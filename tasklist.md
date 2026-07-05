@@ -80,8 +80,8 @@ Git-Repository mit Feature-Historie.
 
 ## Hinweise zum Tinox-Compiler
 
-Im Zuge dieser Arbeiten im Tinox-Repo gefixt (Stand 2026-07-05, dort noch
-uncommittet): `regexMatchGroups`-Runtime + Codegen-Typisierung der
+Im Zuge dieser Arbeiten im Tinox-Repo gefixt (Commit f5f6fcb, 2026-07-05):
+`regexMatchGroups`-Runtime + Codegen-Typisierung der
 Regex-Listen-Rückgaben, verschachtelte Schleifen im Typecheck
 (`break` nach innerer Schleife wurde abgelehnt), libm-Bridges
 (mathLog2/mathTgamma/…), Compound-Assignments (bugs.md Bug 12).
