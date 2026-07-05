@@ -52,6 +52,11 @@ class Matcher
         this.evaluator.inputQueuePos = 0;
     }
 
+    fn noteDocRead()
+    {
+        this.evaluator.linesRead = this.evaluator.linesRead + 1;
+    }
+
     fn runEval(filter: Filter, input: JsonValue) -> EvalResult
     {
         let ctx = EvalContext::new();

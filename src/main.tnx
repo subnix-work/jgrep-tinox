@@ -241,6 +241,7 @@ class JGrep
 
     fn processDocument(doc: JsonValue, prefix: String, countRef: Int64) -> Int64
     {
+        this.matcher.noteDocRead();
         let results = this.matcher.matchRaw(this.compiledFilter, doc);
 
         if results.len() > 0 { this.hadMatch = true; }
