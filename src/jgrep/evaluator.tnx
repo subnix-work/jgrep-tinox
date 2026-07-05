@@ -1398,6 +1398,25 @@ class Evaluator
                 }
                 return result;
             }
+            Comma(left, right) =>
+            {
+                var result: List<JsonValue> = [];
+                let lp = this.extractPaths(left, input, ctx);
+                for p in lp { result.push(p); }
+                let rp = this.extractPaths(right, input, ctx);
+                for p in rp { result.push(p); }
+                return result;
+            }
+            RecursiveDescent =>
+            {
+                var result: List<JsonValue> = [];
+                var emptyP: List<JsonValue> = [];
+                result.push(JsonValue::Array(emptyP));
+                var prefix2: List<JsonValue> = [];
+                let all = this.allPathsRec(input, prefix2, false);
+                for p in all { result.push(p); }
+                return result;
+            }
             _ =>
             {
                 var empty: List<JsonValue> = [];
@@ -1605,6 +1624,264 @@ class Evaluator
         return "";
     }
 
+    // ---- Pfad-Maschinerie (getpath/setpath/delpaths/paths/del/tostream/fromstream) ----
+
+    fn getPathValue(v: JsonValue, path: List<JsonValue>, idx: Int64) -> JsonValue
+    {
+        if idx >= path.len() { return v; }
+        let step = path[idx];
+        match step
+        {
+            Str(k) =>
+            {
+                match v
+                {
+                    Object(o) => { return this.getPathValue(o.get(k), path, idx + 1); }
+                    _ => return JsonValue::Null;
+                }
+            }
+            Integer(i) =>
+            {
+                match v
+                {
+                    Array(a) =>
+                    {
+                        let aa = a;
+                        var ix = i;
+                        if ix < 0 { ix += aa.len(); }
+                        if ix >= 0 && ix < aa.len() { return this.getPathValue(aa[ix], path, idx + 1); }
+                        return JsonValue::Null;
+                    }
+                    _ => return JsonValue::Null;
+                }
+            }
+            _ => return JsonValue::Null;
+        }
+        return JsonValue::Null;
+    }
+
+    fn setPathValue(v: JsonValue, path: List<JsonValue>, idx: Int64, newVal: JsonValue) -> JsonValue
+    {
+        if idx >= path.len() { return newVal; }
+        let step = path[idx];
+        match step
+        {
+            Str(k) =>
+            {
+                var obj: Map<String, JsonValue> = @{};
+                var child: JsonValue = JsonValue::Null;
+                match v
+                {
+                    Object(o) =>
+                    {
+                        let ks = JsonValueHelper::objKeys(wrapObj(o));
+                        var ki: Int64 = 0;
+                        while ki < ks.len()
+                        {
+                            let kk = ks[ki]; ki += 1;
+                            obj[kk] = o.get(kk);
+                            if kk == k { child = o.get(kk); }
+                        }
+                    }
+                    _ => { }
+                }
+                obj[k] = this.setPathValue(child, path, idx + 1, newVal);
+                return JsonValue::Object(obj);
+            }
+            Integer(i) =>
+            {
+                var arr: List<JsonValue> = [];
+                match v
+                {
+                    Array(a) => { for x in a { arr.push(x); } }
+                    _ => { }
+                }
+                var ix = i;
+                if ix < 0 { ix += arr.len(); }
+                if ix < 0 { ix = 0; }
+                while arr.len() <= ix { arr.push(JsonValue::Null); }
+                let child = arr[ix];
+                arr[ix] = this.setPathValue(child, path, idx + 1, newVal);
+                return JsonValue::Array(arr);
+            }
+            _ => return v;
+        }
+        return v;
+    }
+
+    fn delPathValue(v: JsonValue, path: List<JsonValue>, idx: Int64) -> JsonValue
+    {
+        if idx >= path.len() { return JsonValue::Null; }
+        let step = path[idx];
+        let last = idx == path.len() - 1;
+        match step
+        {
+            Str(k) =>
+            {
+                match v
+                {
+                    Object(o) =>
+                    {
+                        var obj: Map<String, JsonValue> = @{};
+                        let ks = JsonValueHelper::objKeys(wrapObj(o));
+                        var ki: Int64 = 0;
+                        while ki < ks.len()
+                        {
+                            let kk = ks[ki]; ki += 1;
+                            if kk == k
+                            {
+                                if !last { obj[kk] = this.delPathValue(o.get(kk), path, idx + 1); }
+                            }
+                            else { obj[kk] = o.get(kk); }
+                        }
+                        return JsonValue::Object(obj);
+                    }
+                    _ => return v;
+                }
+            }
+            Integer(i) =>
+            {
+                match v
+                {
+                    Array(a) =>
+                    {
+                        let aa = a;
+                        var ix = i;
+                        if ix < 0 { ix += aa.len(); }
+                        var arr: List<JsonValue> = [];
+                        var j: Int64 = 0;
+                        while j < aa.len()
+                        {
+                            if j == ix
+                            {
+                                if !last { arr.push(this.delPathValue(aa[j], path, idx + 1)); }
+                            }
+                            else { arr.push(aa[j]); }
+                            j += 1;
+                        }
+                        return JsonValue::Array(arr);
+                    }
+                    _ => return v;
+                }
+            }
+            _ => return v;
+        }
+        return v;
+    }
+
+    // Alle Pfade unter v (jq paths / leaf_paths); prefix wird kopiert
+    fn allPathsRec(v: JsonValue, prefix: List<JsonValue>, leafOnly: Bool) -> List<JsonValue>
+    {
+        var results: List<JsonValue> = [];
+        match v
+        {
+            Array(a) =>
+            {
+                let aa = a;
+                var i: Int64 = 0;
+                while i < aa.len()
+                {
+                    var p: List<JsonValue> = [];
+                    for x in prefix { p.push(x); }
+                    p.push(JsonValue::Integer(i));
+                    var isLeaf = true;
+                    match aa[i] { Array(_) => { isLeaf = false; } Object(_) => { isLeaf = false; } _ => { } }
+                    if !leafOnly || isLeaf { results.push(JsonValue::Array(p)); }
+                    let sub = this.allPathsRec(aa[i], p, leafOnly);
+                    for s in sub { results.push(s); }
+                    i += 1;
+                }
+            }
+            Object(o) =>
+            {
+                let ks = JsonValueHelper::objKeys(wrapObj(o));
+                var ki: Int64 = 0;
+                while ki < ks.len()
+                {
+                    let k = ks[ki]; ki += 1;
+                    var p: List<JsonValue> = [];
+                    for x in prefix { p.push(x); }
+                    p.push(JsonValue::Str(k));
+                    let child = o.get(k);
+                    var isLeaf = true;
+                    match child { Array(_) => { isLeaf = false; } Object(_) => { isLeaf = false; } _ => { } }
+                    if !leafOnly || isLeaf { results.push(JsonValue::Array(p)); }
+                    let sub = this.allPathsRec(child, p, leafOnly);
+                    for s in sub { results.push(s); }
+                }
+            }
+            _ => { }
+        }
+        return results;
+    }
+
+    // jq tostream: [pfad, blatt]-Events plus Abschluss-Events [pfad-zum-letzten-Kind]
+    fn tostreamRec(v: JsonValue, path: List<JsonValue>) -> List<JsonValue>
+    {
+        var events: List<JsonValue> = [];
+        var childCount: Int64 = 0;
+        match v
+        {
+            Array(a) => { let aa = a; childCount = aa.len(); }
+            Object(o) => { childCount = JsonValueHelper::objLen(wrapObj(o)); }
+            _ => { childCount = -1; }
+        }
+        if childCount <= 0
+        {
+            // Skalar oder leerer Container: [pfad, wert]
+            var evt: List<JsonValue> = [];
+            var pcopy: List<JsonValue> = [];
+            for x in path { pcopy.push(x); }
+            evt.push(JsonValue::Array(pcopy));
+            evt.push(v);
+            events.push(JsonValue::Array(evt));
+            return events;
+        }
+        var lastKey: JsonValue = JsonValue::Null;
+        match v
+        {
+            Array(a) =>
+            {
+                let aa = a;
+                var i: Int64 = 0;
+                while i < aa.len()
+                {
+                    var p: List<JsonValue> = [];
+                    for x in path { p.push(x); }
+                    p.push(JsonValue::Integer(i));
+                    let sub = this.tostreamRec(aa[i], p);
+                    for e in sub { events.push(e); }
+                    i += 1;
+                }
+                lastKey = JsonValue::Integer(aa.len() - 1);
+            }
+            Object(o) =>
+            {
+                let ks = JsonValueHelper::objKeys(wrapObj(o));
+                var ki: Int64 = 0;
+                while ki < ks.len()
+                {
+                    let k = ks[ki]; ki += 1;
+                    var p: List<JsonValue> = [];
+                    for x in path { p.push(x); }
+                    p.push(JsonValue::Str(k));
+                    let sub = this.tostreamRec(o.get(k), p);
+                    for e in sub { events.push(e); }
+                    lastKey = JsonValue::Str(k);
+                }
+            }
+            _ => { }
+        }
+        // Abschluss-Event: [pfad + letzter Schlüssel]
+        var closePath: List<JsonValue> = [];
+        for x in path { closePath.push(x); }
+        closePath.push(lastKey);
+        var closeEvt: List<JsonValue> = [];
+        closeEvt.push(JsonValue::Array(closePath));
+        events.push(JsonValue::Array(closeEvt));
+        return events;
+    }
+
     fn evalBuiltin(name: String, args: List<Filter>, input: JsonValue, ctx: EvalContext) -> EvalResult
     {
         if name == "empty"  { return EvalResult::empty(); }
@@ -1643,24 +1920,14 @@ class Evaluator
 
         if name == "getpath"
         {
-            match input
+            if args.len() == 0 { return EvalResult::err("getpath requires a path argument"); }
+            let pr = this.evalSingle(args[0], input, ctx);
+            if pr.isError() { return pr; }
+            match pr.values[0]
             {
                 Array(pathArr) =>
                 {
-                    let pa = pathArr;
-                    var current = input;
-                    var pi: Int64 = 0;
-                    while pi < pa.len()
-                    {
-                        let step = pa[pi]; pi = pi + 1;
-                        match step
-                        {
-                            Str(k) => { match current { Object(o) => { current = o.get(k); } _ => { return EvalResult::single(JsonValue::Null); } } }
-                            Integer(i) => { match current { Array(a) => { let aa = a; if i >= 0 && i < aa.len() { current = aa[i]; } else { return EvalResult::single(JsonValue::Null); } } _ => { return EvalResult::single(JsonValue::Null); } } }
-                            _ => return EvalResult::single(JsonValue::Null);
-                        }
-                    }
-                    return EvalResult::single(current);
+                    return EvalResult::single(this.getPathValue(input, pathArr, 0));
                 }
                 _ => return EvalResult::err("getpath requires path array");
             }
@@ -2495,7 +2762,22 @@ class Evaluator
         if name == "del"
         {
             if args.len() == 0 { return EvalResult::single(input); }
-            return EvalResult::single(this.applyDel(input, args[0], ctx));
+            // del(f) = delpaths([path(f)]) — wie jq: sortieren, rückwärts löschen
+            let pathsToDel = this.extractPaths(args[0], input, ctx);
+            var sorted = pathsToDel;
+            sorted = this.sortJsonArray(sorted);
+            var current = input;
+            var i = sorted.len() - 1;
+            while i >= 0
+            {
+                match sorted[i]
+                {
+                    Array(pa) => { current = this.delPathValue(current, pa, 0); }
+                    _ => { }
+                }
+                i -= 1;
+            }
+            return EvalResult::single(current);
         }
 
         if name == "split"
@@ -3034,6 +3316,8 @@ class Evaluator
                       "log2","log10","exp2","exp10","cbrt","trunc","rint","nearbyint","logb",
                       "significand","exponent","tgamma","lgamma",
                       "input","inputs","input_line_number","halt","halt_error",
+                      "path","paths","leaf_paths","getpath","setpath","delpaths",
+                      "tostream","fromstream","truncate_stream",
                       "error","debug","stderr","builtins"]
             {
                 names.push(JsonValue::Str(n));
@@ -3050,29 +3334,191 @@ class Evaluator
             return this.eval(Filter::RecursiveDescent, input, ctx);
         }
 
-        if name == "paths"
+        if name == "paths" || name == "leaf_paths"
         {
-            return EvalResult::single(JsonValue::Array([]));
-        }
-
-        if name == "leaf_paths"
-        {
-            return EvalResult::single(JsonValue::Array([]));
-        }
-
-        if name == "getpath"
-        {
-            return EvalResult::single(JsonValue::Null);
+            var prefix: List<JsonValue> = [];
+            let all = this.allPathsRec(input, prefix, name == "leaf_paths");
+            // paths(f): nur Pfade behalten, deren Wert f erfüllt
+            if name == "paths" && args.len() > 0
+            {
+                var kept: List<JsonValue> = [];
+                for p in all
+                {
+                    match p
+                    {
+                        Array(pa) =>
+                        {
+                            let v = this.getPathValue(input, pa, 0);
+                            let fr = this.eval(args[0], v, ctx);
+                            if !fr.isError() && fr.values.len() > 0
+                            {
+                                if JsonValueHelper::isTruthy(fr.values[0]) { kept.push(p); }
+                            }
+                        }
+                        _ => { }
+                    }
+                }
+                return EvalResult::ok(kept);
+            }
+            return EvalResult::ok(all);
         }
 
         if name == "setpath"
         {
-            return EvalResult::single(input);
+            if args.len() < 2 { return EvalResult::err("setpath requires 2 arguments"); }
+            let pr = this.evalSingle(args[0], input, ctx);
+            if pr.isError() { return pr; }
+            let vr = this.evalSingle(args[1], input, ctx);
+            if vr.isError() { return vr; }
+            match pr.values[0]
+            {
+                Array(pathArr) =>
+                {
+                    return EvalResult::single(this.setPathValue(input, pathArr, 0, vr.values[0]));
+                }
+                _ => return EvalResult::err("setpath requires path array");
+            }
         }
 
         if name == "delpaths"
         {
-            return EvalResult::single(input);
+            if args.len() == 0 { return EvalResult::err("delpaths requires a paths argument"); }
+            let pr = this.evalSingle(args[0], input, ctx);
+            if pr.isError() { return pr; }
+            match pr.values[0]
+            {
+                Array(pathList) =>
+                {
+                    // wie jq: sortieren, rückwärts löschen (hält Array-Indizes stabil)
+                    var sorted = pathList;
+                    sorted = this.sortJsonArray(sorted);
+                    var current = input;
+                    var i = sorted.len() - 1;
+                    while i >= 0
+                    {
+                        match sorted[i]
+                        {
+                            Array(pa) => { current = this.delPathValue(current, pa, 0); }
+                            _ => { }
+                        }
+                        i -= 1;
+                    }
+                    return EvalResult::single(current);
+                }
+                _ => return EvalResult::err("delpaths requires an array of paths");
+            }
+        }
+
+        if name == "tostream"
+        {
+            var prefix: List<JsonValue> = [];
+            let events = this.tostreamRec(input, prefix);
+            return EvalResult::ok(events);
+        }
+
+        if name == "fromstream"
+        {
+            if args.len() == 0 { return EvalResult::err("fromstream requires argument"); }
+            let er = this.eval(args[0], input, ctx);
+            if er.isError() { return er; }
+            var results: List<JsonValue> = [];
+            var acc: JsonValue = JsonValue::Null;
+            for evt in er.values
+            {
+                match evt
+                {
+                    Array(e) =>
+                    {
+                        let ev = e;
+                        if ev.len() >= 2
+                        {
+                            match ev[0]
+                            {
+                                Array(pa) =>
+                                {
+                                    let pl = pa;
+                                    if pl.len() == 0
+                                    {
+                                        // Skalar auf Top-Level: sofort fertig
+                                        results.push(ev[1]);
+                                        acc = JsonValue::Null;
+                                    }
+                                    else
+                                    {
+                                        acc = this.setPathValue(acc, pl, 0, ev[1]);
+                                    }
+                                }
+                                _ => { }
+                            }
+                        }
+                        else if ev.len() == 1
+                        {
+                            match ev[0]
+                            {
+                                Array(pa) =>
+                                {
+                                    let pl = pa;
+                                    if pl.len() <= 1
+                                    {
+                                        results.push(acc);
+                                        acc = JsonValue::Null;
+                                    }
+                                }
+                                _ => { }
+                            }
+                        }
+                    }
+                    _ => { }
+                }
+            }
+            return EvalResult::ok(results);
+        }
+
+        if name == "truncate_stream"
+        {
+            if args.len() == 0 { return EvalResult::err("truncate_stream requires argument"); }
+            var depth: Int64 = 0;
+            match input
+            {
+                Integer(n) => { depth = n; }
+                Float(f) => { depth = f as Int64; }
+                _ => return EvalResult::err("truncate_stream requires numeric input (depth)");
+            }
+            // Events werden gegen null evaluiert (Input ist die Tiefe, wie jq)
+            let er = this.eval(args[0], JsonValue::Null, ctx);
+            if er.isError() { return er; }
+            var results: List<JsonValue> = [];
+            for evt in er.values
+            {
+                match evt
+                {
+                    Array(e) =>
+                    {
+                        let ev = e;
+                        if ev.len() == 0 { continue; }
+                        match ev[0]
+                        {
+                            Array(pa) =>
+                            {
+                                let pl = pa;
+                                if pl.len() > depth
+                                {
+                                    var newPath: List<JsonValue> = [];
+                                    var i = depth;
+                                    while i < pl.len() { newPath.push(pl[i]); i += 1; }
+                                    var newEvt: List<JsonValue> = [];
+                                    newEvt.push(JsonValue::Array(newPath));
+                                    if ev.len() >= 2 { newEvt.push(ev[1]); }
+                                    results.push(JsonValue::Array(newEvt));
+                                }
+                            }
+                            _ => { }
+                        }
+                    }
+                    _ => { }
+                }
+            }
+            return EvalResult::ok(results);
         }
 
         if name == "walk"
