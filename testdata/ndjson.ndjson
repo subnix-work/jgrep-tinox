@@ -1,0 +1,5 @@
+{"id": 1, "user": "alice", "action": "login",  "success": true}
+{"id": 2, "user": "bob",   "action": "upload", "success": true}
+{"id": 3, "user": "alice", "action": "delete", "success": false}
+{"id": 4, "user": "carol", "action": "login",  "success": true}
+{"id": 5, "user": "bob",   "action": "logout", "success": true}

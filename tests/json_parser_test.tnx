@@ -1,0 +1,170 @@
+import jgrep.json_value;
+import jgrep.json_parser;
+
+class JsonParserTest
+{
+    @Test("parse null")
+    fn testParseNull() -> Bool
+    {
+        let v = JsonParser::parse("null");
+        return JsonValueHelper::isNull(v);
+    }
+
+    @Test("parse true")
+    fn testParseTrue() -> Bool
+    {
+        let v = JsonParser::parse("true");
+        return JsonValueHelper::isBool(v) && JsonValueHelper::asBool(v) == true;
+    }
+
+    @Test("parse false")
+    fn testParseFalse() -> Bool
+    {
+        let v = JsonParser::parse("false");
+        return JsonValueHelper::isBool(v) && JsonValueHelper::asBool(v) == false;
+    }
+
+    @Test("parse integer")
+    fn testParseInteger() -> Bool
+    {
+        let v = JsonParser::parse("42");
+        return JsonValueHelper::isInteger(v) && JsonValueHelper::asInteger(v) == 42;
+    }
+
+    @Test("parse negative integer")
+    fn testParseNegativeInteger() -> Bool
+    {
+        let v = JsonParser::parse("-17");
+        return JsonValueHelper::isInteger(v) && JsonValueHelper::asInteger(v) == -17;
+    }
+
+    @Test("parse float")
+    fn testParseFloat() -> Bool
+    {
+        let v = JsonParser::parse("3.14");
+        return JsonValueHelper::isFloat(v);
+    }
+
+    @Test("parse string")
+    fn testParseString() -> Bool
+    {
+        let v = JsonParser::parse("\"hello\"");
+        return JsonValueHelper::isString(v) && JsonValueHelper::asString(v) == "hello";
+    }
+
+    @Test("parse string with escape sequences")
+    fn testParseStringEscapes() -> Bool
+    {
+        let v = JsonParser::parse("\"line1\\nline2\"");
+        return JsonValueHelper::isString(v) && JsonValueHelper::asString(v).contains("\n");
+    }
+
+    @Test("parse empty array")
+    fn testParseEmptyArray() -> Bool
+    {
+        let v = JsonParser::parse("[]");
+        return JsonValueHelper::isArray(v) && JsonValueHelper::asArray(v).len() == 0;
+    }
+
+    @Test("parse array")
+    fn testParseArray() -> Bool
+    {
+        let v = JsonParser::parse("[1,2,3]");
+        if !JsonValueHelper::isArray(v) { return false; }
+        let a = JsonValueHelper::asArray(v);
+        return a.len() == 3 && JsonValueHelper::asInteger(a[1]) == 2;
+    }
+
+    @Test("parse empty object")
+    fn testParseEmptyObject() -> Bool
+    {
+        let v = JsonParser::parse("{}");
+        return JsonValueHelper::isObject(v) && JsonValueHelper::asObject(v).len() == 0;
+    }
+
+    @Test("parse object")
+    fn testParseObject() -> Bool
+    {
+        let v = JsonParser::parse("{\"name\":\"Alice\",\"age\":30}");
+        if !JsonValueHelper::isObject(v) { return false; }
+        let o = JsonValueHelper::asObject(v);
+        return o.contains("name") && JsonValueHelper::asString(o.get("name")) == "Alice";
+    }
+
+    @Test("parse nested object")
+    fn testParseNested() -> Bool
+    {
+        let v = JsonParser::parse("{\"a\":{\"b\":[1,2]}}");
+        if !JsonValueHelper::isObject(v) { return false; }
+        let o = JsonValueHelper::asObject(v);
+        if !o.contains("a") { return false; }
+        let inner = o.get("a");
+        if !JsonValueHelper::isObject(inner) { return false; }
+        let innerObj = JsonValueHelper::asObject(inner);
+        return innerObj.contains("b");
+    }
+
+    @Test("tryParse invalid returns null")
+    fn testTryParseInvalid() -> Bool
+    {
+        let v = JsonParser::tryParse("{invalid}");
+        return v.len() == 0;
+    }
+
+    @Test("tryParse empty string returns null")
+    fn testTryParseEmpty() -> Bool
+    {
+        let v = JsonParser::tryParse("");
+        return v.len() == 0;
+    }
+
+    @Test("stringify compact round-trip")
+    fn testStringifyRoundTrip() -> Bool
+    {
+        let original = "{\"x\":1,\"y\":[2,3]}";
+        let v = JsonParser::parse(original);
+        let result = JsonSerializer::stringify(v);
+        let v2 = JsonParser::parse(result);
+        return JsonValueHelper::equals(v, v2);
+    }
+
+    @Test("stringify null")
+    fn testStringifyNull() -> Bool
+    {
+        return JsonSerializer::stringify(JsonValue::Null) == "null";
+    }
+
+    @Test("stringify bool")
+    fn testStringifyBool() -> Bool
+    {
+        return JsonSerializer::stringify(JsonValue::Bool(true)) == "true" &&
+               JsonSerializer::stringify(JsonValue::Bool(false)) == "false";
+    }
+
+    @Test("stringify integer")
+    fn testStringifyInteger() -> Bool
+    {
+        return JsonSerializer::stringify(JsonValue::Integer(42)) == "42";
+    }
+
+    @Test("stringify string with escapes")
+    fn testStringifyStringEscapes() -> Bool
+    {
+        let s = JsonSerializer::stringify(JsonValue::Str("a\"b"));
+        return s == "\"a\\\"b\"";
+    }
+
+    @Test("formatForOutput string is raw")
+    fn testFormatForOutputRaw() -> Bool
+    {
+        let v = JsonValue::Str("hello world");
+        return JsonSerializer::formatForOutput(v, false) == "hello world";
+    }
+
+    @Test("formatForOutput number is JSON")
+    fn testFormatForOutputNumber() -> Bool
+    {
+        let v = JsonValue::Integer(42);
+        return JsonSerializer::formatForOutput(v, false) == "42";
+    }
+}

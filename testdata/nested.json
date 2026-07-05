@@ -1,0 +1,16 @@
+{
+  "user": {
+    "id": 42,
+    "name": "Bob",
+    "address": {
+      "city": "Berlin",
+      "country": "Germany",
+      "zip": "10115"
+    },
+    "tags": ["admin", "developer"]
+  },
+  "meta": {
+    "created": "2024-01-15T10:30:00Z",
+    "version": 3
+  }
+}

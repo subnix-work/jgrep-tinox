@@ -1,0 +1,560 @@
+import jgrep.json_value;
+import jgrep.json_parser;
+import jgrep.filter;
+import jgrep.evaluator;
+import jgrep.ndjson;
+import jgrep.file_walker;
+import jgrep.color;
+import jgrep.matcher;
+
+class CliOptions
+{
+    var filterExpr: String;
+    var files: List<String>;
+    var recursive: Bool;
+    var filesWithMatches: Bool;
+    var count: Bool;
+    var slurp: Bool;
+    var nullInput: Bool;
+    var fromFile: String;
+    var pretty: Bool;
+    var colorLevel: Bool;
+    var colorLevelField: String;
+    var noColor: Bool;
+    var showHelp: Bool;
+    var showVersion: Bool;
+    var completionShell: String;
+
+    fnc defaults() -> CliOptions
+    {
+        return CliOptions {
+            filterExpr: ".",
+            files: [],
+            recursive: false,
+            filesWithMatches: false,
+            count: false,
+            slurp: false,
+            nullInput: false,
+            fromFile: "",
+            pretty: false,
+            colorLevel: false,
+            colorLevelField: "",
+            noColor: false,
+            showHelp: false,
+            showVersion: false,
+            completionShell: ""
+        };
+    }
+}
+
+class ArgParser
+{
+    fnc parse(args: List<String>) -> CliOptions
+    {
+        var opts = CliOptions::defaults();
+        var i = 0;
+        var filterSet = false;
+
+        while i < args.len()
+        {
+            let arg = args[i];
+
+            if arg == "-h" || arg == "--help"
+            {
+                opts.showHelp = true;
+                i = i + 1;
+            }
+            else if arg == "-V" || arg == "--version"
+            {
+                opts.showVersion = true;
+                i = i + 1;
+            }
+            else if arg == "-r" || arg == "--recursive"
+            {
+                opts.recursive = true;
+                i = i + 1;
+            }
+            else if arg == "-l" || arg == "--files-with-matches"
+            {
+                opts.filesWithMatches = true;
+                i = i + 1;
+            }
+            else if arg == "-c" || arg == "--count"
+            {
+                opts.count = true;
+                i = i + 1;
+            }
+            else if arg == "-s" || arg == "--slurp"
+            {
+                opts.slurp = true;
+                i = i + 1;
+            }
+            else if arg == "-n" || arg == "--null-input"
+            {
+                opts.nullInput = true;
+                i = i + 1;
+            }
+            else if arg == "--pretty"
+            {
+                opts.pretty = true;
+                i = i + 1;
+            }
+            else if arg == "--color-level"
+            {
+                opts.colorLevel = true;
+                i = i + 1;
+            }
+            else if arg == "--color-level-field"
+            {
+                i = i + 1;
+                if i < args.len() { opts.colorLevelField = args[i]; }
+                i = i + 1;
+            }
+            else if arg == "--no-color"
+            {
+                opts.noColor = true;
+                i = i + 1;
+            }
+            else if arg == "-f" || arg == "--from-file"
+            {
+                i = i + 1;
+                if i < args.len() { opts.fromFile = args[i]; }
+                i = i + 1;
+            }
+            else if arg == "completion"
+            {
+                i = i + 1;
+                if i < args.len() { opts.completionShell = args[i]; }
+                i = i + 1;
+            }
+            else if arg.startsWith("-")
+            {
+                let flags = arg.substring(1, arg.len());
+                var fi: Int64 = 0;
+                while fi < flags.len()
+                {
+                    let fcode = flags[fi] as Int64;
+                    if fcode == 114 { opts.recursive = true; }
+                    else if fcode == 108 { opts.filesWithMatches = true; }
+                    else if fcode == 99 { opts.count = true; }
+                    else if fcode == 115 { opts.slurp = true; }
+                    else if fcode == 110 { opts.nullInput = true; }
+                    else if fcode == 104 { opts.showHelp = true; }
+                    else if fcode == 86 { opts.showVersion = true; }
+                    fi = fi + 1;
+                }
+                i = i + 1;
+            }
+            else
+            {
+                if filterSet == false && opts.fromFile == ""
+                {
+                    opts.filterExpr = arg;
+                    filterSet = true;
+                }
+                else
+                {
+                    opts.files.push(arg);
+                }
+                i = i + 1;
+            }
+        }
+
+        return opts;
+    }
+}
+
+class JGrep
+{
+    var hadMatch: Bool;
+    var hadError: Bool;
+    var slurpResults: List<JsonValue>;
+    var colorConfig: ColorConfig;
+    var compiledFilter: Filter;
+    var opts: CliOptions;
+    var matcher: Matcher;
+
+    fnc new(opts: CliOptions) -> JGrep
+    {
+        let colorEnabled = ColorConfig::detectEnabled(opts.noColor);
+        let colorCfg = ColorConfig::new(colorEnabled, opts.colorLevel, opts.colorLevelField);
+
+        var filterSrc = opts.filterExpr;
+        if opts.fromFile != ""
+        {
+            let fromFileRaw = fileReadAllText(opts.fromFile);
+            filterSrc = fromFileRaw.trim();
+        }
+
+        let compiled = FilterParser::compile(filterSrc);
+
+        return JGrep {
+            hadMatch: false,
+            hadError: false,
+            slurpResults: [],
+            colorConfig: colorCfg,
+            compiledFilter: compiled,
+            opts: opts,
+            matcher: Matcher::new()
+        };
+    }
+
+    fn formatOutput(value: JsonValue) -> String
+    {
+        match value
+        {
+            Str(s) =>
+            {
+                if this.opts.colorLevel
+                {
+                    return LevelColorizer::colorizeByLevel(s, JsonValue::Null, this.colorConfig);
+                }
+                return s;
+            }
+            _ =>
+            {
+                if this.colorConfig.enabled
+                {
+                    if this.opts.pretty
+                    {
+                        return JsonHighlighter::highlightPrettyValue(value, 0);
+                    }
+                    return JsonHighlighter::highlightValue(value);
+                }
+                if this.opts.pretty { return JsonSerializer::prettyStringify(value, 2); }
+                return JsonSerializer::stringify(value);
+            }
+        }
+        return "";
+    }
+
+    fn printLine(prefix: String, line: String, sourceValue: JsonValue)
+    {
+        var output = line;
+        if this.opts.colorLevel
+        {
+            output = LevelColorizer::colorizeByLevel(line, sourceValue, this.colorConfig);
+        }
+        if prefix == "" { println(output); }
+        else { println(prefix + ":" + output); }
+    }
+
+    fn processDocument(doc: JsonValue, prefix: String, countRef: Int64) -> Int64
+    {
+        let results = this.matcher.matchRaw(this.compiledFilter, doc);
+
+        if results.len() > 0 { this.hadMatch = true; }
+
+        if this.opts.slurp
+        {
+            for v in results { this.slurpResults.push(v); }
+            return countRef + results.len();
+        }
+
+        if this.opts.filesWithMatches
+        {
+            if results.len() > 0
+            {
+                if prefix != "" { println(prefix); }
+                return countRef + 1;
+            }
+            return countRef;
+        }
+
+        if this.opts.count
+        {
+            return countRef + results.len();
+        }
+
+        for v in results
+        {
+            let formatted = this.formatOutput(v);
+            this.printLine(prefix, formatted, doc);
+        }
+        return countRef;
+    }
+
+    fn processSource(path: String, content: String, prefix: String)
+    {
+        let reader = NdjsonReader::fromString(content);
+        var count: Int64 = 0;
+        var foundMatchInFile = false;
+
+        while reader.hasNext()
+        {
+            let docList = reader.tryParseNext();
+            if docList.len() == 0
+            {
+                this.hadError = true;
+            }
+            else
+            {
+                let doc = docList[0];
+                let prevMatch = this.hadMatch;
+                count = this.processDocument(doc, prefix, count);
+                if this.hadMatch && !prevMatch { foundMatchInFile = true; }
+
+                if this.opts.filesWithMatches && foundMatchInFile { break; }
+            }
+        }
+
+        if this.opts.count && !this.opts.filesWithMatches
+        {
+            if prefix == "" { println(count.toString()); }
+            else { println(prefix + ":" + count.toString()); }
+        }
+    }
+
+    fn populateInputQueue()
+    {
+        var queue: List<JsonValue> = [];
+        if this.opts.files.len() > 0
+        {
+            let allFiles = FileWalker::listFiles(this.opts.files, this.opts.recursive);
+            for fp in allFiles
+            {
+                if fileExists(fp)
+                {
+                    let content = fileReadAllText(fp);
+                    let reader = NdjsonReader::fromString(content);
+                    while reader.hasNext()
+                    {
+                        let docList = reader.tryParseNext();
+                        if docList.len() > 0 { queue.push(docList[0]); }
+                    }
+                }
+            }
+        }
+        else if isStdinTty() == 0
+        {
+            let stdinContent = fileReadAllText("/dev/stdin");
+            let reader = NdjsonReader::fromString(stdinContent);
+            while reader.hasNext()
+            {
+                let docList = reader.tryParseNext();
+                if docList.len() > 0 { queue.push(docList[0]); }
+            }
+        }
+        this.matcher.setInputQueue(queue);
+    }
+
+    fn processNullInput()
+    {
+        this.populateInputQueue();
+        let evalResult = this.matcher.runEval(this.compiledFilter, JsonValue::Null);
+        if evalResult.isError()
+        {
+            println("Error: " + evalResult.errorMsg);
+            this.hadError = true;
+            return;
+        }
+        if evalResult.values.len() > 0 { this.hadMatch = true; }
+
+        if this.opts.slurp
+        {
+            for v in evalResult.values { this.slurpResults.push(v); }
+            return;
+        }
+
+        for v in evalResult.values
+        {
+            let formatted = this.formatOutput(v);
+            println(formatted);
+        }
+    }
+
+    fn run() -> Int64
+    {
+        if this.opts.nullInput
+        {
+            this.processNullInput();
+        }
+        else if this.opts.files.len() == 0
+        {
+            let content = fileReadAllText("/dev/stdin");
+            this.processSource("", content, "");
+        }
+        else
+        {
+            let allFiles = FileWalker::listFiles(this.opts.files, this.opts.recursive);
+            let usePrefix = allFiles.len() > 1;
+
+            for filePath in allFiles
+            {
+                var skipFile = false;
+                if !fileExists(filePath)
+                {
+                    println("jgrep: " + filePath + ": No such file or directory");
+                    this.hadError = true;
+                    skipFile = true;
+                }
+                if !skipFile
+                {
+                    let content = fileReadAllText(filePath);
+                    var prefix: String = "";
+                    if usePrefix { prefix = filePath; }
+                    this.processSource(filePath, content, prefix);
+                }
+            }
+        }
+
+        if this.opts.slurp
+        {
+            let arrValue = JsonValue::Array(this.slurpResults);
+            let formatted = this.formatOutput(arrValue);
+            println(formatted);
+        }
+
+        if this.hadError { return 2; }
+        if !this.hadMatch { return 1; }
+        return 0;
+    }
+}
+
+class CompletionGenerator
+{
+    fnc generate(shell: String) -> Int64
+    {
+        if shell == "bash"
+        {
+            println("# jgrep bash completion");
+            println("_jgrep_complete() {");
+            println("  local cur flags");
+            println("  cur=\"" + "$" + "{COMP_WORDS[COMP_CWORD]}\"");
+            println("  flags=\"-r -l -c -s -n -f --recursive --files-with-matches --count --slurp --null-input --from-file --pretty --color-level --color-level-field --no-color\"");
+            println("  COMPREPLY=($(" + "compgen -W \"" + "$" + "flags\" -- \"" + "$" + "cur\") $(" + "compgen -f -- \"" + "$" + "cur\"))");
+            println("}");
+            println("complete -F _jgrep_complete jgrep");
+            return 0;
+        }
+        if shell == "zsh"
+        {
+            println("#compdef jgrep");
+            println("_jgrep() {");
+            println("  _arguments \\");
+            println("    '(-r --recursive)-r[recurse into directories]' \\");
+            println("    '(-l --files-with-matches)-l[print only matching filenames]' \\");
+            println("    '(-c --count)-c[print match count]' \\");
+            println("    '(-s --slurp)-s[slurp all results into array]' \\");
+            println("    '(-n --null-input)-n[use null as input]' \\");
+            println("    '(-f --from-file)-f[read filter from file]:file:_files' \\");
+            println("    '--pretty[pretty-print JSON]' \\");
+            println("    '--color-level[colorize by log level]' \\");
+            println("    '--color-level-field[log level field]:field' \\");
+            println("    '--no-color[disable color]' \\");
+            println("    ':filter:' \\");
+            println("    '*:file:_files'");
+            println("}");
+            println("_jgrep \"" + "$" + "@\"");
+            return 0;
+        }
+        if shell == "fish"
+        {
+            println("complete -c jgrep -s r -l recursive -d 'Recurse into directories'");
+            println("complete -c jgrep -s l -l files-with-matches -d 'Print only matching filenames'");
+            println("complete -c jgrep -s c -l count -d 'Print match count per file'");
+            println("complete -c jgrep -s s -l slurp -d 'Collect all results into one array'");
+            println("complete -c jgrep -s n -l null-input -d 'Use null as input'");
+            println("complete -c jgrep -s f -l from-file -d 'Read filter from file' -r");
+            println("complete -c jgrep -l pretty -d 'Pretty-print JSON output'");
+            println("complete -c jgrep -l color-level -d 'Colorize by log level'");
+            println("complete -c jgrep -l color-level-field -d 'Log level field' -r");
+            println("complete -c jgrep -l no-color -d 'Disable color output'");
+            return 0;
+        }
+        if shell == "powershell"
+        {
+            println("Register-ArgumentCompleter -Native -CommandName jgrep -ScriptBlock {");
+            println("  param(" + "$" + "wordToComplete, " + "$" + "commandAst, " + "$" + "cursorPosition)");
+            println("  " + "$" + "flags = @('-r','-l','-c','-s','-n','-f','--recursive','--files-with-matches',");
+            println("             '--count','--slurp','--null-input','--from-file','--pretty',");
+            println("             '--color-level','--color-level-field','--no-color')");
+            println("  " + "$" + "flags | Where-Object { " + "$" + "_ -like \"" + "$" + "wordToComplete*\" } |");
+            println("    ForEach-Object { [System.Management.Automation.CompletionResult]::new(" + "$" + "_) }");
+            println("}");
+            return 0;
+        }
+        println("Unsupported shell: " + shell);
+        return 2;
+    }
+}
+
+fn printHelp()
+{
+    println("Usage: jgrep [-rclsnhV] [-f FILE] [--pretty] [--color-level] [--color-level-field FIELD] [--no-color] [FILTER] [FILE...]");
+    println("");
+    println("grep for JSON — powered by Tinox");
+    println("");
+    println("Arguments:");
+    println("  FILTER     jq filter expression (default: '.')");
+    println("  FILE...    Files to search; reads stdin if omitted");
+    println("");
+    println("Options:");
+    println("  -r, --recursive              Recurse into directories");
+    println("  -l, --files-with-matches     Only print filenames with matches");
+    println("  -c, --count                  Print match count per file");
+    println("  -s, --slurp                  Collect all results into a single array");
+    println("  -n, --null-input             Use null as input (don't read files)");
+    println("  -f, --from-file FILE         Read filter from file");
+    println("      --pretty                 Pretty-print JSON output");
+    println("      --color-level            Colorize output by log level field");
+    println("      --color-level-field F    Override log level field (dot-notation)");
+    println("      --no-color               Disable ANSI color output");
+    println("  -h, --help                   Show this help");
+    println("  -V, --version                Show version");
+    println("");
+    println("  completion SHELL             Generate shell completion (bash/zsh/fish/powershell)");
+    println("");
+    println("Examples:");
+    println("  jgrep '.name' data.json");
+    println("  jgrep 'select(.level == \"ERROR\")' logs.ndjson");
+    println("  jgrep '.[] | select(.active) | .name' items.json");
+    println("  jgrep -r '.id' ./data/");
+    println("  jgrep -c '.' *.json");
+    println("  jgrep --color-level '.' logs.ndjson");
+    println("  echo '{\"x\":1}' | jgrep '.x'");
+}
+
+fn main() -> Int64
+{
+    let allArgs = processArgs();
+
+    var args: List<String> = [];
+    var i = 1;
+    while i < allArgs.len() { args.push(allArgs[i]); i = i + 1; }
+
+    if args.len() == 0
+    {
+        printHelp();
+        return 2;
+    }
+
+    let firstArg = args[0];
+    if firstArg == "completion" && args.len() > 1
+    {
+        return CompletionGenerator::generate(args[1]);
+    }
+
+    let opts = ArgParser::parse(args);
+
+    if opts.showHelp
+    {
+        printHelp();
+        return 0;
+    }
+
+    if opts.showVersion
+    {
+        println("jgrep 1.0.0 (Tinox)");
+        return 0;
+    }
+
+    if opts.count && opts.filesWithMatches
+    {
+        println("jgrep: --count and --files-with-matches are mutually exclusive");
+        return 2;
+    }
+
+    var jgrep = JGrep::new(opts);
+    return jgrep.run();
+}

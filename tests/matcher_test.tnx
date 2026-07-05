@@ -1,0 +1,75 @@
+import jgrep.json_value;
+import jgrep.json_parser;
+import jgrep.filter;
+import jgrep.matcher;
+import jgrep.ndjson;
+
+class MatcherTest
+{
+    @Test("match identity returns input")
+    fn testMatchIdentity() -> Bool
+    {
+        let m = Matcher::new();
+        let f = FilterParser::compile(".");
+        let input = JsonParser::parse("{\"x\":1}");
+        let results = m.matchRaw(f, input);
+        return results.len() == 1;
+    }
+
+    @Test("select match truthy")
+    fn testSelectMatch() -> Bool
+    {
+        let m = Matcher::new();
+        let f = FilterParser::compile("select(.active)");
+        let input = JsonParser::parse("{\"active\":true}");
+        let results = m.matchRaw(f, input);
+        return results.len() == 1;
+    }
+
+    @Test("select no match")
+    fn testSelectNoMatch() -> Bool
+    {
+        let m = Matcher::new();
+        let f = FilterParser::compile("select(.active)");
+        let input = JsonParser::parse("{\"active\":false}");
+        let results = m.matchRaw(f, input);
+        return results.len() == 0;
+    }
+
+    @Test("ndjson reader reads multiple documents")
+    fn testNdjsonMultipleDocs() -> Bool
+    {
+        let content = "{\"id\":1}\n{\"id\":2}\n{\"id\":3}";
+        let reader = NdjsonReader::fromString(content);
+        let docs = reader.readAll();
+        return docs.len() == 3;
+    }
+
+    @Test("ndjson reader skips empty lines")
+    fn testNdjsonSkipEmptyLines() -> Bool
+    {
+        let content = "{\"id\":1}\n\n{\"id\":2}\n";
+        let reader = NdjsonReader::fromString(content);
+        let docs = reader.readAll();
+        return docs.len() == 2;
+    }
+
+    @Test("ndjson error recovery")
+    fn testNdjsonErrorRecovery() -> Bool
+    {
+        let content = "{\"id\":1}\n{invalid}\n{\"id\":3}";
+        let reader = NdjsonReader::fromString(content);
+        let docs = reader.readAll();
+        return docs.len() == 2;
+    }
+
+    @Test("match result has hasMatch")
+    fn testMatchResultHasMatch() -> Bool
+    {
+        let m = Matcher::new();
+        let f = FilterParser::compile(".name");
+        let input = JsonParser::parse("{\"name\":\"test\"}");
+        let result = m.runMatch(f, input);
+        return result.hasMatch();
+    }
+}
