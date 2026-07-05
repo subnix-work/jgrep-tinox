@@ -309,10 +309,11 @@ class Evaluator
     var hadError: Bool;
     var inputQueue: List<JsonValue>;
     var inputQueuePos: Int64;
+    var linesRead: Int64;
 
     fnc new() -> Evaluator
     {
-        return Evaluator { hadError: false, inputQueue: [], inputQueuePos: 0 };
+        return Evaluator { hadError: false, inputQueue: [], inputQueuePos: 0, linesRead: 0 };
     }
 
     fn eval(filter: Filter, input: JsonValue, ctx: EvalContext) -> EvalResult
@@ -3262,6 +3263,40 @@ class Evaluator
                 this.inputQueuePos = this.inputQueuePos + 1;
             }
             return EvalResult::ok(results);
+        }
+
+        if name == "input_line_number"
+        {
+            // Näherung: NDJSON = ein Dokument pro Zeile → konsumierte Dokumente
+            return EvalResult::single(JsonValue::Integer(this.linesRead + this.inputQueuePos));
+        }
+
+        if name == "halt"
+        {
+            processExit(0);
+            return EvalResult::empty();
+        }
+
+        if name == "halt_error"
+        {
+            var code: Int64 = 5;
+            if args.len() > 0
+            {
+                let cr = this.evalSingle(args[0], input, ctx);
+                if cr.isError() { return cr; }
+                match cr.values[0]
+                {
+                    Integer(n) => { code = n; }
+                    _ => { }
+                }
+            }
+            match input
+            {
+                Str(s) => { printStderr(s); }
+                _ => { printStderr(JsonSerializer::stringify(input)); }
+            }
+            processExit(code);
+            return EvalResult::empty();
         }
 
         return EvalResult::err("Unknown function: " + name);
