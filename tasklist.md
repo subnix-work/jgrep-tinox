@@ -80,10 +80,13 @@ Git-Repository mit Feature-Historie.
 
 ## Hinweise zum Tinox-Compiler
 
-Im Zuge dieser Arbeiten im Tinox-Repo gefixt (Commit f5f6fcb, 2026-07-05):
-`regexMatchGroups`-Runtime + Codegen-Typisierung der
+Im Zuge dieser Arbeiten im Tinox-Repo gefixt (Commits f5f6fcb + 03aac11,
+2026-07-05): `regexMatchGroups`-Runtime + Codegen-Typisierung der
 Regex-Listen-Rückgaben, verschachtelte Schleifen im Typecheck
 (`break` nach innerer Schleife wurde abgelehnt), libm-Bridges
-(mathLog2/mathTgamma/…), Compound-Assignments (bugs.md Bug 12).
-Die alten jgrep-Workarounds (strLen/strEq/copyList etc.) sind obsolet,
-funktionieren aber weiter — Rückbau bei Gelegenheit.
+(mathLog2/mathTgamma/…), Compound-Assignments (bugs.md Bug 12),
+`.keys()`-Element-Typisierung (bugs.md Bug 8).
+Die alten Compiler-Bug-Workarounds sind zurückgebaut: wrapObj +
+objLen/objKeys (34 Stellen) durch direkte Map-Methoden ersetzt,
+strCmp inlined. Verbleibende Indirektionen (z. B. `__reduce__`-Encoding
+im Filter-AST) sind funktional und bleiben.
