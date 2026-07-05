@@ -433,11 +433,11 @@ class JsonSerializer
             }
             Object(o)  =>
             {
-                let oLen = JsonValueHelper::objLen(wrapObj(o));
+                let oLen = o.len();
                 if oLen == 0 { return "{}"; }
                 var result = "{";
                 var i = 0;
-                let oKs = JsonValueHelper::objKeys(wrapObj(o));
+                let oKs = sortStringList(o.keys());
                 for key in oKs
                 {
                     if i > 0 { result = result + ","; }
@@ -483,11 +483,11 @@ class JsonSerializer
             }
             Object(o)  =>
             {
-                let poLen = JsonValueHelper::objLen(wrapObj(o));
+                let poLen = o.len();
                 if poLen == 0 { return "{}"; }
                 var result = "{\n";
                 var i = 0;
-                let poKs = JsonValueHelper::objKeys(wrapObj(o));
+                let poKs = sortStringList(o.keys());
                 for key in poKs
                 {
                     if i > 0 { result = result + ",\n"; }

@@ -25,8 +25,6 @@ enum JsonValue
     Object(Map<String, JsonValue>);
 }
 
-fn wrapObj(o: Map<String, JsonValue>) -> JsonValue { return JsonValue::Object(o); }
-
 fn sortStringListInsert(sorted: List<String>, s: String) -> List<String>
 {
     var result: List<String> = [];
@@ -53,27 +51,8 @@ fn sortStringList(strs: List<String>) -> List<String>
     }
     return result;
 }
-fn strCmp(a: String, b: String) -> Int64
-{
-    if a < b { return -1; }
-    if a > b { return 1; }
-    return 0;
-}
-
 class JsonValueHelper
 {
-    fnc objLen(v: JsonValue) -> Int64
-    {
-        match v { Object(o) => return o.len(); _ => return 0; }
-        return 0;
-    }
-    fnc objKeys(v: JsonValue) -> List<String>
-    {
-        match v { Object(o) => return sortStringList(o.keys()); _ => return []; }
-        var empty: List<String> = [];
-        return empty;
-    }
-
     fnc isNull(v: JsonValue) -> Bool
     {
         match v { Null => return true; _ => return false; }
@@ -281,8 +260,8 @@ class JsonValueHelper
                 {
                     Object(bo) =>
                     {
-                        if JsonValueHelper::objLen(wrapObj(ao)) != JsonValueHelper::objLen(wrapObj(bo)) { return false; }
-                        let aoKeys = JsonValueHelper::objKeys(wrapObj(ao));
+                        if ao.len() != bo.len() { return false; }
+                        let aoKeys = sortStringList(ao.keys());
                         for key in aoKeys
                         {
                             if !bo.contains(key) { return false; }
@@ -349,7 +328,12 @@ class JsonValueHelper
             {
                 match b
                 {
-                    Str(bs) => return strCmp(sv, bs);
+                    Str(bs) =>
+                    {
+                        if sv < bs { return -1; }
+                        if sv > bs { return 1; }
+                        return 0;
+                    }
                     _ => return 0;
                 }
             }
@@ -440,9 +424,9 @@ class JsonValueHelper
                     Object(bo) =>
                     {
                         var result: Map<String, JsonValue> = @{};
-                        let aoKs = JsonValueHelper::objKeys(wrapObj(ao));
+                        let aoKs = sortStringList(ao.keys());
                         for key in aoKs { result[key] = ao.get(key); }
-                        let boKs = JsonValueHelper::objKeys(wrapObj(bo));
+                        let boKs = sortStringList(bo.keys());
                         for key in boKs { result[key] = bo.get(key); }
                         return JsonValue::Object(result);
                     }
@@ -556,9 +540,9 @@ class JsonValueHelper
                     Object(bo) =>
                     {
                         var result: Map<String, JsonValue> = @{};
-                        let aoKs = JsonValueHelper::objKeys(wrapObj(ao));
+                        let aoKs = sortStringList(ao.keys());
                         for key in aoKs { result[key] = ao.get(key); }
-                        let boKs = JsonValueHelper::objKeys(wrapObj(bo));
+                        let boKs = sortStringList(bo.keys());
                         for key in boKs
                         {
                             if result.contains(key)

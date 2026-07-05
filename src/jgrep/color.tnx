@@ -89,11 +89,11 @@ class JsonHighlighter
             }
             Object(o) =>
             {
-                let hoLen = JsonValueHelper::objLen(wrapObj(o));
+                let hoLen = o.len();
                 if hoLen == 0 { return "{}"; }
                 var result = "{";
                 var i = 0;
-                let hoKs = JsonValueHelper::objKeys(wrapObj(o));
+                let hoKs = sortStringList(o.keys());
                 for key in hoKs
                 {
                     if i > 0 { result = result + ","; }
@@ -140,11 +140,11 @@ class JsonHighlighter
             }
             Object(o) =>
             {
-                let hpoLen = JsonValueHelper::objLen(wrapObj(o));
+                let hpoLen = o.len();
                 if hpoLen == 0 { return "{}"; }
                 var result = "{\n";
                 var i = 0;
-                let hpoKs = JsonValueHelper::objKeys(wrapObj(o));
+                let hpoKs = sortStringList(o.keys());
                 for key in hpoKs
                 {
                     if i > 0 { result = result + ",\n"; }

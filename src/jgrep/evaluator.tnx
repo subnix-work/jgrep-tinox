@@ -515,7 +515,7 @@ class Evaluator
                     Object(o) =>
                     {
                         var results: List<JsonValue> = [];
-                        let oKeys = JsonValueHelper::objKeys(wrapObj(o));
+                        let oKeys = sortStringList(o.keys());
                         for key in oKeys { results.push(o.get(key)); }
                         return EvalResult::ok(results);
                     }
@@ -537,7 +537,7 @@ class Evaluator
                     Object(o) =>
                     {
                         var results: List<JsonValue> = [];
-                        let oKeys = JsonValueHelper::objKeys(wrapObj(o));
+                        let oKeys = sortStringList(o.keys());
                         for key in oKeys { results.push(o.get(key)); }
                         return EvalResult::ok(results);
                     }
@@ -1134,7 +1134,7 @@ class Evaluator
             }
             Object(o) =>
             {
-                let oKeys = JsonValueHelper::objKeys(wrapObj(o));
+                let oKeys = sortStringList(o.keys());
                 var ki: Int64 = 0;
                 while ki < oKeys.len()
                 {
@@ -1160,7 +1160,7 @@ class Evaluator
                 Object(o) =>
                 {
                     var newObj: Map<String, JsonValue> = @{};
-                    let ks = JsonValueHelper::objKeys(wrapObj(o));
+                    let ks = sortStringList(o.keys());
                     var ki: Int64 = 0;
                     while ki < ks.len()
                     {
@@ -1233,7 +1233,7 @@ class Evaluator
                 Object(o) =>
                 {
                     var newObj: Map<String, JsonValue> = @{};
-                    let ks = JsonValueHelper::objKeys(wrapObj(o));
+                    let ks = sortStringList(o.keys());
                     var ki: Int64 = 0;
                     while ki < ks.len()
                     {
@@ -1331,7 +1331,7 @@ class Evaluator
                     }
                     Object(o) =>
                     {
-                        let keys = JsonValueHelper::objKeys(wrapObj(o));
+                        let keys = sortStringList(o.keys());
                         var ki: Int64 = 0;
                         while ki < keys.len()
                         {
@@ -1362,7 +1362,7 @@ class Evaluator
                     }
                     Object(o) =>
                     {
-                        let keys = JsonValueHelper::objKeys(wrapObj(o));
+                        let keys = sortStringList(o.keys());
                         var ki: Int64 = 0;
                         while ki < keys.len()
                         {
@@ -1682,7 +1682,7 @@ class Evaluator
                 {
                     Object(o) =>
                     {
-                        let ks = JsonValueHelper::objKeys(wrapObj(o));
+                        let ks = sortStringList(o.keys());
                         var ki: Int64 = 0;
                         while ki < ks.len()
                         {
@@ -1731,7 +1731,7 @@ class Evaluator
                     Object(o) =>
                     {
                         var obj: Map<String, JsonValue> = @{};
-                        let ks = JsonValueHelper::objKeys(wrapObj(o));
+                        let ks = sortStringList(o.keys());
                         var ki: Int64 = 0;
                         while ki < ks.len()
                         {
@@ -1802,7 +1802,7 @@ class Evaluator
             }
             Object(o) =>
             {
-                let ks = JsonValueHelper::objKeys(wrapObj(o));
+                let ks = sortStringList(o.keys());
                 var ki: Int64 = 0;
                 while ki < ks.len()
                 {
@@ -1831,7 +1831,7 @@ class Evaluator
         match v
         {
             Array(a) => { let aa = a; childCount = aa.len(); }
-            Object(o) => { childCount = JsonValueHelper::objLen(wrapObj(o)); }
+            Object(o) => { childCount = o.len(); }
             _ => { childCount = -1; }
         }
         if childCount <= 0
@@ -1865,7 +1865,7 @@ class Evaluator
             }
             Object(o) =>
             {
-                let ks = JsonValueHelper::objKeys(wrapObj(o));
+                let ks = sortStringList(o.keys());
                 var ki: Int64 = 0;
                 while ki < ks.len()
                 {
@@ -1948,7 +1948,7 @@ class Evaluator
                 Null       => return EvalResult::single(JsonValue::Integer(0));
                 Str(s)     => return EvalResult::single(JsonValue::Integer(s.len()));
                 Array(a)   => { let arr = a; return EvalResult::single(JsonValue::Integer(arr.len())); }
-                Object(o)  => return EvalResult::single(JsonValue::Integer(JsonValueHelper::objLen(wrapObj(o))));
+                Object(o)  => return EvalResult::single(JsonValue::Integer(o.len()));
                 Integer(n) => { var absN = n; if n < 0 { absN = -n; } return EvalResult::single(JsonValue::Integer(absN)); }
                 Float(fv)  => { var absF = fv; if fv < 0.0 { absF = -fv; } return EvalResult::single(JsonValue::Float(absF)); }
                 Bool(_)    => return EvalResult::err("boolean has no length");
@@ -2033,7 +2033,7 @@ class Evaluator
                 Object(o) =>
                 {
                     var keys: List<JsonValue> = [];
-                    var ks = JsonValueHelper::objKeys(wrapObj(o));
+                    var ks = sortStringList(o.keys());
                     ks = this.sortStrings(ks);
                     for k in ks { keys.push(JsonValue::Str(k)); }
                     return EvalResult::single(JsonValue::Array(keys));
@@ -2057,7 +2057,7 @@ class Evaluator
                 Object(o) =>
                 {
                     var keys: List<JsonValue> = [];
-                    let oKs = JsonValueHelper::objKeys(wrapObj(o));
+                    let oKs = sortStringList(o.keys());
                     for k in oKs { keys.push(JsonValue::Str(k)); }
                     return EvalResult::single(JsonValue::Array(keys));
                 }
@@ -2080,7 +2080,7 @@ class Evaluator
                 Object(o) =>
                 {
                     var vals: List<JsonValue> = [];
-                    let oKs = JsonValueHelper::objKeys(wrapObj(o));
+                    let oKs = sortStringList(o.keys());
                     for k in oKs { vals.push(o.get(k)); }
                     return EvalResult::single(JsonValue::Array(vals));
                 }
@@ -2212,7 +2212,7 @@ class Evaluator
                 Object(o) =>
                 {
                     var obj2: Map<String, JsonValue> = @{};
-                    let oKs = JsonValueHelper::objKeys(wrapObj(o));
+                    let oKs = sortStringList(o.keys());
                     for key in oKs
                     {
                         let r = this.evalSingle(args[0], o.get(key), ctx);
@@ -2684,7 +2684,7 @@ class Evaluator
                 Object(o) =>
                 {
                     var result: List<JsonValue> = [];
-                    let oKs = this.sortStrings(JsonValueHelper::objKeys(wrapObj(o)));
+                    let oKs = this.sortStrings(sortStringList(o.keys()));
                     for key in oKs
                     {
                         var entry: Map<String, JsonValue> = @{};
@@ -4019,7 +4019,7 @@ class Evaluator
                 {
                     Object(ao) =>
                     {
-                        let boKeys = JsonValueHelper::objKeys(wrapObj(bo));
+                        let boKeys = sortStringList(bo.keys());
                         for key in boKeys
                         {
                             if !ao.contains(key) { return false; }
@@ -4154,7 +4154,7 @@ class Evaluator
             }
             Object(o) =>
             {
-                let oKeys = JsonValueHelper::objKeys(wrapObj(o));
+                let oKeys = sortStringList(o.keys());
                 var obj: Map<String, JsonValue> = @{};
                 for key in oKeys
                 {
