@@ -1,8 +1,10 @@
-# jgrep-tinox — Offene Aufgaben
+# jgrep-tinox — Aufgaben
 
-Stand: 2026-07-05 — alle Punkte am Binary verifiziert (89/89 Tests grün, CLI-Flags inkl. Shell-Completion funktionieren, Pflicht-Umfang aus TASKS.md komplett).
+Stand: 2026-07-05 — **alle offenen Punkte abgearbeitet.** 121 Tests grün
+(89 bestehende + 32 neue in `tests/builtins_test.tnx`). Repo ist jetzt ein
+Git-Repository mit Feature-Historie.
 
-## Bugs
+## Bugs (alle behoben)
 
 - [x] `group_by(.k)` — Gruppen nicht nach Key sortiert (jq gibt sie alphabetisch sortiert zurück)
 - [x] `unique_by(.k)` — gleicher Sortierfehler wie group_by
@@ -11,52 +13,77 @@ Stand: 2026-07-05 — alle Punkte am Binary verifiziert (89/89 Tests grün, CLI-
 - [x] `env` / `env.HOME` — gibt `null` zurück statt der tatsächlichen Umgebungsvariablen
 - [x] `to_entries` — falsche Reihenfolge: "value" vor "key", Keys nicht alphabetisch sortiert
 - [x] `.[n:-m]` Slice — negativer End-Index nach positivem Start-Index wurde als IndexAccess(n) geparst
+- [x] **Pipe/Komma-Präzedenz invertiert** (2026-07-05 entdeckt): `a | b, c` wurde als
+      `(a | b), c` geparst statt jq-konform `a | (b, c)`. Parser-Ebenen getauscht,
+      `as`-Body erstreckt sich jetzt über den Restausdruck.
+- [x] **`scan` war kaputt** (2026-07-05): Tinox-Codegen typisierte den
+      `regexFindAll`-Rückgabewert als String (Bug-7-Muster) — im Zuge der
+      neuen Regex-Schicht behoben.
+- [x] **Pfad-Maschinerie war ein Stub-Feld** (2026-07-05): `setpath`, `delpaths`,
+      `paths`, `leaf_paths` gaben Input/[]/null zurück; `getpath` verwechselte
+      Input mit Pfad; `del(.a)` und `del(.x.y)` waren wirkungslos. Alles neu
+      implementiert (getPathValue/setPathValue/delPathValue/allPathsRec,
+      Löschen sortiert-rückwärts wie jq).
 
-## Features (Pflicht)
+## Features (Pflicht — alle umgesetzt)
 
-- [x] User-defined `def`-Funktionen — Def-Variante propagiert Context nicht über Pipe-Grenze
-- [x] `@csv`, `@tsv`, `@html`, `@uri`, `@sh` — Format-Strings implementiert und getestet
-- [x] `input` / `inputs` — Multi-Input-Builtins für `-n`-Modus (liest stdin oder Dateien in Queue)
-- [x] `debug` / `debug(msg)` / `stderr` — Debug-Output auf stderr
-- [x] `now` / `todate` / `fromdate` / `strftime(fmt)` — Datum/Zeit-Funktionen
-- [x] Math: `ceil`, `round`, `sqrt`, `pow`, `log`, `exp`, `nan`, `infinite`, `isinfinite`, `isnan`, `isnormal`, `isfinite`, `fabs`, `floor` — Mathe-Builtins
-- [x] README.md — geschrieben
+- [x] User-defined `def`-Funktionen
+- [x] `@csv`, `@tsv`, `@html`, `@uri`, `@sh` — Format-Strings
+- [x] `input` / `inputs` — Multi-Input-Builtins für `-n`-Modus
+- [x] `debug` / `debug(msg)` / `stderr`
+- [x] `now` / `todate` / `fromdate` / `strftime(fmt)`
+- [x] Math-Basis: `ceil`, `round`, `sqrt`, `pow`, `log`, `exp`, `nan`, `infinite`,
+      `isinfinite`, `isnan`, `isnormal`, `isfinite`, `fabs`, `floor`
+- [x] README.md
+- [x] `sub(re; s)` / `gsub(re; s)` / `splits(re)` / `split(re; flags)` (2026-07-05) —
+      Regex-Schicht über neues `regexMatchGroups` in der Tinox-Runtime;
+      `regexTranslate` übersetzt `(?<name>...)`, `(?:...)`, `\d\w\s` nach POSIX ERE;
+      Capture-Objekt als Replacement-Input plus `$name`-Bindings; `i`/`g`-Flags.
+      `match`/`capture` liefern echte jq-Objekte (offset/length/string/captures).
+- [x] `halt` / `halt_error` / `halt_error(code)` (2026-07-05)
+- [x] `input_line_number` (2026-07-05) — Näherung: zählt konsumierte Dokumente
 
-## Fehlende Features (in TASKS.md nicht erfasst, aber jq-Core)
+## Optional (alle umgesetzt, 2026-07-05)
 
-- [ ] `sub(re; s)` / `gsub(re; s)` / `splits(re)` — Regex-Ersetzung und Regex-Split fehlen komplett.
-      `test`/`match`/`capture`/`scan` existieren, die Ersetzungs-Seite nicht.
-      **Größter Kompatibilitätsgewinn — als Nächstes angehen.** Auch die Varianten mit
-      Flags (`sub(re; s; flags)`, `gsub(re; s; flags)`) und Capture-Referenzen
-      (`gsub("(?<x>...)"; "\(.x)")`) gehören dazu.
-- [ ] `halt` / `halt_error` / `halt_error(code)` — Programm sofort beenden (Exit-Code setzen)
-- [ ] `input_line_number` — Zeilennummer des zuletzt gelesenen Inputs
+- [x] `label $out | ...` / `break $out` — echte Break-Semantik: `LabelBind`-Variante
+      im Parser (Body wurde vorher verworfen!), `breakLabel`-Signal im EvalResult,
+      Propagation durch Pipe/Comma, `[...]` verwirft bei break das halbe Array,
+      `try` fängt break nicht, break ohne label ist Fehler.
+- [x] Datum-Rest: `gmtime`, `localtime` (= gmtime, keine TZ), `mktime`,
+      `dateadd(unit; n)`, `datesub(unit; n)` — Civil-Calendar-Arithmetik in purem
+      Tinox, gegen date(1) verifiziert. `mktime` akzeptiert auch Integer-Timestamps.
+- [x] Komplexe Mathe: `log2`, `log10`, `exp2`, `exp10`, `cbrt`, `trunc`, `rint`,
+      `nearbyint`, `logb`, `significand`, `exponent`, `tgamma`, `lgamma` —
+      native libm-Bridges (exakte Ergebnisse).
+- [x] Streaming: `tostream`, `fromstream`, `truncate_stream` — jq-Semantik inkl.
+      Abschluss-Events; `fromstream(tostream)`-Roundtrip verifiziert.
+- [x] `$__loc__` → `{"file":"<stdin>","line":1}`
+- [x] `modulemeta` → jq-kompatibler Fehler (kein Modulsystem)
 
-## Optional (Nice-to-have)
+## Repo-Hygiene (erledigt)
 
-- [ ] `label $out | ...` / `break $out` — **Achtung: wird geparst, ist aber nur ein Stub!**
-      evaluator.tnx:726: `Label` gibt den Input unverändert durch, `Break` gibt `empty` zurück —
-      kein echter Early-Exit. Verifiziert: `label $out | .[] | if . == 2 then break $out else . end`
-      auf `[1,2,3]` müsste `1` liefern, gibt aber alles aus. Echter Fix braucht Umbau des
-      Evaluator-Ergebnistyps (Break-Signal muss durch die Pipe propagieren).
-- [ ] Datum-Rest: `gmtime`, `mktime`, `dateadd(x; n)`, `datesub(x; n)` — fehlen
-      (Basis `now`/`todate`/`fromdate`/`todateiso8601`/`fromdateiso8601`/`strftime`/`strptime` funktioniert)
-- [ ] Komplexe Mathe: `log2`, `log10`, `exp2`, `exp10`, `tgamma`, `lgamma`, `logb`, `trunc`,
-      `rint`, `cbrt`, `significand`, `exponent`, `nearbyint`
-- [ ] Streaming: `truncate_stream`, `tostream`, `fromstream`
-- [ ] `$__loc__` — aktuelle Datei + Zeile als Objekt (verifiziert: exit 1)
-- [ ] `modulemeta` — Modul-Metadaten
+- [x] `git init` + `.gitignore` (Achtung: Pattern `jgrep` ohne Root-Anker hatte
+      anfangs `src/jgrep/` verschluckt — auf `/jgrep` korrigiert)
+- [x] `tests/jgrep` ist ein Symlink auf `../src/jgrep` (Modul-Auflösung des
+      Testrunners) und wird mitversioniert
+- [x] `jgrep.ll` und `.tinox_*`-Artefakte ignoriert
 
-## Repo-Hygiene
+## Bekannte Abweichungen von jq (dokumentiert, bewusst)
 
-- [ ] `git init` — das Verzeichnis ist kein Git-Repository, trotz erheblichem Arbeitsstand
-- [ ] `tests/jgrep/` enthält eine Kopie der Quelldateien aus `src/jgrep/` (vermutlich
-      Build-Artefakt des Testrunners) — klären, ob das in ein Ignore gehört
-- [ ] `jgrep.ll` (generiertes LLVM-IR) liegt im Repo-Root — Build-Artefakt, sollte ignoriert werden
+- Regex ist POSIX ERE statt Oniguruma: kein Lookahead/Lookbehind, keine
+  Backreferences, keine Lazy-Quantifier. `(?:...)` wird zur zählenden Gruppe.
+- Match-Offsets sind Byte-Offsets (jq zählt Unicode-Codepoints).
+- `localtime` == `gmtime` (keine Zeitzonen).
+- `sub`/`gsub` mit Replacement-Filter, der mehrere Werte produziert, nimmt den ersten.
+- `input_line_number` zählt Dokumente, nicht physische Zeilen.
+- Float-Ausgabe zeigt `9.0` statt `9` (bestehende Serializer-Konvention).
 
 ## Hinweise zum Tinox-Compiler
 
-Die Workarounds für Compiler-Bugs (strLen/strEq/copyList etc., siehe `bugs.md` im
-Tinox-Repo) sind inzwischen obsolet: Bugs 1–7, 9, 10, 13, 14 sind im Compiler gefixt
-(Stand 2026-07-05), ebenso Compound-Assignments (Bug 12). Die Workaround-Funktionen im
-jgrep-Code funktionieren weiterhin, könnten aber bei Gelegenheit zurückgebaut werden.
+Im Zuge dieser Arbeiten im Tinox-Repo gefixt (Stand 2026-07-05, dort noch
+uncommittet): `regexMatchGroups`-Runtime + Codegen-Typisierung der
+Regex-Listen-Rückgaben, verschachtelte Schleifen im Typecheck
+(`break` nach innerer Schleife wurde abgelehnt), libm-Bridges
+(mathLog2/mathTgamma/…), Compound-Assignments (bugs.md Bug 12).
+Die alten jgrep-Workarounds (strLen/strEq/copyList etc.) sind obsolet,
+funktionieren aber weiter — Rückbau bei Gelegenheit.
