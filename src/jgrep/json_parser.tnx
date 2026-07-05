@@ -1,0 +1,544 @@
+module jgrep.json_parser;
+
+import json_value;
+
+enum JsonToken
+{
+    LBrace;
+    RBrace;
+    LBracket;
+    RBracket;
+    Colon;
+    Comma;
+    TrueToken;
+    FalseToken;
+    NullToken;
+    StringToken(String);
+    IntToken(Int64);
+    FloatToken(Float64);
+    EOF;
+}
+
+class JsonLexer
+{
+    var source: String;
+    var pos: Int64;
+    var line: Int64;
+    var col: Int64;
+
+    fnc new(src: String) -> JsonLexer
+    {
+        return JsonLexer { source: src, pos: 0, line: 1, col: 1 };
+    }
+
+    fn peekChar() -> Int64
+    {
+        if this.pos >= this.source.len() { return 0; }
+        return this.source[this.pos] as Int64;
+    }
+
+    fn nextChar() -> Int64
+    {
+        if this.pos >= this.source.len() { return 0; }
+        let code = this.source[this.pos] as Int64;
+        this.pos = this.pos + 1;
+        if code == 10 { this.line = this.line + 1; this.col = 1; }
+        else          { this.col = this.col + 1; }
+        return code;
+    }
+
+    fn skipWhitespace()
+    {
+        while this.pos < this.source.len()
+        {
+            let ch = this.peekChar();
+            if ch == 32 || ch == 9 || ch == 10 || ch == 13
+            {
+                this.nextChar();
+            }
+            else { break; }
+        }
+    }
+
+    fn hexDigit(ch: Int64) -> Int64
+    {
+        if ch >= 48 && ch <= 57 { return ch - 48; }
+        if ch >= 97 && ch <= 102 { return ch - 97 + 10; }
+        if ch >= 65 && ch <= 70  { return ch - 65 + 10; }
+        return -1;
+    }
+
+    fnc codePointToStr(code: Int64) -> String
+    {
+        let ascii = " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~";
+        if code >= 32 && code <= 126 { return ascii.substring(code - 32, code - 31); }
+        if code == 10 { return "\n"; }
+        if code == 13 { return "\r"; }
+        if code == 9  { return "\t"; }
+        if code == 8  { return "\x08"; }
+        if code == 12 { return "\x0c"; }
+        return "?";
+    }
+
+    fn readString() -> String
+    {
+        var result = "";
+        while this.pos < this.source.len()
+        {
+            let ch = this.nextChar();
+            if ch == 34 { return result; }
+            if ch == 92
+            {
+                let esc = this.nextChar();
+                if esc == 34  { result = result + "\""; }
+                else if esc == 92 { result = result + "\\"; }
+                else if esc == 47  { result = result + "/"; }
+                else if esc == 98  { result = result + "\x08"; }
+                else if esc == 102  { result = result + "\x0c"; }
+                else if esc == 110  { result = result + "\n"; }
+                else if esc == 114  { result = result + "\r"; }
+                else if esc == 116  { result = result + "\t"; }
+                else if esc == 117
+                {
+                    var codepoint: Int64 = 0;
+                    var i = 0;
+                    while i < 4
+                    {
+                        let hc = this.nextChar();
+                        let hv = this.hexDigit(hc);
+                        codepoint = codepoint * 16 + hv;
+                        i = i + 1;
+                    }
+                    result = result + JsonLexer::codePointToStr(codepoint);
+                }
+                else { result = result + this.source.substring(this.pos - 1, this.pos); }
+            }
+            else { result = result + this.source.substring(this.pos - 1, this.pos); }
+        }
+        return result;
+    }
+
+    fn readNumber(firstCode: Int64) -> JsonToken
+    {
+        var numStr = JsonLexer::codePointToStr(firstCode);
+        var isFloat = false;
+
+        while this.pos < this.source.len()
+        {
+            let ch = this.peekChar();
+            if ch >= 48 && ch <= 57 { numStr = numStr + JsonLexer::codePointToStr(ch); this.nextChar(); }
+            else if ch == 46 && !isFloat
+            {
+                isFloat = true;
+                numStr = numStr + ".";
+                this.nextChar();
+            }
+            else if ch == 101 || ch == 69
+            {
+                isFloat = true;
+                numStr = numStr + JsonLexer::codePointToStr(ch);
+                this.nextChar();
+                let sign = this.peekChar();
+                if sign == 43 || sign == 45
+                {
+                    numStr = numStr + JsonLexer::codePointToStr(sign);
+                    this.nextChar();
+                }
+            }
+            else { break; }
+        }
+
+        if isFloat { return JsonToken::FloatToken(numStr.toFloat()); }
+        return JsonToken::IntToken(numStr.toInt());
+    }
+
+    fn nextToken() -> JsonToken
+    {
+        this.skipWhitespace();
+        if this.pos >= this.source.len() { return JsonToken::EOF; }
+
+        let ch = this.nextChar();
+
+        if ch == 123 { return JsonToken::LBrace; }
+        if ch == 125 { return JsonToken::RBrace; }
+        if ch == 91 { return JsonToken::LBracket; }
+        if ch == 93 { return JsonToken::RBracket; }
+        if ch == 58 { return JsonToken::Colon; }
+        if ch == 44 { return JsonToken::Comma; }
+        if ch == 34 { return JsonToken::StringToken(this.readString()); }
+        if ch == 116
+        {
+            this.nextChar(); this.nextChar(); this.nextChar();
+            return JsonToken::TrueToken;
+        }
+        if ch == 102
+        {
+            this.nextChar(); this.nextChar(); this.nextChar(); this.nextChar();
+            return JsonToken::FalseToken;
+        }
+        if ch == 110
+        {
+            this.nextChar(); this.nextChar(); this.nextChar();
+            return JsonToken::NullToken;
+        }
+        if ch == 45 || (ch >= 48 && ch <= 57) { return this.readNumber(ch); }
+
+        return JsonToken::EOF;
+    }
+
+    fn tokenize() -> List<JsonToken>
+    {
+        var tokens: List<JsonToken> = [];
+        loop
+        {
+            let tok = this.nextToken();
+            tokens.push(tok);
+            match tok { EOF => break; _ => {} }
+        }
+        return tokens;
+    }
+}
+
+class JsonParser
+{
+    var tokens: List<JsonToken>;
+    var pos: Int64;
+    var errorMsg: String;
+    var hasError: Bool;
+
+    fnc new(toks: List<JsonToken>) -> JsonParser
+    {
+        return JsonParser { tokens: toks, pos: 0, errorMsg: "", hasError: false };
+    }
+
+    fn peek() -> JsonToken
+    {
+        if this.pos >= this.tokens.len() { return JsonToken::EOF; }
+        return this.tokens[this.pos];
+    }
+
+    fn consume() -> JsonToken
+    {
+        let tok = this.peek();
+        this.pos = this.pos + 1;
+        return tok;
+    }
+
+    fn parseValue() -> JsonValue
+    {
+        let tok = this.consume();
+        match tok
+        {
+            NullToken        => return JsonValue::Null;
+            TrueToken        => return JsonValue::Bool(true);
+            FalseToken       => return JsonValue::Bool(false);
+            IntToken(n)      => return JsonValue::Integer(n);
+            FloatToken(s)    => return JsonValue::Float(s);
+            StringToken(s)   => return JsonValue::Str(s);
+            LBrace           => return this.parseObject();
+            LBracket         => return this.parseArray();
+            _ =>
+            {
+                this.hasError = true;
+                this.errorMsg = "Unexpected token in JSON value";
+                return JsonValue::Null;
+            }
+        }
+        return JsonValue::Null;
+    }
+
+    fn parseObject() -> JsonValue
+    {
+        var obj: Map<String, JsonValue> = @{};
+
+        match this.peek()
+        {
+            RBrace => { this.consume(); return JsonValue::Object(obj); }
+            _ => {}
+        }
+
+        loop
+        {
+            let keyTok = this.consume();
+            var key = "";
+            match keyTok
+            {
+                StringToken(s) => { key = s; }
+                _ =>
+                {
+                    this.hasError = true;
+                    this.errorMsg = "Expected string key in object";
+                    return JsonValue::Object(obj);
+                }
+            }
+
+            match this.consume()
+            {
+                Colon => {}
+                _ =>
+                {
+                    this.hasError = true;
+                    this.errorMsg = "Expected ':' after object key";
+                    return JsonValue::Object(obj);
+                }
+            }
+
+            let value = this.parseValue();
+            obj[key] = value;
+
+            match this.peek()
+            {
+                Comma  => { this.consume(); }
+                RBrace => { this.consume(); break; }
+                _ =>
+                {
+                    this.hasError = true;
+                    this.errorMsg = "Expected ',' or '}' in object";
+                    break;
+                }
+            }
+        }
+
+        return JsonValue::Object(obj);
+    }
+
+    fn parseArray() -> JsonValue
+    {
+        var arr: List<JsonValue> = [];
+
+        match this.peek()
+        {
+            RBracket => { this.consume(); return JsonValue::Array(arr); }
+            _ => {}
+        }
+
+        loop
+        {
+            let value = this.parseValue();
+            arr.push(value);
+
+            match this.peek()
+            {
+                Comma    => { this.consume(); }
+                RBracket => { this.consume(); break; }
+                _ =>
+                {
+                    this.hasError = true;
+                    this.errorMsg = "Expected ',' or ']' in array";
+                    break;
+                }
+            }
+        }
+
+        return JsonValue::Array(arr);
+    }
+
+    fnc parse(input: String) -> JsonValue
+    {
+        let lexer = JsonLexer::new(input);
+        let tokens = lexer.tokenize();
+        var parser = JsonParser::new(tokens);
+        let result = parser.parseValue();
+        if parser.hasError
+        {
+            println("JSON parse error: " + parser.errorMsg);
+            processExit(2);
+        }
+        return result;
+    }
+
+    fnc tryParse(input: String) -> List<JsonValue>
+    {
+        let trimmed = input.trim();
+        if trimmed.len() == 0 { return []; }
+        let lexer = JsonLexer::new(trimmed);
+        let tokens = lexer.tokenize();
+        var parser = JsonParser::new(tokens);
+        let result = parser.parseValue();
+        if parser.hasError { return []; }
+        return [result];
+    }
+
+    fnc parseAll(input: String) -> List<JsonValue>
+    {
+        let trimmed = input.trim();
+        if trimmed.len() == 0 { return []; }
+        let lexer = JsonLexer::new(trimmed);
+        let tokens = lexer.tokenize();
+        var parser = JsonParser::new(tokens);
+        var results: List<JsonValue> = [];
+        var go = true;
+        while go
+        {
+            match parser.peek()
+            {
+                EOF => { go = false; }
+                _ =>
+                {
+                    let v = parser.parseValue();
+                    if parser.hasError { go = false; }
+                    else { results.push(v); }
+                }
+            }
+        }
+        return results;
+    }
+}
+
+class ParseResult
+{
+    var ok: Bool;
+    var value: JsonValue;
+
+    fnc success(v: JsonValue) -> ParseResult { return ParseResult { ok: true, value: v }; }
+    fnc failure() -> ParseResult { return ParseResult { ok: false, value: JsonValue::Null }; }
+}
+
+class JsonSerializer
+{
+    fnc codePointToStr(code: Int64) -> String
+    {
+        let ascii = " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~";
+        if code >= 32 && code <= 126 { return ascii.substring(code - 32, code - 31); }
+        if code == 10 { return "\n"; }
+        if code == 13 { return "\r"; }
+        if code == 9  { return "\t"; }
+        if code == 8  { return "\x08"; }
+        if code == 12 { return "\x0c"; }
+        return "?";
+    }
+
+    fnc stringify(value: JsonValue) -> String
+    {
+        match value
+        {
+            Null       => return "null";
+            Bool(b)    => { if b { return "true"; } return "false"; }
+            Integer(n) => return n.toString();
+            Float(s)   => return floatDisplay(s);
+            Str(s)     => return "\"" + JsonSerializer::escapeString(s) + "\"";
+            Array(a)   =>
+            {
+                let aa = a;
+                if aa.len() == 0 { return "[]"; }
+                var result = "[";
+                var i = 0;
+                for item in aa
+                {
+                    if i > 0 { result = result + ","; }
+                    result = result + JsonSerializer::stringify(item);
+                    i = i + 1;
+                }
+                return result + "]";
+            }
+            Object(o)  =>
+            {
+                let oLen = JsonValueHelper::objLen(wrapObj(o));
+                if oLen == 0 { return "{}"; }
+                var result = "{";
+                var i = 0;
+                let oKs = JsonValueHelper::objKeys(wrapObj(o));
+                for key in oKs
+                {
+                    if i > 0 { result = result + ","; }
+                    result = result + "\"" + JsonSerializer::escapeString(key) + "\":" + JsonSerializer::stringify(o.get(key));
+                    i = i + 1;
+                }
+                return result + "}";
+            }
+        }
+        return "null";
+    }
+
+    fnc prettyStringify(value: JsonValue, indent: Int64) -> String
+    {
+        return JsonSerializer::prettyStringifyInner(value, indent, 0);
+    }
+
+    fnc prettyStringifyInner(value: JsonValue, indent: Int64, depth: Int64) -> String
+    {
+        let pad = JsonSerializer::spaces((depth + 1) * indent);
+        let closePad = JsonSerializer::spaces(depth * indent);
+
+        match value
+        {
+            Null       => return "null";
+            Bool(b)    => { if b { return "true"; } return "false"; }
+            Integer(n) => return n.toString();
+            Float(s)   => return floatDisplay(s);
+            Str(s)     => return "\"" + JsonSerializer::escapeString(s) + "\"";
+            Array(a)   =>
+            {
+                let pa = a;
+                if pa.len() == 0 { return "[]"; }
+                var result = "[\n";
+                var i = 0;
+                for item in pa
+                {
+                    if i > 0 { result = result + ",\n"; }
+                    result = result + pad + JsonSerializer::prettyStringifyInner(item, indent, depth + 1);
+                    i = i + 1;
+                }
+                return result + "\n" + closePad + "]";
+            }
+            Object(o)  =>
+            {
+                let poLen = JsonValueHelper::objLen(wrapObj(o));
+                if poLen == 0 { return "{}"; }
+                var result = "{\n";
+                var i = 0;
+                let poKs = JsonValueHelper::objKeys(wrapObj(o));
+                for key in poKs
+                {
+                    if i > 0 { result = result + ",\n"; }
+                    result = result + pad + "\"" + JsonSerializer::escapeString(key) + "\": " + JsonSerializer::prettyStringifyInner(o.get(key), indent, depth + 1);
+                    i = i + 1;
+                }
+                return result + "\n" + closePad + "}";
+            }
+        }
+        return "null";
+    }
+
+    fnc escapeString(s: String) -> String
+    {
+        var result = "";
+        var i: Int64 = 0;
+        while i < s.len()
+        {
+            let code = s[i] as Int64;
+            if code == 34       { result = result + "\\\""; }
+            else if code == 92  { result = result + "\\\\"; }
+            else if code == 10  { result = result + "\\n"; }
+            else if code == 13  { result = result + "\\r"; }
+            else if code == 9   { result = result + "\\t"; }
+            else if code == 8   { result = result + "\\b"; }
+            else if code == 12  { result = result + "\\f"; }
+            else                { result = result + s.substring(i, i + 1); }
+            i = i + 1;
+        }
+        return result;
+    }
+
+    fnc spaces(n: Int64) -> String
+    {
+        var s = "";
+        var i: Int64 = 0;
+        while i < n { s = s + " "; i = i + 1; }
+        return s;
+    }
+
+    fnc formatForOutput(value: JsonValue, pretty: Bool) -> String
+    {
+        match value
+        {
+            Str(s) => return s;
+            _ =>
+            {
+                if pretty { return JsonSerializer::prettyStringify(value, 2); }
+                return JsonSerializer::stringify(value);
+            }
+        }
+        return "";
+    }
+}

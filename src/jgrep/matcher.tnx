@@ -1,0 +1,60 @@
+module jgrep.matcher;
+
+import json_value;
+import filter;
+import evaluator;
+
+class MatchResult
+{
+    var values: List<JsonValue>;
+    var hadError: Bool;
+    var errorMsg: String;
+
+    fnc new(values: List<JsonValue>, hadError: Bool, errorMsg: String) -> MatchResult
+    {
+        return MatchResult { values: values, hadError: hadError, errorMsg: errorMsg };
+    }
+
+    fn hasMatch() -> Bool { return this.values.len() > 0; }
+}
+
+class Matcher
+{
+    var evaluator: Evaluator;
+
+    fnc new() -> Matcher
+    {
+        return Matcher { evaluator: Evaluator::new() };
+    }
+
+    fn runMatch(filter: Filter, input: JsonValue) -> MatchResult
+    {
+        let ctx = EvalContext::new();
+        let result = this.evaluator.eval(filter, input, ctx);
+        if result.isError()
+        {
+            return MatchResult::new([], true, result.errorMsg);
+        }
+        return MatchResult::new(result.values, false, "");
+    }
+
+    fn matchRaw(filter: Filter, input: JsonValue) -> List<JsonValue>
+    {
+        let ctx = EvalContext::new();
+        let result = this.evaluator.eval(filter, input, ctx);
+        if result.isError() { return []; }
+        return result.values;
+    }
+
+    fn setInputQueue(q: List<JsonValue>)
+    {
+        this.evaluator.inputQueue = q;
+        this.evaluator.inputQueuePos = 0;
+    }
+
+    fn runEval(filter: Filter, input: JsonValue) -> EvalResult
+    {
+        let ctx = EvalContext::new();
+        return this.evaluator.eval(filter, input, ctx);
+    }
+}

@@ -1,0 +1,1303 @@
+module jgrep.filter;
+
+import json_value;
+
+enum StringPart
+{
+    Text(String);
+    Expr(Filter);
+}
+
+enum ObjKey
+{
+    Literal(String);
+    Computed(Filter);
+}
+
+class ObjEntry
+{
+    var keySpec: ObjKey;
+    var valFilter: Filter;
+}
+
+enum Filter
+{
+    Identity;
+    RecursiveDescent;
+    Field(String);
+    OptionalField(String);
+    IndexAccess(Int64);
+    SliceAccess(Int64, Int64, Bool, Bool);
+    IterEach;
+    OptionalIterator;
+    Pipe(Filter, Filter);
+    Comma(Filter, Filter);
+    LiteralNull;
+    LiteralBool(Bool);
+    LiteralInt(Int64);
+    LiteralFloat(Float64);
+    LiteralStr(String);
+    LiteralArray(List<Filter>);
+    LiteralObject(List<ObjEntry>);
+    ObjectConstruct(List<ObjEntry>);
+    ArrayConstruct(Filter);
+    Add(Filter, Filter);
+    Subtract(Filter, Filter);
+    Multiply(Filter, Filter);
+    Divide(Filter, Filter);
+    Modulo(Filter, Filter);
+    Equals(Filter, Filter);
+    NotEquals(Filter, Filter);
+    LessThan(Filter, Filter);
+    GreaterThan(Filter, Filter);
+    LessThanOrEqual(Filter, Filter);
+    GreaterThanOrEqual(Filter, Filter);
+    And(Filter, Filter);
+    Or(Filter, Filter);
+    Not;
+    Alternative(Filter, Filter);
+    TryOnly(Filter);
+    TryCatchWith(Filter, Filter);
+    Optional(Filter);
+    IfThenElse(Filter, Filter, Filter);
+    FunctionCall(String, List<Filter>);
+    StringInterp(List<StringPart>);
+    Variable(String);
+    AsPattern(Filter, String, Filter);
+    Reduce(Filter, String, Filter, Filter);
+    Foreach(Filter, String, Filter, Filter, List<Filter>);
+    Recurse(Bool, Filter);
+    Limit(Filter, Filter);
+    Until(Filter, Filter);
+    While(Filter, Filter);
+    Path(Filter);
+    GetPath;
+    SetPath(Filter, Filter);
+    UpdatePath(Filter, Filter);
+    Label(String);
+    Break(String);
+    Env;
+    Format(String, Bool, Filter);
+    Def(String, List<String>, Filter);
+    Deref;
+}
+
+enum FilterToken
+{
+    Dot;
+    DotDot;
+    Pipe;
+    Comma;
+    Semicolon;
+    Question;
+    Colon;
+    Plus;
+    Minus;
+    Star;
+    Slash;
+    Percent;
+    EqEq;
+    BangEq;
+    Lt;
+    Gt;
+    LtEq;
+    GtEq;
+    LParen;
+    RParen;
+    LBracket;
+    RBracket;
+    LBrace;
+    RBrace;
+    AltOp;
+    And;
+    Or;
+    Not;
+    If;
+    Then;
+    Elif;
+    Else;
+    End;
+    Try;
+    Catch;
+    Reduce;
+    Foreach;
+    As;
+    Label;
+    Break;
+    Def;
+    Import;
+    Include;
+    Module;
+    Dollar;
+    At;
+    Recurse;
+    Empty;
+    Error;
+    Ident(String);
+    VarName(String);
+    LabelName(String);
+    IntLit(Int64);
+    FloatLit(Float64);
+    StrLit(String);
+    InterpStr(List<StringPart>);
+    Format(String);
+    Assign;
+    UpdateAssign;
+    PlusAssign;
+    MinusAssign;
+    MulAssign;
+    DivAssign;
+    ModAssign;
+    AltAssign;
+    EOF;
+}
+
+class FilterLexer
+{
+    var source: String;
+    var pos: Int64;
+
+    fnc new(src: String) -> FilterLexer
+    {
+        return FilterLexer { source: src, pos: 0 };
+    }
+
+    fn peek() -> Int64
+    {
+        if this.pos >= this.source.len() { return 0; }
+        return this.source[this.pos] as Int64;
+    }
+
+    fn peek2() -> Int64
+    {
+        if this.pos + 1 >= this.source.len() { return 0; }
+        return this.source[this.pos + 1] as Int64;
+    }
+
+    fn next() -> Int64
+    {
+        if this.pos >= this.source.len() { return 0; }
+        let code = this.source[this.pos] as Int64;
+        this.pos = this.pos + 1;
+        return code;
+    }
+
+    fnc codePointToStr(code: Int64) -> String
+    {
+        let ascii = " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~";
+        if code >= 32 && code <= 126 { return ascii.substring(code - 32, code - 31); }
+        if code == 10 { return "\n"; }
+        if code == 13 { return "\r"; }
+        if code == 9  { return "\t"; }
+        if code == 8  { return "\x08"; }
+        if code == 12 { return "\x0c"; }
+        return "?";
+    }
+
+    fn skipWhitespace()
+    {
+        var skipping = true;
+        while this.pos < this.source.len() && skipping
+        {
+            let ch = this.peek();
+            if ch == 32 || ch == 9 || ch == 10 || ch == 13 { this.next(); }
+            else if ch == 35
+            {
+                while this.pos < this.source.len() && this.peek() != 10 { this.next(); }
+            }
+            else { skipping = false; }
+        }
+    }
+
+    fn readIdent(firstCode: Int64) -> String
+    {
+        var s = FilterLexer::codePointToStr(firstCode);
+        while this.pos < this.source.len()
+        {
+            let ch = this.peek();
+            if (ch >= 97 && ch <= 122) || (ch >= 65 && ch <= 90) || (ch >= 48 && ch <= 57) || ch == 95
+            {
+                s = s + this.source.substring(this.pos, this.pos + 1);
+                this.next();
+            }
+            else { break; }
+        }
+        return s;
+    }
+
+    fn readNumber(firstCode: Int64) -> FilterToken
+    {
+        var s = FilterLexer::codePointToStr(firstCode);
+        var isFloat = false;
+        while this.pos < this.source.len()
+        {
+            let ch = this.peek();
+            if ch >= 48 && ch <= 57 { s = s + this.source.substring(this.pos, this.pos + 1); this.next(); }
+            else if ch == 46 && !isFloat && this.peek2() != 46
+            {
+                isFloat = true;
+                s = s + ".";
+                this.next();
+            }
+            else if ch == 101 || ch == 69
+            {
+                isFloat = true;
+                s = s + this.source.substring(this.pos, this.pos + 1);
+                this.next();
+                let sign = this.peek();
+                if sign == 43 || sign == 45 { s = s + this.source.substring(this.pos, this.pos + 1); this.next(); }
+            }
+            else { break; }
+        }
+        if isFloat { return FilterToken::FloatLit(s.toFloat()); }
+        return FilterToken::IntLit(s.toInt());
+    }
+
+    fn readString() -> FilterToken
+    {
+        var parts: List<StringPart> = [];
+        var current = "";
+        var hasInterp = false;
+
+        while this.pos < this.source.len()
+        {
+            let ch = this.next();
+            if ch == 34
+            {
+                if hasInterp
+                {
+                    if current.len() > 0 { parts.push(StringPart::Text(current)); }
+                    return FilterToken::InterpStr(parts);
+                }
+                return FilterToken::StrLit(current);
+            }
+            if ch == 92
+            {
+                let esc = this.next();
+                if esc == 34  { current = current + "\""; }
+                else if esc == 92 { current = current + "\\"; }
+                else if esc == 110  { current = current + "\n"; }
+                else if esc == 114  { current = current + "\r"; }
+                else if esc == 116  { current = current + "\t"; }
+                else if esc == 98  { current = current + "\x08"; }
+                else if esc == 102  { current = current + "\x0c"; }
+                else if esc == 40
+                {
+                    hasInterp = true;
+                    if current.len() > 0 { parts.push(StringPart::Text(current)); current = ""; }
+                    var depth = 1;
+                    var innerSrc = "";
+                    while this.pos < this.source.len() && depth > 0
+                    {
+                        let ic = this.next();
+                        if ic == 40 { depth = depth + 1; innerSrc = innerSrc + FilterLexer::codePointToStr(ic); }
+                        else if ic == 41 { depth = depth - 1; if depth > 0 { innerSrc = innerSrc + FilterLexer::codePointToStr(ic); } }
+                        else { innerSrc = innerSrc + this.source.substring(this.pos - 1, this.pos); }
+                    }
+                    let innerFilter = FilterParser::parseExprStr(innerSrc);
+                    parts.push(StringPart::Expr(innerFilter));
+                }
+                else { current = current + this.source.substring(this.pos - 1, this.pos); }
+            }
+            else { current = current + this.source.substring(this.pos - 1, this.pos); }
+        }
+        return FilterToken::StrLit(current);
+    }
+
+    fn tokenize() -> List<FilterToken>
+    {
+        var tokens: List<FilterToken> = [];
+        loop
+        {
+            this.skipWhitespace();
+            if this.pos >= this.source.len() { tokens.push(FilterToken::EOF); break; }
+
+            let ch = this.next();
+
+            if ch == 124
+            {
+                if this.peek() == 61 { this.next(); tokens.push(FilterToken::UpdateAssign); }
+                else { tokens.push(FilterToken::Pipe); }
+            }
+            else if ch == 44 { tokens.push(FilterToken::Comma); }
+            else if ch == 59 { tokens.push(FilterToken::Semicolon); }
+            else if ch == 63 { tokens.push(FilterToken::Question); }
+            else if ch == 43 { if this.peek() == 61 { this.next(); tokens.push(FilterToken::PlusAssign); } else { tokens.push(FilterToken::Plus); } }
+            else if ch == 45 { if this.peek() == 61 { this.next(); tokens.push(FilterToken::MinusAssign); } else { tokens.push(FilterToken::Minus); } }
+            else if ch == 42 { if this.peek() == 61 { this.next(); tokens.push(FilterToken::MulAssign); } else { tokens.push(FilterToken::Star); } }
+            else if ch == 37 { if this.peek() == 61 { this.next(); tokens.push(FilterToken::ModAssign); } else { tokens.push(FilterToken::Percent); } }
+            else if ch == 40 { tokens.push(FilterToken::LParen); }
+            else if ch == 41 { tokens.push(FilterToken::RParen); }
+            else if ch == 91 { tokens.push(FilterToken::LBracket); }
+            else if ch == 93 { tokens.push(FilterToken::RBracket); }
+            else if ch == 123 { tokens.push(FilterToken::LBrace); }
+            else if ch == 125 { tokens.push(FilterToken::RBrace); }
+            else if ch == 58 { tokens.push(FilterToken::Colon); }
+            else if ch == 47
+            {
+                if this.peek() == 47
+                {
+                    this.next();
+                    if this.peek() == 61 { this.next(); tokens.push(FilterToken::AltAssign); }
+                    else { tokens.push(FilterToken::AltOp); }
+                }
+                else if this.peek() == 61 { this.next(); tokens.push(FilterToken::DivAssign); }
+                else { tokens.push(FilterToken::Slash); }
+            }
+            else if ch == 61
+            {
+                if this.peek() == 61 { this.next(); tokens.push(FilterToken::EqEq); }
+                else { tokens.push(FilterToken::Assign); }
+            }
+            else if ch == 33
+            {
+                if this.peek() == 61 { this.next(); tokens.push(FilterToken::BangEq); }
+            }
+            else if ch == 60
+            {
+                if this.peek() == 61 { this.next(); tokens.push(FilterToken::LtEq); }
+                else { tokens.push(FilterToken::Lt); }
+            }
+            else if ch == 62
+            {
+                if this.peek() == 61 { this.next(); tokens.push(FilterToken::GtEq); }
+                else { tokens.push(FilterToken::Gt); }
+            }
+            else if ch == 46
+            {
+                if this.peek() == 46
+                {
+                    this.next();
+                    tokens.push(FilterToken::DotDot);
+                }
+                else { tokens.push(FilterToken::Dot); }
+            }
+            else if ch == 36
+            {
+                let name = this.readIdent(this.next());
+                tokens.push(FilterToken::VarName(name));
+            }
+            else if ch == 64
+            {
+                let p = this.peek();
+                if (p >= 97 && p <= 122) || (p >= 65 && p <= 90)
+                {
+                    let name = this.readIdent(this.next());
+                    tokens.push(FilterToken::Format(name));
+                }
+                else { tokens.push(FilterToken::At); }
+            }
+            else if ch == 34 { tokens.push(this.readString()); }
+            else if ch >= 48 && ch <= 57 { tokens.push(this.readNumber(ch)); }
+            else if (ch >= 97 && ch <= 122) || (ch >= 65 && ch <= 90) || ch == 95
+            {
+                let word = this.readIdent(ch);
+                if word == "and"     { tokens.push(FilterToken::And); }
+                else if word == "or"      { tokens.push(FilterToken::Or); }
+                else if word == "not"     { tokens.push(FilterToken::Not); }
+                else if word == "if"      { tokens.push(FilterToken::If); }
+                else if word == "then"    { tokens.push(FilterToken::Then); }
+                else if word == "elif"    { tokens.push(FilterToken::Elif); }
+                else if word == "else"    { tokens.push(FilterToken::Else); }
+                else if word == "end"     { tokens.push(FilterToken::End); }
+                else if word == "try"     { tokens.push(FilterToken::Try); }
+                else if word == "catch"   { tokens.push(FilterToken::Catch); }
+                else if word == "reduce"  { tokens.push(FilterToken::Reduce); }
+                else if word == "foreach" { tokens.push(FilterToken::Foreach); }
+                else if word == "as"      { tokens.push(FilterToken::As); }
+                else if word == "label"   { tokens.push(FilterToken::Label); }
+                else if word == "break"   { tokens.push(FilterToken::Break); }
+                else if word == "def"     { tokens.push(FilterToken::Def); }
+                else if word == "null"    { tokens.push(FilterToken::StrLit("null")); }
+                else if word == "true"    { tokens.push(FilterToken::StrLit("true")); }
+                else if word == "false"   { tokens.push(FilterToken::StrLit("false")); }
+                else                      { tokens.push(FilterToken::Ident(word)); }
+            }
+        }
+        return tokens;
+    }
+}
+
+class FilterParser
+{
+    var tokens: List<FilterToken>;
+    var pos: Int64;
+    var defs: Map<String, Filter>;
+
+    fnc new(toks: List<FilterToken>) -> FilterParser
+    {
+        return FilterParser { tokens: toks, pos: 0, defs: @{} };
+    }
+
+    fn peek() -> FilterToken
+    {
+        if this.pos >= this.tokens.len() { return FilterToken::EOF; }
+        return this.tokens[this.pos];
+    }
+
+    fn peek2() -> FilterToken
+    {
+        if this.pos + 1 >= this.tokens.len() { return FilterToken::EOF; }
+        return this.tokens[this.pos + 1];
+    }
+
+    fn consume() -> FilterToken
+    {
+        let tok = this.peek();
+        this.pos = this.pos + 1;
+        return tok;
+    }
+
+    fn isPeek(tok: FilterToken) -> Bool
+    {
+        match this.peek()
+        {
+            Pipe      => { match tok { Pipe => return true; _ => return false; } }
+            Comma     => { match tok { Comma => return true; _ => return false; } }
+            AltOp     => { match tok { AltOp => return true; _ => return false; } }
+            Or        => { match tok { Or => return true; _ => return false; } }
+            And       => { match tok { And => return true; _ => return false; } }
+            EqEq      => { match tok { EqEq => return true; _ => return false; } }
+            BangEq    => { match tok { BangEq => return true; _ => return false; } }
+            Lt        => { match tok { Lt => return true; _ => return false; } }
+            Gt        => { match tok { Gt => return true; _ => return false; } }
+            LtEq      => { match tok { LtEq => return true; _ => return false; } }
+            GtEq      => { match tok { GtEq => return true; _ => return false; } }
+            Plus      => { match tok { Plus => return true; _ => return false; } }
+            Minus     => { match tok { Minus => return true; _ => return false; } }
+            Star      => { match tok { Star => return true; _ => return false; } }
+            Slash     => { match tok { Slash => return true; _ => return false; } }
+            Percent   => { match tok { Percent => return true; _ => return false; } }
+            _         => return false;
+        }
+    }
+
+    fn parseTopLevel() -> Filter
+    {
+        var defs: List<Filter> = [];
+        loop
+        {
+            match this.peek()
+            {
+                Def =>
+                {
+                    let d = this.parseDef();
+                    defs.push(d);
+                    match this.peek() { Semicolon => { this.consume(); } _ => {} }
+                }
+                EOF => break;
+                _   => break;
+            }
+        }
+        let body = this.parseComma();
+        if defs.len() == 0 { return body; }
+        var result = body;
+        var i = defs.len() - 1;
+        while i >= 0
+        {
+            match defs[i]
+            {
+                Def(name, args, defBody) =>
+                {
+                    result = Filter::Pipe(Filter::Def(name, args, defBody), result);
+                }
+                _ => {}
+            }
+            i = i - 1;
+        }
+        return result;
+    }
+
+    fn parseDef() -> Filter
+    {
+        this.consume();
+        var name = "";
+        match this.consume() { Ident(n) => { name = n; } _ => { name = "?"; } }
+        var args: List<String> = [];
+        match this.peek()
+        {
+            LParen =>
+            {
+                this.consume();
+                loop
+                {
+                    match this.consume()
+                    {
+                        VarName(a) => { args.push(a); }
+                        Ident(a)   => { args.push(a); }
+                        _          => {}
+                    }
+                    match this.peek()
+                    {
+                        Semicolon => { this.consume(); }
+                        RParen    => { this.consume(); break; }
+                        _         => break;
+                    }
+                }
+            }
+            _ => {}
+        }
+        match this.peek() { Colon => { this.consume(); } _ => {} }
+        let body = this.parseComma();
+        return Filter::Def(name, args, body);
+    }
+
+    fn parseComma() -> Filter
+    {
+        var left = this.parsePipe();
+        while this.isPeek(FilterToken::Comma)
+        {
+            this.consume();
+            let right = this.parsePipe();
+            left = Filter::Comma(left, right);
+        }
+        return left;
+    }
+
+    fn parsePipe() -> Filter
+    {
+        var left = this.parseAs();
+        while this.isPeek(FilterToken::Pipe)
+        {
+            this.consume();
+            let right = this.parseAs();
+            left = Filter::Pipe(left, right);
+        }
+        return left;
+    }
+
+    fn parseAs() -> Filter
+    {
+        let left = this.parseAlternative();
+        match this.peek()
+        {
+            As =>
+            {
+                this.consume();
+                var varName = "";
+                match this.consume()
+                {
+                    VarName(n) => { varName = n; }
+                    _          => { varName = "?"; }
+                }
+                match this.peek() { Pipe => { this.consume(); } _ => {} }
+                let body = this.parseAs();
+                return Filter::AsPattern(left, varName, body);
+            }
+            _ => return left;
+        }
+        return left;
+    }
+
+    fn parseAlternative() -> Filter
+    {
+        var left = this.parseOr();
+        while this.isPeek(FilterToken::AltOp)
+        {
+            this.consume();
+            let right = this.parseOr();
+            left = Filter::Alternative(left, right);
+        }
+        return left;
+    }
+
+    fn parseOr() -> Filter
+    {
+        var left = this.parseAnd();
+        while this.isPeek(FilterToken::Or)
+        {
+            this.consume();
+            let right = this.parseAnd();
+            left = Filter::Or(left, right);
+        }
+        return left;
+    }
+
+    fn parseAnd() -> Filter
+    {
+        var left = this.parseNot();
+        while this.isPeek(FilterToken::And)
+        {
+            this.consume();
+            let right = this.parseNot();
+            left = Filter::And(left, right);
+        }
+        return left;
+    }
+
+    fn parseNot() -> Filter
+    {
+        match this.peek()
+        {
+            Not => { this.consume(); return Filter::FunctionCall("not", [this.parseComparison()]); }
+            _   => return this.parseComparison();
+        }
+        return Filter::LiteralNull;
+    }
+
+    fn parseComparison() -> Filter
+    {
+        var left = this.parseAddSub();
+        loop
+        {
+            match this.peek()
+            {
+                EqEq        => { this.consume(); left = Filter::Equals(left, this.parseAddSub()); }
+                BangEq      => { this.consume(); left = Filter::NotEquals(left, this.parseAddSub()); }
+                Lt          => { this.consume(); left = Filter::LessThan(left, this.parseAddSub()); }
+                Gt          => { this.consume(); left = Filter::GreaterThan(left, this.parseAddSub()); }
+                LtEq        => { this.consume(); left = Filter::LessThanOrEqual(left, this.parseAddSub()); }
+                GtEq        => { this.consume(); left = Filter::GreaterThanOrEqual(left, this.parseAddSub()); }
+                Assign      => { this.consume(); return Filter::SetPath(left, this.parseAlternative()); }
+                UpdateAssign => { this.consume(); return Filter::UpdatePath(left, this.parseAlternative()); }
+                PlusAssign  => { this.consume(); let rhs = this.parseAlternative(); return Filter::UpdatePath(left, Filter::Add(Filter::Identity, rhs)); }
+                MinusAssign => { this.consume(); let rhs = this.parseAlternative(); return Filter::UpdatePath(left, Filter::Subtract(Filter::Identity, rhs)); }
+                MulAssign   => { this.consume(); let rhs = this.parseAlternative(); return Filter::UpdatePath(left, Filter::Multiply(Filter::Identity, rhs)); }
+                DivAssign   => { this.consume(); let rhs = this.parseAlternative(); return Filter::UpdatePath(left, Filter::Divide(Filter::Identity, rhs)); }
+                ModAssign   => { this.consume(); let rhs = this.parseAlternative(); return Filter::UpdatePath(left, Filter::Modulo(Filter::Identity, rhs)); }
+                AltAssign   => { this.consume(); let rhs = this.parseAlternative(); return Filter::UpdatePath(left, Filter::Alternative(Filter::Identity, rhs)); }
+                _           => break;
+            }
+        }
+        return left;
+    }
+
+    fn parseAddSub() -> Filter
+    {
+        var left = this.parseMulDiv();
+        loop
+        {
+            match this.peek()
+            {
+                Plus  => { this.consume(); left = Filter::Add(left, this.parseMulDiv()); }
+                Minus => { this.consume(); left = Filter::Subtract(left, this.parseMulDiv()); }
+                _     => break;
+            }
+        }
+        return left;
+    }
+
+    fn parseMulDiv() -> Filter
+    {
+        var left = this.parseUnary();
+        loop
+        {
+            match this.peek()
+            {
+                Star    => { this.consume(); left = Filter::Multiply(left, this.parseUnary()); }
+                Slash   => { this.consume(); left = Filter::Divide(left, this.parseUnary()); }
+                Percent => { this.consume(); left = Filter::Modulo(left, this.parseUnary()); }
+                _       => break;
+            }
+        }
+        return left;
+    }
+
+    fn parseUnary() -> Filter
+    {
+        match this.peek()
+        {
+            Minus =>
+            {
+                this.consume();
+                let inner = this.parsePostfixChain(this.parseAtom());
+                return Filter::Subtract(Filter::LiteralInt(0), inner);
+            }
+            _ => return this.parsePostfixChain(this.parseAtom());
+        }
+        return Filter::LiteralNull;
+    }
+
+    fn parsePostfixChain(inner: Filter) -> Filter
+    {
+        var result = inner;
+        loop
+        {
+            match this.peek()
+            {
+                Question =>
+                {
+                    this.consume();
+                    result = Filter::Optional(result);
+                }
+                Dot =>
+                {
+                    match this.peek2()
+                    {
+                        Ident(_) =>
+                        {
+                            this.consume();
+                            match this.consume()
+                            {
+                                Ident(field) =>
+                                {
+                                    match this.peek()
+                                    {
+                                        Question =>
+                                        {
+                                            this.consume();
+                                            result = Filter::Pipe(result, Filter::OptionalField(field));
+                                        }
+                                        _ => result = Filter::Pipe(result, Filter::Field(field));
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+                        LBracket =>
+                        {
+                            this.consume();
+                            result = Filter::Pipe(result, this.parseIndexer());
+                        }
+                        _ => break;
+                    }
+                }
+                LBracket =>
+                {
+                    result = Filter::Pipe(result, this.parseIndexer());
+                }
+                _ => break;
+            }
+        }
+        return result;
+    }
+
+    fn parseIndexer() -> Filter
+    {
+        this.consume();
+        var result: Filter = Filter::LiteralNull;
+        var done = false;
+
+        // Dispatch on first token
+        match this.peek()
+        {
+            RBracket =>
+            {
+                this.consume();
+                match this.peek()
+                {
+                    Question => { this.consume(); result = Filter::OptionalIterator; done = true; }
+                    _        => { result = Filter::IterEach; done = true; }
+                }
+            }
+            IntLit(n) =>
+            {
+                this.consume();
+                match this.peek()
+                {
+                    Colon =>
+                    {
+                        this.consume();
+                        match this.peek()
+                        {
+                            IntLit(m) =>
+                            {
+                                this.consume();
+                                this.consume();
+                                result = Filter::SliceAccess(n, m, true, true);
+                                done = true;
+                            }
+                            Minus =>
+                            {
+                                this.consume();
+                                match this.consume()
+                                {
+                                    IntLit(m) =>
+                                    {
+                                        this.consume();
+                                        result = Filter::SliceAccess(n, 0 - m, true, true);
+                                        done = true;
+                                    }
+                                    _ =>
+                                    {
+                                        result = Filter::SliceAccess(n, 0, true, false);
+                                        done = true;
+                                    }
+                                }
+                            }
+                            RBracket =>
+                            {
+                                this.consume();
+                                result = Filter::SliceAccess(n, 0, true, false);
+                                done = true;
+                            }
+                            _ =>
+                            {
+                                this.consume();
+                                result = Filter::IndexAccess(n);
+                                done = true;
+                            }
+                        }
+                    }
+                    RBracket =>
+                    {
+                        this.consume();
+                        result = Filter::IndexAccess(n);
+                        done = true;
+                    }
+                    _ =>
+                    {
+                        this.consume();
+                        result = Filter::IndexAccess(n);
+                        done = true;
+                    }
+                }
+            }
+            Minus =>
+            {
+                this.consume();
+                match this.peek()
+                {
+                    IntLit(n) =>
+                    {
+                        this.consume();
+                        match this.peek()
+                        {
+                            Colon =>
+                            {
+                                this.consume();
+                                match this.peek()
+                                {
+                                    IntLit(m) =>
+                                    {
+                                        this.consume();
+                                        this.consume();
+                                        result = Filter::SliceAccess(0 - n, m, true, true);
+                                        done = true;
+                                    }
+                                    Minus =>
+                                    {
+                                        this.consume();
+                                        match this.consume()
+                                        {
+                                            IntLit(m) =>
+                                            {
+                                                this.consume();
+                                                result = Filter::SliceAccess(0 - n, 0 - m, true, true);
+                                                done = true;
+                                            }
+                                            _ => { result = Filter::SliceAccess(0 - n, 0, true, false); done = true; }
+                                        }
+                                    }
+                                    RBracket =>
+                                    {
+                                        this.consume();
+                                        result = Filter::SliceAccess(0 - n, 0, true, false);
+                                        done = true;
+                                    }
+                                    _ =>
+                                    {
+                                        this.consume();
+                                        result = Filter::SliceAccess(0 - n, 0, true, false);
+                                        done = true;
+                                    }
+                                }
+                            }
+                            RBracket =>
+                            {
+                                this.consume();
+                                result = Filter::IndexAccess(0 - n);
+                                done = true;
+                            }
+                            _ =>
+                            {
+                                this.consume();
+                                result = Filter::IndexAccess(0 - n);
+                                done = true;
+                            }
+                        }
+                    }
+                    _ =>
+                    {
+                        let expr = this.parseComma();
+                        this.consume();
+                        result = expr;
+                        done = true;
+                    }
+                }
+            }
+            Colon =>
+            {
+                this.consume();
+                match this.peek()
+                {
+                    IntLit(m) =>
+                    {
+                        this.consume();
+                        this.consume();
+                        result = Filter::SliceAccess(0, m, false, true);
+                        done = true;
+                    }
+                    Minus =>
+                    {
+                        this.consume();
+                        match this.consume()
+                        {
+                            IntLit(m) =>
+                            {
+                                this.consume();
+                                result = Filter::SliceAccess(0, 0 - m, false, true);
+                                done = true;
+                            }
+                            _ => { this.consume(); result = Filter::IterEach; done = true; }
+                        }
+                    }
+                    _ =>
+                    {
+                        this.consume();
+                        result = Filter::IterEach;
+                        done = true;
+                    }
+                }
+            }
+            _ =>
+            {
+                let expr = this.parseComma();
+                this.consume();
+                result = expr;
+                done = true;
+            }
+        }
+        return result;
+    }
+
+    fn parseAtom() -> Filter
+    {
+        match this.peek()
+        {
+            Dot =>
+            {
+                this.consume();
+                match this.peek()
+                {
+                    Ident(field) =>
+                    {
+                        this.consume();
+                        match this.peek()
+                        {
+                            Question => { this.consume(); return Filter::OptionalField(field); }
+                            _        => return Filter::Field(field);
+                        }
+                    }
+                    LBracket => return this.parseIndexer();
+                    _        => return Filter::Identity;
+                }
+            }
+            DotDot => { this.consume(); return Filter::RecursiveDescent; }
+            LParen =>
+            {
+                this.consume();
+                let inner = this.parseComma();
+                match this.consume() { RParen => {} _ => {} }
+                return inner;
+            }
+            LBracket =>
+            {
+                this.consume();
+                match this.peek()
+                {
+                    RBracket => { this.consume(); return Filter::ArrayConstruct(Filter::LiteralNull); }
+                    _ =>
+                    {
+                        let inner = this.parseComma();
+                        match this.consume() { RBracket => {} _ => {} }
+                        return Filter::ArrayConstruct(inner);
+                    }
+                }
+            }
+            LBrace => return this.parseObjectConstruct();
+            If     => return this.parseIfThenElse();
+            Try    => return this.parseTryCatch();
+            Reduce => return this.parseReduce();
+            Foreach => return this.parseForeach();
+            Label  =>
+            {
+                this.consume();
+                var name = "";
+                match this.consume() { LabelName(n) => { name = n; } VarName(n) => { name = n; } _ => {} }
+                match this.consume() { Pipe => {} _ => {} }
+                let body = this.parseComma();
+                return Filter::Label(name);
+            }
+            Break =>
+            {
+                this.consume();
+                var name = "";
+                match this.consume() { LabelName(n) => { name = n; } VarName(n) => { name = n; } _ => {} }
+                return Filter::Break(name);
+            }
+            Def =>
+            {
+                return this.parseDef();
+            }
+            Not =>
+            {
+                this.consume();
+                return Filter::Not;
+            }
+            VarName(name) =>
+            {
+                this.consume();
+                if name == "ENV" { return Filter::Env; }
+                return Filter::Variable(name);
+            }
+            Format(fmt) =>
+            {
+                this.consume();
+                match this.peek()
+                {
+                    StrLit(_)     => { let inner = this.parseAtom(); return Filter::Format(fmt, true, inner); }
+                    InterpStr(_)  => { let inner = this.parseAtom(); return Filter::Format(fmt, true, inner); }
+                    _             => return Filter::Format(fmt, false, Filter::Identity);
+                }
+            }
+            StrLit(s) =>
+            {
+                this.consume();
+                if s == "null"  { return Filter::LiteralNull; }
+                if s == "true"  { return Filter::LiteralBool(true); }
+                if s == "false" { return Filter::LiteralBool(false); }
+                return Filter::LiteralStr(s);
+            }
+            InterpStr(parts) =>
+            {
+                this.consume();
+                return Filter::StringInterp(parts);
+            }
+            IntLit(n) =>
+            {
+                this.consume();
+                return Filter::LiteralInt(n);
+            }
+            FloatLit(s) =>
+            {
+                this.consume();
+                return Filter::LiteralFloat(s);
+            }
+            Ident(name) =>
+            {
+                this.consume();
+                match this.peek()
+                {
+                    LParen =>
+                    {
+                        this.consume();
+                        var args: List<Filter> = [];
+                        match this.peek()
+                        {
+                            RParen => { this.consume(); }
+                            _ =>
+                            {
+                                loop
+                                {
+                                    args.push(this.parseComma());
+                                    match this.peek()
+                                    {
+                                        Semicolon => { this.consume(); }
+                                        RParen    => { this.consume(); break; }
+                                        _         => break;
+                                    }
+                                }
+                            }
+                        }
+                        return Filter::FunctionCall(name, args);
+                    }
+                    _ => return Filter::FunctionCall(name, []);
+                }
+            }
+            _ => return Filter::LiteralNull;
+        }
+        return Filter::LiteralNull;
+    }
+
+    fn parseObjectConstruct() -> Filter
+    {
+        this.consume();
+        var entries: List<ObjEntry> = [];
+
+        match this.peek()
+        {
+            RBrace => { this.consume(); return Filter::ObjectConstruct(entries); }
+            _ => {}
+        }
+
+        loop
+        {
+            var key: ObjKey = ObjKey::Literal("?");
+            var valueFilter: Filter = Filter::Identity;
+
+            match this.peek()
+            {
+                Ident(field) =>
+                {
+                    this.consume();
+                    match this.peek()
+                    {
+                        Colon =>
+                        {
+                            this.consume();
+                            key = ObjKey::Literal(field);
+                            valueFilter = this.parsePipe();
+                        }
+                        _ =>
+                        {
+                            key = ObjKey::Literal(field);
+                            valueFilter = Filter::Field(field);
+                        }
+                    }
+                }
+                StrLit(s) =>
+                {
+                    this.consume();
+                    match this.peek()
+                    {
+                        Colon =>
+                        {
+                            this.consume();
+                            key = ObjKey::Literal(s);
+                            valueFilter = this.parsePipe();
+                        }
+                        _ =>
+                        {
+                            key = ObjKey::Literal(s);
+                            valueFilter = Filter::Field(s);
+                        }
+                    }
+                }
+                LParen =>
+                {
+                    this.consume();
+                    let keyExpr = this.parseComma();
+                    match this.consume() { RParen => {} _ => {} }
+                    match this.consume() { Colon  => {} _ => {} }
+                    key = ObjKey::Computed(keyExpr);
+                    valueFilter = this.parsePipe();
+                }
+                _ =>
+                {
+                    this.consume();
+                }
+            }
+
+            entries.push(ObjEntry { keySpec: key, valFilter: valueFilter });
+
+            match this.peek()
+            {
+                Comma  => { this.consume(); }
+                RBrace => { this.consume(); break; }
+                _      => break;
+            }
+        }
+
+        return Filter::ObjectConstruct(entries);
+    }
+
+    fn parseIfThenElse() -> Filter
+    {
+        this.consume();
+        let cond = this.parseComma();
+        match this.consume() { Then => {} _ => {} }
+        let thenBranch = this.parseComma();
+        match this.peek()
+        {
+            Else =>
+            {
+                this.consume();
+                let elseBranch = this.parseComma();
+                match this.consume() { End => {} _ => {} }
+                return Filter::IfThenElse(cond, thenBranch, elseBranch);
+            }
+            Elif =>
+            {
+                let elseBranch = this.parseIfThenElse();
+                return Filter::IfThenElse(cond, thenBranch, elseBranch);
+            }
+            End =>
+            {
+                this.consume();
+                return Filter::IfThenElse(cond, thenBranch, Filter::LiteralNull);
+            }
+            _ =>
+            {
+                return Filter::IfThenElse(cond, thenBranch, Filter::LiteralNull);
+            }
+        }
+        return Filter::LiteralNull;
+    }
+
+    fn parseTryCatch() -> Filter
+    {
+        this.consume();
+        let body = this.parsePostfixChain(this.parseAtom());
+        match this.peek()
+        {
+            Catch =>
+            {
+                this.consume();
+                let handler = this.parsePostfixChain(this.parseAtom());
+                return Filter::TryCatchWith(body, handler);
+            }
+            _ => return Filter::TryOnly(body);
+        }
+        return Filter::LiteralNull;
+    }
+
+    fn parseReduce() -> Filter
+    {
+        this.consume();
+        let gen = this.parseAlternative();
+        match this.consume() { As => {} _ => {} }
+        var varName = "";
+        match this.consume() { VarName(n) => { varName = n; } _ => {} }
+        match this.consume() { LParen => {} _ => {} }
+        let init = this.parseComma();
+        match this.consume() { Semicolon => {} _ => {} }
+        let body = this.parseComma();
+        match this.consume() { RParen => {} _ => {} }
+        return Filter::Reduce(gen, varName, init, body);
+    }
+
+    fn parseForeach() -> Filter
+    {
+        this.consume();
+        let gen = this.parseAlternative();
+        match this.consume() { As => {} _ => {} }
+        var varName = "";
+        match this.consume() { VarName(n) => { varName = n; } _ => {} }
+        match this.consume() { LParen => {} _ => {} }
+        let init = this.parseComma();
+        match this.consume() { Semicolon => {} _ => {} }
+        let body = this.parseComma();
+        var extracts: List<Filter> = [];
+        match this.peek()
+        {
+            Semicolon =>
+            {
+                this.consume();
+                extracts.push(this.parseComma());
+                match this.consume() { RParen => {} _ => {} }
+            }
+            _ =>
+            {
+                match this.consume() { RParen => {} _ => {} }
+            }
+        }
+        return Filter::Foreach(gen, varName, init, body, extracts);
+    }
+
+    fnc parseExprStr(src: String) -> Filter
+    {
+        let lexer = FilterLexer::new(src);
+        let tokens = lexer.tokenize();
+        var parser = FilterParser::new(tokens);
+        return parser.parseTopLevel();
+    }
+
+    fnc compile(src: String) -> Filter
+    {
+        let lexer = FilterLexer::new(src);
+        let tokens = lexer.tokenize();
+        var parser = FilterParser::new(tokens);
+        return parser.parseTopLevel();
+    }
+}
