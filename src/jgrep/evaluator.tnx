@@ -36,28 +36,36 @@ class EvalResult
     values: List<JsonValue>;
     hadError: Bool;
     errorMsg: String;
+    breakLabel: String;
 
     fnc ok(vals: List<JsonValue>) -> EvalResult
     {
-        return EvalResult { values: vals, hadError: false, errorMsg: "" };
+        return EvalResult { values: vals, hadError: false, errorMsg: "", breakLabel: "" };
     }
 
     fnc err(msg: String) -> EvalResult
     {
-        return EvalResult { values: [], hadError: true, errorMsg: msg };
+        return EvalResult { values: [], hadError: true, errorMsg: msg, breakLabel: "" };
     }
 
     fnc empty() -> EvalResult
     {
-        return EvalResult { values: [], hadError: false, errorMsg: "" };
+        return EvalResult { values: [], hadError: false, errorMsg: "", breakLabel: "" };
     }
 
     fnc single(v: JsonValue) -> EvalResult
     {
-        return EvalResult { values: [v], hadError: false, errorMsg: "" };
+        return EvalResult { values: [v], hadError: false, errorMsg: "", breakLabel: "" };
+    }
+
+    // break $label unterwegs: values = bis dahin produzierte Outputs
+    fnc brk(label: String, vals: List<JsonValue>) -> EvalResult
+    {
+        return EvalResult { values: vals, hadError: false, errorMsg: "", breakLabel: label };
     }
 
     fn isError() -> Bool { return this.hadError; }
+    fn isBreak() -> Bool { return this.breakLabel != ""; }
     fn isEmpty() -> Bool { return this.values.len() == 0 && !this.hadError; }
 }
 
@@ -469,11 +477,17 @@ class Evaluator
                 }
                 let leftResult = this.eval(left, input, ctx);
                 if leftResult.isError() { return leftResult; }
+                if leftResult.isBreak() { return leftResult; }
                 var allResults: List<JsonValue> = [];
                 for v in leftResult.values
                 {
                     let r = this.eval(right, v, ctx);
                     if r.isError() { return r; }
+                    if r.isBreak()
+                    {
+                        for rv in r.values { allResults.push(rv); }
+                        return EvalResult::brk(r.breakLabel, allResults);
+                    }
                     for rv in r.values { allResults.push(rv); }
                 }
                 return EvalResult::ok(allResults);
@@ -482,10 +496,12 @@ class Evaluator
             Comma(left, right) =>
             {
                 let leftResult = this.eval(left, input, ctx);
+                if leftResult.isBreak() { return leftResult; }
                 let rightResult = this.eval(right, input, ctx);
                 var allResults: List<JsonValue> = [];
                 for v in leftResult.values  { allResults.push(v); }
                 for v in rightResult.values { allResults.push(v); }
+                if rightResult.isBreak() { return EvalResult::brk(rightResult.breakLabel, allResults); }
                 return EvalResult::ok(allResults);
             }
 
@@ -498,6 +514,8 @@ class Evaluator
                     {
                         let r = this.eval(inner, input, ctx);
                         if r.isError() { return EvalResult::single(JsonValue::Array([])); }
+                        // break über die Array-Grenze hinweg verwirft das halbe Array (wie jq)
+                        if r.isBreak() { return EvalResult::brk(r.breakLabel, []); }
                         var arr: List<JsonValue> = [];
                         for v in r.values { arr.push(v); }
                         return EvalResult::single(JsonValue::Array(arr));
@@ -910,7 +928,13 @@ class Evaluator
             }
 
             Label(name) => return EvalResult::single(input);
-            Break(name)  => return EvalResult::empty();
+            LabelBind(name, body) =>
+            {
+                let r = this.eval(body, input, ctx);
+                if r.isBreak() && r.breakLabel == name { return EvalResult::ok(r.values); }
+                return r;
+            }
+            Break(name)  => return EvalResult::brk(name, []);
             Limit(n, f)  => return this.eval(f, input, ctx);
             Until(cond, body) =>
             {
@@ -995,6 +1019,8 @@ class Evaluator
     {
         let r = this.eval(filter, input, ctx);
         if r.isError() { return r; }
+        // break ohne umschließendes label ist ein Fehler (wie jq)
+        if r.isBreak() { return EvalResult::err("break"); }
         if r.values.len() == 0 { return EvalResult::single(JsonValue::Null); }
         return EvalResult::single(r.values[0]);
     }
