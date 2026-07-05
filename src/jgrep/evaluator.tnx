@@ -824,6 +824,14 @@ class Evaluator
             Variable(name) =>
             {
                 if ctx.vars.contains(name) { return EvalResult::single(ctx.vars.get(name)); }
+                if name == "__loc__"
+                {
+                    // CLI-Filter sind einzeilig — wie jq bei --arg-losen Programmen
+                    var loc: Map<String, JsonValue> = @{};
+                    loc["file"] = JsonValue::Str("<stdin>");
+                    loc["line"] = JsonValue::Integer(1);
+                    return EvalResult::single(JsonValue::Object(loc));
+                }
                 return EvalResult::err("Variable $" + name + " not defined");
             }
 
@@ -3916,6 +3924,16 @@ class Evaluator
                 this.inputQueuePos = this.inputQueuePos + 1;
             }
             return EvalResult::ok(results);
+        }
+
+        if name == "modulemeta"
+        {
+            // jgrep hat kein Modulsystem — wie jq bei unbekanntem Modul
+            match input
+            {
+                Str(m) => return EvalResult::err("module not found: " + m);
+                _ => return EvalResult::err("modulemeta requires a module name string");
+            }
         }
 
         if name == "input_line_number"
