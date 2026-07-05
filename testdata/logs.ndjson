@@ -1,0 +1,7 @@
+{"timestamp": "2024-01-15T10:00:01Z", "level": "INFO",  "message": "Server started", "service": "api"}
+{"timestamp": "2024-01-15T10:00:05Z", "level": "DEBUG", "message": "Config loaded", "service": "api"}
+{"timestamp": "2024-01-15T10:01:00Z", "level": "INFO",  "message": "Request received", "service": "api", "path": "/users"}
+{"timestamp": "2024-01-15T10:01:01Z", "level": "WARN",  "message": "Slow query detected", "service": "db", "ms": 450}
+{"timestamp": "2024-01-15T10:01:02Z", "level": "ERROR", "message": "Connection timeout", "service": "db", "code": 503}
+{"timestamp": "2024-01-15T10:01:03Z", "level": "INFO",  "message": "Retry attempt 1", "service": "api"}
+{"timestamp": "2024-01-15T10:01:05Z", "level": "FATAL", "message": "Database unreachable", "service": "api"}

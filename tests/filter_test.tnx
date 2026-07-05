@@ -1,0 +1,481 @@
+import jgrep.json_value;
+import jgrep.json_parser;
+import jgrep.filter;
+import jgrep.evaluator;
+
+class FilterHelper
+{
+    fnc run(filterStr: String, inputJson: String) -> List<JsonValue>
+    {
+        let f = FilterParser::compile(filterStr);
+        let input = JsonParser::parse(inputJson);
+        let ev = Evaluator::new();
+        let ctx = EvalContext::new();
+        let r = ev.eval(f, input, ctx);
+        if r.isError() { return []; }
+        return r.values;
+    }
+
+    fnc runSingle(filterStr: String, inputJson: String) -> JsonValue
+    {
+        let results = FilterHelper::run(filterStr, inputJson);
+        if results.len() == 0 { return JsonValue::Null; }
+        return results[0];
+    }
+}
+
+class FilterTest
+{
+    @Test("identity")
+    fn testIdentity() -> Bool
+    {
+        let v = FilterHelper::runSingle(".", "{\"x\":1}");
+        return JsonValueHelper::isObject(v);
+    }
+
+    @Test("field access")
+    fn testFieldAccess() -> Bool
+    {
+        let v = FilterHelper::runSingle(".name", "{\"name\":\"Alice\"}");
+        return JsonValueHelper::asString(v) == "Alice";
+    }
+
+    @Test("missing field is null")
+    fn testMissingFieldIsNull() -> Bool
+    {
+        let v = FilterHelper::runSingle(".x", "{}");
+        return JsonValueHelper::isNull(v);
+    }
+
+    @Test("nested field access")
+    fn testNestedFieldAccess() -> Bool
+    {
+        let v = FilterHelper::runSingle(".a.b", "{\"a\":{\"b\":42}}");
+        return JsonValueHelper::asInteger(v) == 42;
+    }
+
+    @Test("array index")
+    fn testArrayIndex() -> Bool
+    {
+        let v = FilterHelper::runSingle(".[1]", "[10,20,30]");
+        return JsonValueHelper::asInteger(v) == 20;
+    }
+
+    @Test("negative array index")
+    fn testNegativeArrayIndex() -> Bool
+    {
+        let v = FilterHelper::runSingle(".[-1]", "[10,20,30]");
+        return JsonValueHelper::asInteger(v) == 30;
+    }
+
+    @Test("array iterator count")
+    fn testArrayIterator() -> Bool
+    {
+        let results = FilterHelper::run(".[]", "[1,2,3]");
+        return results.len() == 3;
+    }
+
+    @Test("pipe")
+    fn testPipe() -> Bool
+    {
+        let v = FilterHelper::runSingle(".a | .b", "{\"a\":{\"b\":99}}");
+        return JsonValueHelper::asInteger(v) == 99;
+    }
+
+    @Test("comma produces two values")
+    fn testComma() -> Bool
+    {
+        let results = FilterHelper::run(".a, .b", "{\"a\":1,\"b\":2}");
+        return results.len() == 2;
+    }
+
+    @Test("select truthy keeps value")
+    fn testSelectTruthy() -> Bool
+    {
+        let results = FilterHelper::run("select(.x > 0)", "{\"x\":5}");
+        return results.len() == 1;
+    }
+
+    @Test("select falsy discards")
+    fn testSelectFalsy() -> Bool
+    {
+        let results = FilterHelper::run("select(.x > 0)", "{\"x\":-1}");
+        return results.len() == 0;
+    }
+
+    @Test("addition numbers")
+    fn testAddNumbers() -> Bool
+    {
+        let v = FilterHelper::runSingle("1 + 2", "null");
+        return JsonValueHelper::asInteger(v) == 3;
+    }
+
+    @Test("addition strings")
+    fn testAddStrings() -> Bool
+    {
+        let v = FilterHelper::runSingle(".a + .b", "{\"a\":\"hello \",\"b\":\"world\"}");
+        return JsonValueHelper::asString(v) == "hello world";
+    }
+
+    @Test("subtraction")
+    fn testSubtract() -> Bool
+    {
+        let v = FilterHelper::runSingle("10 - 3", "null");
+        return JsonValueHelper::asInteger(v) == 7;
+    }
+
+    @Test("multiplication")
+    fn testMultiply() -> Bool
+    {
+        let v = FilterHelper::runSingle("3 * 4", "null");
+        return JsonValueHelper::asInteger(v) == 12;
+    }
+
+    @Test("division integer exact")
+    fn testDivideExact() -> Bool
+    {
+        let v = FilterHelper::runSingle("10 / 2", "null");
+        return JsonValueHelper::asInteger(v) == 5;
+    }
+
+    @Test("equals true")
+    fn testEqualsTrue() -> Bool
+    {
+        let v = FilterHelper::runSingle(".a == .b", "{\"a\":1,\"b\":1}");
+        return JsonValueHelper::asBool(v) == true;
+    }
+
+    @Test("equals false")
+    fn testEqualsFalse() -> Bool
+    {
+        let v = FilterHelper::runSingle(".a == .b", "{\"a\":1,\"b\":2}");
+        return JsonValueHelper::asBool(v) == false;
+    }
+
+    @Test("less than")
+    fn testLessThan() -> Bool
+    {
+        let v = FilterHelper::runSingle("1 < 2", "null");
+        return JsonValueHelper::asBool(v) == true;
+    }
+
+    @Test("alternative with null gives default")
+    fn testAlternativeNull() -> Bool
+    {
+        let v = FilterHelper::runSingle(".x // \"default\"", "{}");
+        return JsonValueHelper::asString(v) == "default";
+    }
+
+    @Test("alternative with truthy keeps original")
+    fn testAlternativeTruthy() -> Bool
+    {
+        let v = FilterHelper::runSingle(".x // \"default\"", "{\"x\":\"found\"}");
+        return JsonValueHelper::asString(v) == "found";
+    }
+
+    @Test("if-then-else true branch")
+    fn testIfThenElseTrue() -> Bool
+    {
+        let v = FilterHelper::runSingle("if .x > 0 then \"pos\" else \"nonpos\" end", "{\"x\":5}");
+        return JsonValueHelper::asString(v) == "pos";
+    }
+
+    @Test("if-then-else false branch")
+    fn testIfThenElseFalse() -> Bool
+    {
+        let v = FilterHelper::runSingle("if .x > 0 then \"pos\" else \"nonpos\" end", "{\"x\":-1}");
+        return JsonValueHelper::asString(v) == "nonpos";
+    }
+
+    @Test("try-catch catches error")
+    fn testTryCatch() -> Bool
+    {
+        let v = FilterHelper::runSingle("try error(\"boom\") catch .", "null");
+        return JsonValueHelper::asString(v) == "\"boom\"";
+    }
+
+    @Test("optional on wrong type returns empty")
+    fn testOptional() -> Bool
+    {
+        let results = FilterHelper::run(".x?", "42");
+        return results.len() == 0;
+    }
+
+    @Test("object construct")
+    fn testObjectConstruct() -> Bool
+    {
+        let v = FilterHelper::runSingle("{n: .name}", "{\"name\":\"Alice\"}");
+        if !JsonValueHelper::isObject(v) { return false; }
+        let o = JsonValueHelper::asObject(v);
+        return o.contains("n") && JsonValueHelper::asString(o.get("n")) == "Alice";
+    }
+
+    @Test("array construct")
+    fn testArrayConstruct() -> Bool
+    {
+        let v = FilterHelper::runSingle("[.a, .b]", "{\"a\":1,\"b\":2}");
+        if !JsonValueHelper::isArray(v) { return false; }
+        let a = JsonValueHelper::asArray(v);
+        return a.len() == 2 && JsonValueHelper::asInteger(a[0]) == 1;
+    }
+
+    @Test("length of string")
+    fn testLengthString() -> Bool
+    {
+        let v = FilterHelper::runSingle("length", "\"hello\"");
+        return JsonValueHelper::asInteger(v) == 5;
+    }
+
+    @Test("length of array")
+    fn testLengthArray() -> Bool
+    {
+        let v = FilterHelper::runSingle("length", "[1,2,3]");
+        return JsonValueHelper::asInteger(v) == 3;
+    }
+
+    @Test("length of null is 0")
+    fn testLengthNull() -> Bool
+    {
+        let v = FilterHelper::runSingle("length", "null");
+        return JsonValueHelper::asInteger(v) == 0;
+    }
+
+    @Test("type function")
+    fn testTypeFunction() -> Bool
+    {
+        let v = FilterHelper::runSingle("type", "\"hello\"");
+        return JsonValueHelper::asString(v) == "string";
+    }
+
+    @Test("keys of object sorted")
+    fn testKeysObject() -> Bool
+    {
+        let v = FilterHelper::runSingle("keys", "{\"b\":2,\"a\":1}");
+        if !JsonValueHelper::isArray(v) { return false; }
+        let a = JsonValueHelper::asArray(v);
+        return a.len() == 2 && JsonValueHelper::asString(a[0]) == "a";
+    }
+
+    @Test("map doubles elements")
+    fn testMap() -> Bool
+    {
+        let v = FilterHelper::runSingle("map(. * 2)", "[1,2,3]");
+        if !JsonValueHelper::isArray(v) { return false; }
+        let a = JsonValueHelper::asArray(v);
+        return a.len() == 3 && JsonValueHelper::asInteger(a[2]) == 6;
+    }
+
+    @Test("select inside map filters")
+    fn testMapSelect() -> Bool
+    {
+        let v = FilterHelper::runSingle("[.[] | select(. > 2)]", "[1,2,3,4]");
+        if !JsonValueHelper::isArray(v) { return false; }
+        let a = JsonValueHelper::asArray(v);
+        return a.len() == 2;
+    }
+
+    @Test("add array elements")
+    fn testAdd() -> Bool
+    {
+        let v = FilterHelper::runSingle("add", "[1,2,3]");
+        return JsonValueHelper::asInteger(v) == 6;
+    }
+
+    @Test("tojson")
+    fn testToJson() -> Bool
+    {
+        let v = FilterHelper::runSingle("tojson", "{\"a\":1}");
+        match v
+        {
+            Str(s) => return s.contains("\"a\"") && s.contains("1");
+            _ => return false;
+        }
+    }
+
+    @Test("fromjson")
+    fn testFromJson() -> Bool
+    {
+        let v = FilterHelper::runSingle("fromjson", "\"{\\\"x\\\":42}\"");
+        return JsonValueHelper::isObject(v);
+    }
+
+    @Test("split string")
+    fn testSplit() -> Bool
+    {
+        let v = FilterHelper::runSingle("split(\",\")", "\"a,b,c\"");
+        if !JsonValueHelper::isArray(v) { return false; }
+        let a = JsonValueHelper::asArray(v);
+        return a.len() == 3 && JsonValueHelper::asString(a[1]) == "b";
+    }
+
+    @Test("join array")
+    fn testJoin() -> Bool
+    {
+        let v = FilterHelper::runSingle("join(\",\")", "[\"a\",\"b\",\"c\"]");
+        return JsonValueHelper::asString(v) == "a,b,c";
+    }
+
+    @Test("to_entries converts object")
+    fn testToEntries() -> Bool
+    {
+        let v = FilterHelper::runSingle("to_entries", "{\"x\":1}");
+        if !JsonValueHelper::isArray(v) { return false; }
+        let a = JsonValueHelper::asArray(v);
+        if a.len() != 1 { return false; }
+        let entry = JsonValueHelper::asObject(a[0]);
+        return entry.contains("key") && entry.contains("value");
+    }
+
+    @Test("from_entries converts array")
+    fn testFromEntries() -> Bool
+    {
+        let v = FilterHelper::runSingle("from_entries", "[{\"key\":\"a\",\"value\":1}]");
+        if !JsonValueHelper::isObject(v) { return false; }
+        let o = JsonValueHelper::asObject(v);
+        return o.contains("a") && JsonValueHelper::asInteger(o.get("a")) == 1;
+    }
+
+    @Test("reduce sums array")
+    fn testReduce() -> Bool
+    {
+        let v = FilterHelper::runSingle("reduce .[] as $x (0; . + $x)", "[1,2,3]");
+        return JsonValueHelper::asInteger(v) == 6;
+    }
+
+    @Test("sort array")
+    fn testSort() -> Bool
+    {
+        let v = FilterHelper::runSingle("sort", "[3,1,2]");
+        if !JsonValueHelper::isArray(v) { return false; }
+        let a = JsonValueHelper::asArray(v);
+        return JsonValueHelper::asInteger(a[0]) == 1 &&
+               JsonValueHelper::asInteger(a[1]) == 2 &&
+               JsonValueHelper::asInteger(a[2]) == 3;
+    }
+
+    @Test("reverse array")
+    fn testReverse() -> Bool
+    {
+        let v = FilterHelper::runSingle("reverse", "[1,2,3]");
+        if !JsonValueHelper::isArray(v) { return false; }
+        let a = JsonValueHelper::asArray(v);
+        return JsonValueHelper::asInteger(a[0]) == 3;
+    }
+
+    @Test("unique removes duplicates")
+    fn testUnique() -> Bool
+    {
+        let v = FilterHelper::runSingle("unique", "[1,2,1,3,2]");
+        if !JsonValueHelper::isArray(v) { return false; }
+        return JsonValueHelper::asArray(v).len() == 3;
+    }
+
+    @Test("flatten one level")
+    fn testFlatten() -> Bool
+    {
+        let v = FilterHelper::runSingle("flatten(1)", "[[1,2],[3,[4]]]");
+        if !JsonValueHelper::isArray(v) { return false; }
+        let a = JsonValueHelper::asArray(v);
+        return a.len() == 4;
+    }
+
+    @Test("range produces sequence")
+    fn testRange() -> Bool
+    {
+        let results = FilterHelper::run("range(3)", "null");
+        return results.len() == 3 &&
+               JsonValueHelper::asInteger(results[0]) == 0 &&
+               JsonValueHelper::asInteger(results[2]) == 2;
+    }
+
+    @Test("string interpolation")
+    fn testStringInterpolation() -> Bool
+    {
+        let v = FilterHelper::runSingle("\"Name: \\(.name)\"", "{\"name\":\"Bob\"}");
+        return JsonValueHelper::asString(v) == "Name: Bob";
+    }
+
+    @Test("startswith")
+    fn testStartsWith() -> Bool
+    {
+        let v = FilterHelper::runSingle("startswith(\"he\")", "\"hello\"");
+        return JsonValueHelper::asBool(v) == true;
+    }
+
+    @Test("endswith")
+    fn testEndsWith() -> Bool
+    {
+        let v = FilterHelper::runSingle("endswith(\"lo\")", "\"hello\"");
+        return JsonValueHelper::asBool(v) == true;
+    }
+
+    @Test("ascii_upcase")
+    fn testAsciiUpcase() -> Bool
+    {
+        let v = FilterHelper::runSingle("ascii_upcase", "\"hello\"");
+        return JsonValueHelper::asString(v) == "HELLO";
+    }
+
+    @Test("ascii_downcase")
+    fn testAsciiDowncase() -> Bool
+    {
+        let v = FilterHelper::runSingle("ascii_downcase", "\"HELLO\"");
+        return JsonValueHelper::asString(v) == "hello";
+    }
+
+    @Test("min of array")
+    fn testMin() -> Bool
+    {
+        let v = FilterHelper::runSingle("min", "[3,1,4,1,5]");
+        return JsonValueHelper::asInteger(v) == 1;
+    }
+
+    @Test("max of array")
+    fn testMax() -> Bool
+    {
+        let v = FilterHelper::runSingle("max", "[3,1,4,1,5]");
+        return JsonValueHelper::asInteger(v) == 5;
+    }
+
+    @Test("not of false is true")
+    fn testNot() -> Bool
+    {
+        let v = FilterHelper::runSingle("not", "false");
+        return JsonValueHelper::asBool(v) == true;
+    }
+
+    @Test("not of null is true")
+    fn testNotNull() -> Bool
+    {
+        let v = FilterHelper::runSingle("not", "null");
+        return JsonValueHelper::asBool(v) == true;
+    }
+
+    @Test("has key in object")
+    fn testHasKey() -> Bool
+    {
+        let v = FilterHelper::runSingle("has(\"x\")", "{\"x\":1}");
+        return JsonValueHelper::asBool(v) == true;
+    }
+
+    @Test("has missing key is false")
+    fn testHasKeyFalse() -> Bool
+    {
+        let v = FilterHelper::runSingle("has(\"y\")", "{\"x\":1}");
+        return JsonValueHelper::asBool(v) == false;
+    }
+
+    @Test("recursive descent finds numbers")
+    fn testRecursiveDescent() -> Bool
+    {
+        let results = FilterHelper::run(".. | numbers", "{\"a\":{\"b\":1},\"c\":2}");
+        return results.len() >= 2;
+    }
+
+    @Test("as pattern binds variable")
+    fn testAsPattern() -> Bool
+    {
+        let v = FilterHelper::runSingle(". as $x | $x + $x", "21");
+        return JsonValueHelper::asInteger(v) == 42;
+    }
+}
