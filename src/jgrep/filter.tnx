@@ -543,18 +543,35 @@ class FilterParser
         return Filter::Def(name, args, body);
     }
 
+    // Top-Level-Einstieg. Wie jq: Pipe bindet am schwächsten, Komma enger —
+    // "a | b, c" ist "a | (b, c)". Der Name bleibt, damit alle Aufrufer
+    // weiterhin den vollständigen Ausdruck parsen.
     fn parseComma() -> Filter
     {
-        var left = this.parsePipe();
+        var left = this.parseCommaChain();
+        while this.isPeek(FilterToken::Pipe)
+        {
+            this.consume();
+            let right = this.parseCommaChain();
+            left = Filter::Pipe(left, right);
+        }
+        return left;
+    }
+
+    fn parseCommaChain() -> Filter
+    {
+        var left = this.parseAs();
         while this.isPeek(FilterToken::Comma)
         {
             this.consume();
-            let right = this.parsePipe();
+            let right = this.parseAs();
             left = Filter::Comma(left, right);
         }
         return left;
     }
 
+    // Pipe-Kette ohne Komma — für Objekt-Werte ({k: f|g, ...}),
+    // wo das Komma Einträge trennt
     fn parsePipe() -> Filter
     {
         var left = this.parseAs();
@@ -582,7 +599,8 @@ class FilterParser
                     _          => { varName = "?"; }
                 }
                 match this.peek() { Pipe => { this.consume(); } _ => {} }
-                let body = this.parseAs();
+                // Der as-Body erstreckt sich wie in jq über den Rest des Ausdrucks
+                let body = this.parseComma();
                 return Filter::AsPattern(left, varName, body);
             }
             _ => return left;
