@@ -3029,7 +3029,12 @@ class Evaluator
                       "first","last","nth","to_entries","from_entries","with_entries","del","split","join",
                       "ltrimstr","rtrimstr","startswith","endswith","ascii_downcase","ascii_upcase",
                       "test","match","capture","scan","sub","gsub","splits","explode","implode","indices","index","rindex",
-                      "now","todate","fromdate","todateiso8601","fromdateiso8601","strftime","error","debug","stderr","builtins"]
+                      "now","todate","fromdate","todateiso8601","fromdateiso8601","strftime","strptime",
+                      "gmtime","localtime","mktime","dateadd","datesub",
+                      "log2","log10","exp2","exp10","cbrt","trunc","rint","nearbyint","logb",
+                      "significand","exponent","tgamma","lgamma",
+                      "input","inputs","input_line_number","halt","halt_error",
+                      "error","debug","stderr","builtins"]
             {
                 names.push(JsonValue::Str(n));
             }
@@ -3281,6 +3286,37 @@ class Evaluator
                 Integer(n) => { if n < 0 { return EvalResult::single(JsonValue::Integer(0 - n)); } return EvalResult::single(JsonValue::Integer(n)); }
                 _ => return EvalResult::err("fabs requires number");
             }
+        }
+
+        if name == "log2" || name == "log10" || name == "exp2" || name == "exp10"
+            || name == "cbrt" || name == "trunc" || name == "rint" || name == "nearbyint"
+            || name == "logb" || name == "significand" || name == "exponent"
+            || name == "tgamma" || name == "lgamma"
+        {
+            var x: Float64 = 0.0;
+            match input
+            {
+                Float(f) => { x = f; }
+                Integer(n) => { x = n as Float64; }
+                _ => return EvalResult::err(name + " requires number");
+            }
+            if name == "log2" { return EvalResult::single(JsonValue::Float(mathLog2(x))); }
+            if name == "log10" { return EvalResult::single(JsonValue::Float(mathLog10(x))); }
+            if name == "exp2" { return EvalResult::single(JsonValue::Float(mathExp2(x))); }
+            if name == "exp10" { return EvalResult::single(JsonValue::Float(mathExp10(x))); }
+            if name == "cbrt" { return EvalResult::single(JsonValue::Float(mathCbrt(x))); }
+            if name == "trunc" { return EvalResult::single(JsonValue::Float(mathTrunc(x))); }
+            if name == "rint" || name == "nearbyint" { return EvalResult::single(JsonValue::Float(mathRint(x))); }
+            if name == "logb" { return EvalResult::single(JsonValue::Float(mathLogb(x))); }
+            if name == "exponent" { return EvalResult::single(JsonValue::Float(mathLogb(x))); }
+            if name == "significand"
+            {
+                if x == 0.0 { return EvalResult::single(JsonValue::Float(0.0)); }
+                let e = mathLogb(x);
+                return EvalResult::single(JsonValue::Float(x / exp(e * log(2.0))));
+            }
+            if name == "tgamma" { return EvalResult::single(JsonValue::Float(mathTgamma(x))); }
+            if name == "lgamma" { return EvalResult::single(JsonValue::Float(mathLgamma(x))); }
         }
 
         if name == "now"
