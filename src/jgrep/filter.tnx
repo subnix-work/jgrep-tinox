@@ -75,6 +75,7 @@ enum Filter
     SetPath(Filter, Filter);
     UpdatePath(Filter, Filter);
     Label(String);
+    LabelBind(String, Filter);
     Break(String);
     Env;
     Format(String, Bool, Filter);
@@ -1017,7 +1018,7 @@ class FilterParser
                 match this.consume() { LabelName(n) => { name = n; } VarName(n) => { name = n; } _ => {} }
                 match this.consume() { Pipe => {} _ => {} }
                 let body = this.parseComma();
-                return Filter::Label(name);
+                return Filter::LabelBind(name, body);
             }
             Break =>
             {
