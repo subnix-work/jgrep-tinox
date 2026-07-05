@@ -1,6 +1,4 @@
 # Build-Artefakte
-jgrep
-jgrep.ll
+/jgrep
+/jgrep.ll
 .tinox_*
-# Testrunner kopiert src/jgrep hierher
-tests/jgrep/

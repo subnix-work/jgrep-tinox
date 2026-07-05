@@ -1,0 +1,237 @@
+module jgrep.color;
+
+import json_value;
+import json_parser;
+
+class Ansi
+{
+    fnc reset()     -> String { return "\x1b[0m"; }
+    fnc bold()      -> String { return "\x1b[1m"; }
+    fnc black()     -> String { return "\x1b[30m"; }
+    fnc red()       -> String { return "\x1b[31m"; }
+    fnc green()     -> String { return "\x1b[32m"; }
+    fnc yellow()    -> String { return "\x1b[33m"; }
+    fnc blue()      -> String { return "\x1b[34m"; }
+    fnc magenta()   -> String { return "\x1b[35m"; }
+    fnc cyan()      -> String { return "\x1b[36m"; }
+    fnc white()     -> String { return "\x1b[37m"; }
+    fnc brightRed()    -> String { return "\x1b[91m"; }
+    fnc boldRed()      -> String { return "\x1b[1;31m"; }
+
+    fnc colorize(text: String, colorCode: String) -> String
+    {
+        return colorCode + text + Ansi::reset();
+    }
+}
+
+class ColorConfig
+{
+    var enabled: Bool;
+    var colorLevel: Bool;
+    var colorLevelField: String;
+
+    fnc new(enabled: Bool, colorLevel: Bool, colorLevelField: String) -> ColorConfig
+    {
+        return ColorConfig { enabled: enabled, colorLevel: colorLevel, colorLevelField: colorLevelField };
+    }
+
+    fnc detectEnabled(noColorFlag: Bool) -> Bool
+    {
+        if noColorFlag { return false; }
+        let noColorEnv = envGet("NO_COLOR");
+        if noColorEnv != "" { return false; }
+        let term = envGet("TERM");
+        if term == "dumb" { return false; }
+        return true;
+    }
+}
+
+class JsonHighlighter
+{
+    fnc highlight(value: JsonValue, config: ColorConfig) -> String
+    {
+        if !config.enabled { return JsonSerializer::stringify(value); }
+        return JsonHighlighter::highlightValue(value);
+    }
+
+    fnc highlightPretty(value: JsonValue, config: ColorConfig) -> String
+    {
+        if !config.enabled { return JsonSerializer::prettyStringify(value, 2); }
+        return JsonHighlighter::highlightPrettyValue(value, 0);
+    }
+
+    fnc highlightValue(value: JsonValue) -> String
+    {
+        match value
+        {
+            Null    => return Ansi::colorize("null", Ansi::magenta());
+            Bool(b) =>
+            {
+                if b { return Ansi::colorize("true", Ansi::magenta()); }
+                return Ansi::colorize("false", Ansi::magenta());
+            }
+            Integer(n) => return Ansi::colorize(n.toString(), Ansi::yellow());
+            Float(s)   => return Ansi::colorize(floatDisplay(s), Ansi::yellow());
+            Str(s) => return Ansi::colorize("\"" + JsonSerializer::escapeString(s) + "\"", Ansi::green());
+            Array(a) =>
+            {
+                let ha = a;
+                if ha.len() == 0 { return "[]"; }
+                var result = "[";
+                var i = 0;
+                for item in ha
+                {
+                    if i > 0 { result = result + ","; }
+                    result = result + JsonHighlighter::highlightValue(item);
+                    i = i + 1;
+                }
+                return result + "]";
+            }
+            Object(o) =>
+            {
+                let hoLen = JsonValueHelper::objLen(wrapObj(o));
+                if hoLen == 0 { return "{}"; }
+                var result = "{";
+                var i = 0;
+                let hoKs = JsonValueHelper::objKeys(wrapObj(o));
+                for key in hoKs
+                {
+                    if i > 0 { result = result + ","; }
+                    result = result + Ansi::colorize("\"" + JsonSerializer::escapeString(key) + "\"", Ansi::cyan());
+                    result = result + ":";
+                    result = result + JsonHighlighter::highlightValue(o.get(key));
+                    i = i + 1;
+                }
+                return result + "}";
+            }
+        }
+        return "";
+    }
+
+    fnc highlightPrettyValue(value: JsonValue, depth: Int64) -> String
+    {
+        let pad = JsonSerializer::spaces((depth + 1) * 2);
+        let closePad = JsonSerializer::spaces(depth * 2);
+
+        match value
+        {
+            Null    => return Ansi::colorize("null", Ansi::magenta());
+            Bool(b) =>
+            {
+                if b { return Ansi::colorize("true", Ansi::magenta()); }
+                return Ansi::colorize("false", Ansi::magenta());
+            }
+            Integer(n) => return Ansi::colorize(n.toString(), Ansi::yellow());
+            Float(s)   => return Ansi::colorize(floatDisplay(s), Ansi::yellow());
+            Str(s) => return Ansi::colorize("\"" + JsonSerializer::escapeString(s) + "\"", Ansi::green());
+            Array(a) =>
+            {
+                let hpa = a;
+                if hpa.len() == 0 { return "[]"; }
+                var result = "[\n";
+                var i = 0;
+                for item in hpa
+                {
+                    if i > 0 { result = result + ",\n"; }
+                    result = result + pad + JsonHighlighter::highlightPrettyValue(item, depth + 1);
+                    i = i + 1;
+                }
+                return result + "\n" + closePad + "]";
+            }
+            Object(o) =>
+            {
+                let hpoLen = JsonValueHelper::objLen(wrapObj(o));
+                if hpoLen == 0 { return "{}"; }
+                var result = "{\n";
+                var i = 0;
+                let hpoKs = JsonValueHelper::objKeys(wrapObj(o));
+                for key in hpoKs
+                {
+                    if i > 0 { result = result + ",\n"; }
+                    result = result + pad + Ansi::colorize("\"" + JsonSerializer::escapeString(key) + "\"", Ansi::cyan());
+                    result = result + ": ";
+                    result = result + JsonHighlighter::highlightPrettyValue(o.get(key), depth + 1);
+                    i = i + 1;
+                }
+                return result + "\n" + closePad + "}";
+            }
+        }
+        return "";
+    }
+}
+
+class ColorResult
+{
+    var found: Bool;
+    var color: String;
+
+    fnc none() -> ColorResult { return ColorResult { found: false, color: "" }; }
+    fnc some(c: String) -> ColorResult { return ColorResult { found: true, color: c }; }
+}
+
+class LevelColorizer
+{
+    fnc getLogLevel(obj: JsonValue, fieldPath: String) -> String
+    {
+        var searchFields: List<String> = ["log.level", "level", "severity", "severity_text", "severityText"];
+        if fieldPath != "" { searchFields = [fieldPath]; }
+
+        for field in searchFields
+        {
+            let parts = field.split(".");
+            var current = obj;
+            var found = true;
+            for part in parts
+            {
+                match current
+                {
+                    Object(o) =>
+                    {
+                        if o.contains(part) { current = o.get(part); }
+                        else { found = false; break; }
+                    }
+                    _ => { found = false; break; }
+                }
+            }
+            if found
+            {
+                match current
+                {
+                    Str(s) => return s;
+                    _ => {}
+                }
+            }
+        }
+        return "";
+    }
+
+    fnc colorForLevel(level: String) -> ColorResult
+    {
+        let upper = level.toUpper();
+        if upper == "TRACE"     { return ColorResult::some(Ansi::magenta()); }
+        if upper == "DEBUG"     { return ColorResult::some(Ansi::blue()); }
+        if upper == "INFO"      { return ColorResult::some(Ansi::cyan()); }
+        if upper == "INFORMATION" { return ColorResult::some(Ansi::cyan()); }
+        if upper == "NOTICE"    { return ColorResult::some(Ansi::cyan()); }
+        if upper == "WARN"      { return ColorResult::some(Ansi::yellow()); }
+        if upper == "WARNING"   { return ColorResult::some(Ansi::yellow()); }
+        if upper == "ERROR"     { return ColorResult::some(Ansi::red()); }
+        if upper == "ERR"       { return ColorResult::some(Ansi::red()); }
+        if upper == "FATAL"     { return ColorResult::some(Ansi::boldRed()); }
+        if upper == "CRITICAL"  { return ColorResult::some(Ansi::boldRed()); }
+        if upper == "CRIT"      { return ColorResult::some(Ansi::boldRed()); }
+        if upper == "ALERT"     { return ColorResult::some(Ansi::boldRed()); }
+        if upper == "EMERGENCY" { return ColorResult::some(Ansi::boldRed()); }
+        return ColorResult::none();
+    }
+
+    fnc colorizeByLevel(line: String, value: JsonValue, config: ColorConfig) -> String
+    {
+        if !config.enabled || !config.colorLevel { return line; }
+        let level = LevelColorizer::getLogLevel(value, config.colorLevelField);
+        if level == "" { return line; }
+        let colorResult = LevelColorizer::colorForLevel(level);
+        if !colorResult.found { return line; }
+        return Ansi::colorize(line, colorResult.color);
+    }
+}

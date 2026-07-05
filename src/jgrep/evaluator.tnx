@@ -1,0 +1,3466 @@
+module jgrep.evaluator;
+
+import json_value;
+import json_parser;
+import filter;
+
+class EvalContext
+{
+    var vars: Map<String, JsonValue>;
+    var defs: Map<String, Filter>;
+
+    fnc new() -> EvalContext
+    {
+        return EvalContext { vars: @{}, defs: @{} };
+    }
+
+    fn withVar(name: String, value: JsonValue) -> EvalContext
+    {
+        var ctx = EvalContext { vars: @{}, defs: this.defs };
+        for k in this.vars.keys() { ctx.vars[k] = this.vars.get(k); }
+        ctx.vars[name] = value;
+        return ctx;
+    }
+
+    fn withDef(name: String, filter: Filter) -> EvalContext
+    {
+        var ctx = EvalContext { vars: this.vars, defs: @{} };
+        for k in this.defs.keys() { ctx.defs[k] = this.defs.get(k); }
+        ctx.defs[name] = filter;
+        return ctx;
+    }
+}
+
+class EvalResult
+{
+    values: List<JsonValue>;
+    hadError: Bool;
+    errorMsg: String;
+
+    fnc ok(vals: List<JsonValue>) -> EvalResult
+    {
+        return EvalResult { values: vals, hadError: false, errorMsg: "" };
+    }
+
+    fnc err(msg: String) -> EvalResult
+    {
+        return EvalResult { values: [], hadError: true, errorMsg: msg };
+    }
+
+    fnc empty() -> EvalResult
+    {
+        return EvalResult { values: [], hadError: false, errorMsg: "" };
+    }
+
+    fnc single(v: JsonValue) -> EvalResult
+    {
+        return EvalResult { values: [v], hadError: false, errorMsg: "" };
+    }
+
+    fn isError() -> Bool { return this.hadError; }
+    fn isEmpty() -> Bool { return this.values.len() == 0 && !this.hadError; }
+}
+
+fn getEntryKeySpec(e: ObjEntry) -> ObjKey { return e.keySpec; }
+fn getEntryValFilter(e: ObjEntry) -> Filter { return e.valFilter; }
+fn filterFieldName(f: Filter) -> List<String>
+{
+    match f { Filter::Field(s) => return [s]; _ => return []; }
+}
+fn filterIndexAccess(f: Filter) -> List<Int64>
+{
+    match f { Filter::IndexAccess(n) => return [n]; _ => return []; }
+}
+fn filterIsPipe(f: Filter) -> Bool
+{
+    match f { Filter::Pipe(l, r) => return true; _ => return false; }
+}
+fn filterPipeLeft(f: Filter) -> Filter
+{
+    match f { Filter::Pipe(l, r) => return l; _ => return Filter::Identity; }
+}
+fn filterPipeRight(f: Filter) -> Filter
+{
+    match f { Filter::Pipe(l, r) => return r; _ => return Filter::Identity; }
+}
+fn filterIsIdentity(f: Filter) -> Bool
+{
+    match f { Filter::Identity => return true; _ => return false; }
+}
+fn filterIsIterEach(f: Filter) -> Bool
+{
+    match f { Filter::IterEach => return true; _ => return false; }
+}
+fn filterTypeName(f: Filter) -> String
+{
+    match f
+    {
+        Filter::Identity => return "Identity";
+        Filter::LiteralNull => return "LiteralNull";
+        Filter::LiteralBool(b) => return "LiteralBool";
+        Filter::LiteralInt(n) => return "LiteralInt(" + n.toString() + ")";
+        Filter::LiteralFloat(s) => return "LiteralFloat";
+        Filter::LiteralStr(s) => return "LiteralStr(" + s + ")";
+        Filter::Field(n) => return "Field(" + n + ")";
+        Filter::Variable(n) => return "Variable(" + n + ")";
+        Filter::Pipe(l, r) => return "Pipe";
+        Filter::Comma(l, r) => return "Comma";
+        Filter::FunctionCall(n, a) => return "FunctionCall(" + n + ")";
+        Filter::IterEach => return "IterEach";
+        Filter::TryOnly(b) => return "TryOnly";
+        Filter::TryCatchWith(b, h) => return "TryCatchWith";
+        _ => return "Other";
+    }
+    return "Unknown";
+}
+
+fn filterGetDefName(f: Filter) -> List<String>
+{ match f { Filter::Def(name, args, body) => return [name]; _ => return []; } }
+fn filterGetDefBody(f: Filter) -> List<Filter>
+{ match f { Filter::Def(name, args, body) => return [body]; _ => return []; } }
+
+// ---- Regex-Schicht (sub/gsub/splits/match/capture/scan/test) ----
+//
+// Übersetzt jq/Oniguruma-Syntax nach POSIX ERE: (?<name>...) und (?:...)
+// werden zu zählenden Gruppen, \d/\w/\s & Co. zu Zeichenklassen.
+// Rückgabe: [posixPattern, gruppe1Name, gruppe2Name, ...] ("" = unbenannt).
+
+fn rxStrAt(xs: List<String>, i: Int64) -> String { return xs[i]; }
+fn rxStrCount(xs: List<String>) -> Int64 { return xs.len(); }
+
+fn regexTranslate(pattern: String) -> List<String>
+{
+    var names: List<String> = [];
+    var out = "";
+    var i: Int64 = 0;
+    let n = pattern.len();
+    var inClass = false;
+    while i < n
+    {
+        let c = pattern.substring(i, i + 1);
+        if c == "\\" && i + 1 < n
+        {
+            let d = pattern.substring(i + 1, i + 2);
+            if inClass
+            {
+                if d == "d" { out = out + "0-9"; i += 2; continue; }
+                if d == "w" { out = out + "A-Za-z0-9_"; i += 2; continue; }
+                if d == "s" { out = out + " \t\r\n"; i += 2; continue; }
+            }
+            else
+            {
+                if d == "d" { out = out + "[0-9]"; i += 2; continue; }
+                if d == "D" { out = out + "[^0-9]"; i += 2; continue; }
+                if d == "w" { out = out + "[A-Za-z0-9_]"; i += 2; continue; }
+                if d == "W" { out = out + "[^A-Za-z0-9_]"; i += 2; continue; }
+                if d == "s" { out = out + "[ \t\r\n]"; i += 2; continue; }
+                if d == "S" { out = out + "[^ \t\r\n]"; i += 2; continue; }
+            }
+            out = out + c + d;
+            i += 2;
+            continue;
+        }
+        if inClass
+        {
+            if c == "]" { inClass = false; }
+            out = out + c;
+            i += 1;
+            continue;
+        }
+        if c == "[" { inClass = true; out = out + c; i += 1; continue; }
+        if c == "("
+        {
+            if i + 2 < n && pattern.substring(i + 1, i + 2) == "?"
+            {
+                let t = pattern.substring(i + 2, i + 3);
+                if t == "<"
+                {
+                    var j = i + 3;
+                    var nm = "";
+                    while j < n && pattern.substring(j, j + 1) != ">"
+                    {
+                        nm = nm + pattern.substring(j, j + 1);
+                        j += 1;
+                    }
+                    out = out + "(";
+                    names.push(nm);
+                    i = j + 1;
+                    continue;
+                }
+                if t == ":"
+                {
+                    // non-capturing kennt POSIX nicht — wird zur zählenden Gruppe
+                    out = out + "(";
+                    names.push("");
+                    i += 3;
+                    continue;
+                }
+            }
+            out = out + "(";
+            names.push("");
+            i += 1;
+            continue;
+        }
+        out = out + c;
+        i += 1;
+    }
+    var result: List<String> = [out];
+    for nm in names { result.push(nm); }
+    return result;
+}
+
+// jq-Match-Objekt: {offset, length, string, captures: [{offset, length, string, name}]}
+// Offsets sind Byte-Offsets (jq zählt Codepoints — Abweichung bei Nicht-ASCII).
+fn buildMatchObject(s: String, groups: List<Int64>, tr: List<String>) -> JsonValue
+{
+    var obj: Map<String, JsonValue> = @{};
+    let ms = groups[0];
+    let me = groups[1];
+    obj["offset"] = JsonValue::Integer(ms);
+    obj["length"] = JsonValue::Integer(me - ms);
+    obj["string"] = JsonValue::Str(s.substring(ms, me));
+    var caps: List<JsonValue> = [];
+    var gi: Int64 = 2;
+    var ni: Int64 = 1;
+    while gi + 1 < groups.len()
+    {
+        var cap: Map<String, JsonValue> = @{};
+        let gs = groups[gi];
+        let ge = groups[gi + 1];
+        if gs < 0
+        {
+            cap["offset"] = JsonValue::Integer(-1);
+            cap["length"] = JsonValue::Integer(0);
+            cap["string"] = JsonValue::Null;
+        }
+        else
+        {
+            cap["offset"] = JsonValue::Integer(gs);
+            cap["length"] = JsonValue::Integer(ge - gs);
+            cap["string"] = JsonValue::Str(s.substring(gs, ge));
+        }
+        var nm = "";
+        if ni < rxStrCount(tr) { nm = rxStrAt(tr, ni); }
+        if nm == "" { cap["name"] = JsonValue::Null; }
+        else { cap["name"] = JsonValue::Str(nm); }
+        caps.push(JsonValue::Object(cap));
+        gi += 2;
+        ni += 1;
+    }
+    obj["captures"] = JsonValue::Array(caps);
+    return JsonValue::Object(obj);
+}
+
+// Regex-Split: Teile zwischen den Matches (für splits und split/2)
+fn regexSplitString(s: String, pattern: String, flags: String) -> List<JsonValue>
+{
+    let tr = regexTranslate(pattern);
+    let posix = rxStrAt(tr, 0);
+    var icase: Int64 = 0;
+    if flags.contains("i") { icase = 1; }
+    var parts: List<JsonValue> = [];
+    var partStart: Int64 = 0;
+    var searchPos: Int64 = 0;
+    while searchPos <= s.len()
+    {
+        let g = regexMatchGroups(posix, s, searchPos, icase);
+        if g.len() == 0 { break; }
+        let ms = g[0];
+        let me = g[1];
+        if me == ms
+        {
+            // leere Matches überspringen (kein leerer Separator)
+            searchPos = ms + 1;
+            continue;
+        }
+        parts.push(JsonValue::Str(s.substring(partStart, ms)));
+        partStart = me;
+        searchPos = me;
+    }
+    parts.push(JsonValue::Str(s.substring(partStart, s.len())));
+    return parts;
+}
+
+// Capture-Objekt für sub/gsub/capture: nur benannte Gruppen, name → String|Null
+fn buildCaptureObject(s: String, groups: List<Int64>, tr: List<String>) -> JsonValue
+{
+    var obj: Map<String, JsonValue> = @{};
+    var gi: Int64 = 2;
+    var ni: Int64 = 1;
+    while gi + 1 < groups.len()
+    {
+        if ni < rxStrCount(tr)
+        {
+            let nm = rxStrAt(tr, ni);
+            if nm != ""
+            {
+                if groups[gi] < 0 { obj[nm] = JsonValue::Null; }
+                else { obj[nm] = JsonValue::Str(s.substring(groups[gi], groups[gi + 1])); }
+            }
+        }
+        gi += 2;
+        ni += 1;
+    }
+    return JsonValue::Object(obj);
+}
+
+class Evaluator
+{
+    var hadError: Bool;
+    var inputQueue: List<JsonValue>;
+    var inputQueuePos: Int64;
+
+    fnc new() -> Evaluator
+    {
+        return Evaluator { hadError: false, inputQueue: [], inputQueuePos: 0 };
+    }
+
+    fn eval(filter: Filter, input: JsonValue, ctx: EvalContext) -> EvalResult
+    {
+        match filter
+        {
+            Identity => return EvalResult::single(input);
+
+            LiteralNull    => return EvalResult::single(JsonValue::Null);
+            LiteralBool(b) => return EvalResult::single(JsonValue::Bool(b));
+            LiteralInt(n)  => return EvalResult::single(JsonValue::Integer(n));
+            LiteralFloat(s) => return EvalResult::single(JsonValue::Float(s));
+            LiteralStr(s)  => return EvalResult::single(JsonValue::Str(s));
+
+            Field(name) =>
+            {
+                match input
+                {
+                    Object(o) =>
+                    {
+                        if o.contains(name) { return EvalResult::single(o.get(name)); }
+                        return EvalResult::single(JsonValue::Null);
+                    }
+                    Null => return EvalResult::single(JsonValue::Null);
+                    _ => return EvalResult::err("null (null) and string (\"" + name + "\") cannot be iterated over");
+                }
+            }
+
+            OptionalField(name) =>
+            {
+                match input
+                {
+                    Object(o) =>
+                    {
+                        if o.contains(name) { return EvalResult::single(o.get(name)); }
+                        return EvalResult::single(JsonValue::Null);
+                    }
+                    _ => return EvalResult::empty();
+                }
+            }
+
+            IndexAccess(idx) =>
+            {
+                match input
+                {
+                    Array(a) =>
+                    {
+                        let arr = a;
+                        var i = idx;
+                        if i < 0 { i = arr.len() + i; }
+                        if i < 0 || i >= arr.len() { return EvalResult::single(JsonValue::Null); }
+                        return EvalResult::single(arr[i]);
+                    }
+                    Object(o) =>
+                    {
+                        let key = idx.toString();
+                        if o.contains(key) { return EvalResult::single(o.get(key)); }
+                        return EvalResult::single(JsonValue::Null);
+                    }
+                    _ => return EvalResult::single(JsonValue::Null);
+                }
+            }
+
+            SliceAccess(start, end, hasStart, hasEnd) =>
+            {
+                match input
+                {
+                    Array(a) =>
+                    {
+                        let arr = a;
+                        let len = arr.len();
+                        var s: Int64 = 0; if hasStart { s = start; }
+                        var e = len; if hasEnd { e = end; }
+                        if s < 0 { s = len + s; }
+                        if e < 0 { e = len + e; }
+                        if s < 0 { s = 0; }
+                        if e > len { e = len; }
+                        var result: List<JsonValue> = [];
+                        var i = s;
+                        while i < e { result.push(arr[i]); i = i + 1; }
+                        return EvalResult::single(JsonValue::Array(result));
+                    }
+                    Str(s) =>
+                    {
+                        let len = s.len();
+                        var st: Int64 = 0; if hasStart { st = start; }
+                        var en = len; if hasEnd { en = end; }
+                        if st < 0 { st = len + st; }
+                        if en < 0 { en = len + en; }
+                        if st < 0 { st = 0; }
+                        if en > len { en = len; }
+                        return EvalResult::single(JsonValue::Str(s.substring(st, en)));
+                    }
+                    _ => return EvalResult::err("Cannot slice non-array/string");
+                }
+            }
+
+            IterEach =>
+            {
+                match input
+                {
+                    Array(a) =>
+                    {
+                        let arr = a;
+                        var results: List<JsonValue> = [];
+                        for item in arr { results.push(item); }
+                        return EvalResult::ok(results);
+                    }
+                    Object(o) =>
+                    {
+                        var results: List<JsonValue> = [];
+                        let oKeys = JsonValueHelper::objKeys(wrapObj(o));
+                        for key in oKeys { results.push(o.get(key)); }
+                        return EvalResult::ok(results);
+                    }
+                    _ => return EvalResult::err("Cannot iterate over " + JsonValueHelper::typeName(input));
+                }
+            }
+
+            OptionalIterator =>
+            {
+                match input
+                {
+                    Array(a)  =>
+                    {
+                        let arr = a;
+                        var results: List<JsonValue> = [];
+                        for item in arr { results.push(item); }
+                        return EvalResult::ok(results);
+                    }
+                    Object(o) =>
+                    {
+                        var results: List<JsonValue> = [];
+                        let oKeys = JsonValueHelper::objKeys(wrapObj(o));
+                        for key in oKeys { results.push(o.get(key)); }
+                        return EvalResult::ok(results);
+                    }
+                    _ => return EvalResult::empty();
+                }
+            }
+
+            Pipe(left, right) =>
+            {
+                let defName = filterGetDefName(left);
+                if defName.len() > 0
+                {
+                    let defBodies = filterGetDefBody(left);
+                    if defBodies.len() > 0
+                    {
+                        let newCtx = ctx.withDef(defName[0], defBodies[0]);
+                        return this.eval(right, input, newCtx);
+                    }
+                }
+                let leftResult = this.eval(left, input, ctx);
+                if leftResult.isError() { return leftResult; }
+                var allResults: List<JsonValue> = [];
+                for v in leftResult.values
+                {
+                    let r = this.eval(right, v, ctx);
+                    if r.isError() { return r; }
+                    for rv in r.values { allResults.push(rv); }
+                }
+                return EvalResult::ok(allResults);
+            }
+
+            Comma(left, right) =>
+            {
+                let leftResult = this.eval(left, input, ctx);
+                let rightResult = this.eval(right, input, ctx);
+                var allResults: List<JsonValue> = [];
+                for v in leftResult.values  { allResults.push(v); }
+                for v in rightResult.values { allResults.push(v); }
+                return EvalResult::ok(allResults);
+            }
+
+            ArrayConstruct(inner) =>
+            {
+                match inner
+                {
+                    LiteralNull => return EvalResult::single(JsonValue::Array([]));
+                    _ =>
+                    {
+                        let r = this.eval(inner, input, ctx);
+                        if r.isError() { return EvalResult::single(JsonValue::Array([])); }
+                        var arr: List<JsonValue> = [];
+                        for v in r.values { arr.push(v); }
+                        return EvalResult::single(JsonValue::Array(arr));
+                    }
+                }
+            }
+
+            ObjectConstruct(entries) =>
+            {
+                var obj: Map<String, JsonValue> = @{};
+                let ents = entries;
+                var ei: Int64 = 0;
+                while ei < ents.len()
+                {
+                    let entry = ents[ei];
+                    ei = ei + 1;
+                    let keySpec = getEntryKeySpec(entry);
+                    let valFilter = getEntryValFilter(entry);
+                    var key = "";
+                    match keySpec
+                    {
+                        ObjKey::Literal(s) => { key = s; }
+                        ObjKey::Computed(kf) =>
+                        {
+                            let kr = this.eval(kf, input, ctx);
+                            if !kr.isError() && kr.values.len() > 0
+                            {
+                                match kr.values[0]
+                                {
+                                    JsonValue::Str(s)  => { key = s; }
+                                    JsonValue::Integer(n) => { key = n.toString(); }
+                                    _ => { key = JsonSerializer::stringify(kr.values[0]); }
+                                }
+                            }
+                        }
+                    }
+                    let vr = this.evalSingle(valFilter, input, ctx);
+                    if !vr.isError() { obj[key] = vr.values[0]; }
+                    else { obj[key] = JsonValue::Null; }
+                }
+                return EvalResult::single(JsonValue::Object(obj));
+            }
+
+            Add(left, right) =>
+            {
+                let lr = this.evalSingle(left, input, ctx);
+                let rr = this.evalSingle(right, input, ctx);
+                if lr.isError() { return lr; }
+                if rr.isError() { return rr; }
+                return EvalResult::single(JsonValueHelper::addValues(lr.values[0], rr.values[0]));
+            }
+
+            Subtract(left, right) =>
+            {
+                let lr = this.evalSingle(left, input, ctx);
+                let rr = this.evalSingle(right, input, ctx);
+                if lr.isError() { return lr; }
+                if rr.isError() { return rr; }
+                return EvalResult::single(JsonValueHelper::subtractValues(lr.values[0], rr.values[0]));
+            }
+
+            Multiply(left, right) =>
+            {
+                let lr = this.evalSingle(left, input, ctx);
+                let rr = this.evalSingle(right, input, ctx);
+                if lr.isError() { return lr; }
+                if rr.isError() { return rr; }
+                return EvalResult::single(JsonValueHelper::multiplyValues(lr.values[0], rr.values[0]));
+            }
+
+            Divide(left, right) =>
+            {
+                let lr = this.evalSingle(left, input, ctx);
+                let rr = this.evalSingle(right, input, ctx);
+                if lr.isError() { return lr; }
+                if rr.isError() { return rr; }
+                return EvalResult::single(JsonValueHelper::divideValues(lr.values[0], rr.values[0]));
+            }
+
+            Modulo(left, right) =>
+            {
+                let lr = this.evalSingle(left, input, ctx);
+                let rr = this.evalSingle(right, input, ctx);
+                if lr.isError() { return lr; }
+                if rr.isError() { return rr; }
+                return EvalResult::single(JsonValueHelper::moduloValues(lr.values[0], rr.values[0]));
+            }
+
+            Equals(left, right) =>
+            {
+                let lr = this.evalSingle(left, input, ctx);
+                let rr = this.evalSingle(right, input, ctx);
+                if lr.isError() { return lr; }
+                if rr.isError() { return rr; }
+                let eq = JsonValueHelper::equals(lr.values[0], rr.values[0]);
+                return EvalResult::single(JsonValue::Bool(eq));
+            }
+
+            NotEquals(left, right) =>
+            {
+                let lr = this.evalSingle(left, input, ctx);
+                let rr = this.evalSingle(right, input, ctx);
+                if lr.isError() { return lr; }
+                if rr.isError() { return rr; }
+                let eq = JsonValueHelper::equals(lr.values[0], rr.values[0]);
+                return EvalResult::single(JsonValue::Bool(!eq));
+            }
+
+            LessThan(left, right) =>
+            {
+                let lr = this.evalSingle(left, input, ctx);
+                let rr = this.evalSingle(right, input, ctx);
+                if lr.isError() { return lr; }
+                if rr.isError() { return rr; }
+                return EvalResult::single(JsonValue::Bool(JsonValueHelper::compare(lr.values[0], rr.values[0]) < 0));
+            }
+
+            GreaterThan(left, right) =>
+            {
+                let lr = this.evalSingle(left, input, ctx);
+                let rr = this.evalSingle(right, input, ctx);
+                if lr.isError() { return lr; }
+                if rr.isError() { return rr; }
+                return EvalResult::single(JsonValue::Bool(JsonValueHelper::compare(lr.values[0], rr.values[0]) > 0));
+            }
+
+            LessThanOrEqual(left, right) =>
+            {
+                let lr = this.evalSingle(left, input, ctx);
+                let rr = this.evalSingle(right, input, ctx);
+                if lr.isError() { return lr; }
+                if rr.isError() { return rr; }
+                return EvalResult::single(JsonValue::Bool(JsonValueHelper::compare(lr.values[0], rr.values[0]) <= 0));
+            }
+
+            GreaterThanOrEqual(left, right) =>
+            {
+                let lr = this.evalSingle(left, input, ctx);
+                let rr = this.evalSingle(right, input, ctx);
+                if lr.isError() { return lr; }
+                if rr.isError() { return rr; }
+                return EvalResult::single(JsonValue::Bool(JsonValueHelper::compare(lr.values[0], rr.values[0]) >= 0));
+            }
+
+            And(left, right) =>
+            {
+                let lr = this.evalSingle(left, input, ctx);
+                if lr.isError() { return lr; }
+                if !JsonValueHelper::isTruthy(lr.values[0]) { return EvalResult::single(JsonValue::Bool(false)); }
+                let rr = this.evalSingle(right, input, ctx);
+                if rr.isError() { return rr; }
+                return EvalResult::single(JsonValue::Bool(JsonValueHelper::isTruthy(rr.values[0])));
+            }
+
+            Or(left, right) =>
+            {
+                let lr = this.evalSingle(left, input, ctx);
+                if lr.isError() { return lr; }
+                if JsonValueHelper::isTruthy(lr.values[0]) { return EvalResult::single(JsonValue::Bool(true)); }
+                let rr = this.evalSingle(right, input, ctx);
+                if rr.isError() { return rr; }
+                return EvalResult::single(JsonValue::Bool(JsonValueHelper::isTruthy(rr.values[0])));
+            }
+
+            Not =>
+            {
+                return EvalResult::single(JsonValue::Bool(!JsonValueHelper::isTruthy(input)));
+            }
+
+            Alternative(left, right) =>
+            {
+                let lr = this.eval(left, input, ctx);
+                if !lr.isError() && lr.values.len() > 0
+                {
+                    var allTruthy = false;
+                    for v in lr.values
+                    {
+                        if JsonValueHelper::isTruthy(v) { allTruthy = true; break; }
+                    }
+                    if allTruthy { return lr; }
+                }
+                return this.eval(right, input, ctx);
+            }
+
+            TryOnly(tcbody) =>
+            {
+                let tcBodyF = tcbody;
+                let r = this.eval(tcBodyF, input, ctx);
+                if r.isError() { return EvalResult::empty(); }
+                return r;
+            }
+
+            TryCatchWith(tcbody, tchandler) =>
+            {
+                let tcBodyF = tcbody;
+                let tcHandlerF = tchandler;
+                let r = this.eval(tcBodyF, input, ctx);
+                if r.isError()
+                {
+                    let errVal = JsonValue::Str(r.errorMsg);
+                    return this.eval(tcHandlerF, errVal, ctx);
+                }
+                return r;
+            }
+
+            Optional(inner) =>
+            {
+                let r = this.eval(inner, input, ctx);
+                if r.isError() { return EvalResult::empty(); }
+                return r;
+            }
+
+            IfThenElse(cond, thenBranch, elseBranch) =>
+            {
+                let condResult = this.evalSingle(cond, input, ctx);
+                if condResult.isError() { return condResult; }
+                if JsonValueHelper::isTruthy(condResult.values[0])
+                {
+                    return this.eval(thenBranch, input, ctx);
+                }
+                return this.eval(elseBranch, input, ctx);
+            }
+
+            Variable(name) =>
+            {
+                if ctx.vars.contains(name) { return EvalResult::single(ctx.vars.get(name)); }
+                return EvalResult::err("Variable $" + name + " not defined");
+            }
+
+            AsPattern(gen, varName, body) =>
+            {
+                let genResult = this.eval(gen, input, ctx);
+                if genResult.isError() { return genResult; }
+                var allResults: List<JsonValue> = [];
+                for v in genResult.values
+                {
+                    let newCtx = ctx.withVar(varName, v);
+                    let r = this.eval(body, input, newCtx);
+                    if r.isError() { return r; }
+                    for rv in r.values { allResults.push(rv); }
+                }
+                return EvalResult::ok(allResults);
+            }
+
+            Reduce(gen, varName, init, body) =>
+            {
+                let initResult = this.evalSingle(init, input, ctx);
+                if initResult.isError() { return initResult; }
+                var acc = initResult.values[0];
+                let genResult = this.eval(gen, input, ctx);
+                if genResult.isError() { return genResult; }
+                var gvals = genResult.values;
+                var gi: Int64 = 0;
+                while gi < gvals.len()
+                {
+                    let v = gvals[gi]; gi = gi + 1;
+                    let newCtx = ctx.withVar(varName, v);
+                    let r = this.evalSingle(body, acc, newCtx);
+                    if r.isError() { return r; }
+                    acc = r.values[0];
+                }
+                return EvalResult::single(acc);
+            }
+
+            Foreach(gen, varName, init, body, extracts) =>
+            {
+                let initResult = this.evalSingle(init, input, ctx);
+                if initResult.isError() { return initResult; }
+                var acc = initResult.values[0];
+                let genResult = this.eval(gen, input, ctx);
+                if genResult.isError() { return genResult; }
+                var results: List<JsonValue> = [];
+                var fvals = genResult.values;
+                var fi: Int64 = 0;
+                while fi < fvals.len()
+                {
+                    let v = fvals[fi]; fi = fi + 1;
+                    let newCtx = ctx.withVar(varName, v);
+                    let r = this.evalSingle(body, acc, newCtx);
+                    if r.isError() { return r; }
+                    acc = r.values[0];
+                    if extracts.len() > 0
+                    {
+                        let er = this.evalSingle(extracts[0], acc, newCtx);
+                        if !er.isError() && er.values.len() > 0 { results.push(er.values[0]); }
+                    }
+                    else
+                    {
+                        results.push(acc);
+                    }
+                }
+                return EvalResult::ok(results);
+            }
+
+            RecursiveDescent =>
+            {
+                let results = this.recurseAll(input);
+                return EvalResult::ok(results);
+            }
+
+            Recurse(hasFilter, recurseFilter) =>
+            {
+                if !hasFilter
+                {
+                    let results = this.recurseAll(input);
+                    return EvalResult::ok(results);
+                }
+                else
+                {
+                    var results: List<JsonValue> = [];
+                    var queue: List<JsonValue> = [input];
+                    while queue.len() > 0
+                    {
+                        let current = queue[0];
+                        queue.removeAt(0);
+                        results.push(current);
+                        let r = this.eval(recurseFilter, current, ctx);
+                        if !r.isError() { for v in r.values { queue.push(v); } }
+                    }
+                    return EvalResult::ok(results);
+                }
+            }
+
+            StringInterp(parts) =>
+            {
+                var result = "";
+                let sparts = parts;
+                var spi: Int64 = 0;
+                while spi < sparts.len()
+                {
+                    let part = sparts[spi]; spi = spi + 1;
+                    match part
+                    {
+                        StringPart::Text(t) => { result = result + t; }
+                        StringPart::Expr(f) =>
+                        {
+                            let r = this.evalSingle(f, input, ctx);
+                            if r.isError() { return r; }
+                            match r.values[0]
+                            {
+                                JsonValue::Str(s) => { result = result + s; }
+                                v => { result = result + JsonSerializer::stringify(v); }
+                            }
+                        }
+                    }
+                }
+                return EvalResult::single(JsonValue::Str(result));
+            }
+
+            Def(name, args, body) =>
+            {
+                let newCtx = ctx.withDef(name, body);
+                return EvalResult::single(input);
+            }
+
+            Env =>
+            {
+                return EvalResult::single(this.buildEnvObject());
+            }
+
+            Format(fmt, hasInner, innerFilter) =>
+            {
+                var fmtVal = input;
+                if hasInner
+                {
+                    let r = this.evalSingle(innerFilter, input, ctx);
+                    if r.isError() { return r; }
+                    fmtVal = r.values[0];
+                }
+                let formatted = this.applyFormat(fmt, fmtVal);
+                return EvalResult::single(JsonValue::Str(formatted));
+            }
+
+            FunctionCall(name, args) => return this.evalBuiltin(name, args, input, ctx);
+
+            Path(inner) =>
+            {
+                let innerF = inner;
+                let paths = this.extractPaths(innerF, input, ctx);
+                if paths.len() == 1 { return EvalResult::single(paths[0]); }
+                return EvalResult::ok(paths);
+            }
+
+            GetPath =>
+            {
+                match input
+                {
+                    Array(path) =>
+                    {
+                        return EvalResult::single(JsonValue::Null);
+                    }
+                    _ => return EvalResult::err("getpath requires an array");
+                }
+            }
+
+            SetPath(pathFilter, valFilter) =>
+            {
+                let vr = this.evalSingle(valFilter, input, ctx);
+                if vr.isError() { return vr; }
+                return EvalResult::single(this.applySetAt(input, pathFilter, vr.values[0], ctx));
+            }
+
+            UpdatePath(pathFilter, updateFilter) =>
+            {
+                let lr = this.evalSingle(pathFilter, input, ctx);
+                if lr.isError() { return lr; }
+                let ur = this.evalSingle(updateFilter, lr.values[0], ctx);
+                if ur.isError() { return ur; }
+                return EvalResult::single(this.applySetAt(input, pathFilter, ur.values[0], ctx));
+            }
+
+            Label(name) => return EvalResult::single(input);
+            Break(name)  => return EvalResult::empty();
+            Limit(n, f)  => return this.eval(f, input, ctx);
+            Until(cond, body) =>
+            {
+                var current = input;
+                var iters = 0;
+                while iters < 10000
+                {
+                    let cr = this.evalSingle(cond, current, ctx);
+                    if cr.isError() { return cr; }
+                    if JsonValueHelper::isTruthy(cr.values[0]) { return EvalResult::single(current); }
+                    let br = this.evalSingle(body, current, ctx);
+                    if br.isError() { return br; }
+                    current = br.values[0];
+                    iters = iters + 1;
+                }
+                return EvalResult::single(current);
+            }
+            While(cond, body) =>
+            {
+                var current = input;
+                var results: List<JsonValue> = [];
+                var iters = 0;
+                while iters < 10000
+                {
+                    let cr = this.evalSingle(cond, current, ctx);
+                    if cr.isError() { break; }
+                    if !JsonValueHelper::isTruthy(cr.values[0]) { break; }
+                    results.push(current);
+                    let br = this.evalSingle(body, current, ctx);
+                    if br.isError() { break; }
+                    current = br.values[0];
+                    iters = iters + 1;
+                }
+                return EvalResult::ok(results);
+            }
+
+            Deref => return EvalResult::single(input);
+
+            LiteralArray(filters) =>
+            {
+                var results: List<JsonValue> = [];
+                let flist = filters;
+                var fli: Int64 = 0;
+                while fli < flist.len()
+                {
+                    let f = flist[fli]; fli = fli + 1;
+                    let r = this.eval(f, input, ctx);
+                    var ri: Int64 = 0;
+                    while ri < r.values.len() { results.push(r.values[ri]); ri = ri + 1; }
+                }
+                return EvalResult::single(JsonValue::Array(results));
+            }
+
+            LiteralObject(entries) =>
+            {
+                var obj: Map<String, JsonValue> = @{};
+                let lents = entries;
+                var lei: Int64 = 0;
+                while lei < lents.len()
+                {
+                    let entry = lents[lei]; lei = lei + 1;
+                    let k = getEntryKeySpec(entry);
+                    let vf = getEntryValFilter(entry);
+                    let r = this.evalSingle(vf, input, ctx);
+                    match k
+                    {
+                        ObjKey::Literal(s) =>
+                        {
+                            if !r.isError() && r.values.len() > 0 { obj[s] = r.values[0]; }
+                            else { obj[s] = JsonValue::Null; }
+                        }
+                        ObjKey::Computed(_) => {}
+                    }
+                }
+                return EvalResult::single(JsonValue::Object(obj));
+            }
+        }
+        return EvalResult::empty();
+    }
+
+    fn evalSingle(filter: Filter, input: JsonValue, ctx: EvalContext) -> EvalResult
+    {
+        let r = this.eval(filter, input, ctx);
+        if r.isError() { return r; }
+        if r.values.len() == 0 { return EvalResult::single(JsonValue::Null); }
+        return EvalResult::single(r.values[0]);
+    }
+
+    fn recurseAll(value: JsonValue) -> List<JsonValue>
+    {
+        var results: List<JsonValue> = [value];
+        match value
+        {
+            Array(a) =>
+            {
+                let arr = a;
+                var i: Int64 = 0;
+                while i < arr.len()
+                {
+                    let sub = this.recurseAll(arr[i]);
+                    var si: Int64 = 0;
+                    while si < sub.len() { results.push(sub[si]); si = si + 1; }
+                    i = i + 1;
+                }
+            }
+            Object(o) =>
+            {
+                let oKeys = JsonValueHelper::objKeys(wrapObj(o));
+                var ki: Int64 = 0;
+                while ki < oKeys.len()
+                {
+                    let sub = this.recurseAll(o.get(oKeys[ki]));
+                    var si: Int64 = 0;
+                    while si < sub.len() { results.push(sub[si]); si = si + 1; }
+                    ki = ki + 1;
+                }
+            }
+            _ => {}
+        }
+        return results;
+    }
+
+    fn applyDel(input: JsonValue, pathFilter: Filter, ctx: EvalContext) -> JsonValue
+    {
+        let fieldNames = filterFieldName(pathFilter);
+        if fieldNames.len() > 0
+        {
+            let key = fieldNames[0];
+            match input
+            {
+                Object(o) =>
+                {
+                    var newObj: Map<String, JsonValue> = @{};
+                    let ks = JsonValueHelper::objKeys(wrapObj(o));
+                    var ki: Int64 = 0;
+                    while ki < ks.len()
+                    {
+                        let k = ks[ki]; ki = ki + 1;
+                        if !(k == key) { newObj[k] = o.get(k); }
+                    }
+                    return JsonValue::Object(newObj);
+                }
+                _ => return input;
+            }
+        }
+
+        let idxList = filterIndexAccess(pathFilter);
+        if idxList.len() > 0
+        {
+            let idx = idxList[0];
+            match input
+            {
+                Array(a) =>
+                {
+                    let arr = a;
+                    var result: List<JsonValue> = [];
+                    var i: Int64 = 0;
+                    var target = idx;
+                    if target < 0 { target = arr.len() + target; }
+                    while i < arr.len()
+                    {
+                        if i != target { result.push(arr[i]); }
+                        i = i + 1;
+                    }
+                    return JsonValue::Array(result);
+                }
+                _ => return input;
+            }
+        }
+
+        if filterIsIterEach(pathFilter)
+        {
+            match input
+            {
+                Array(_) => return JsonValue::Array([]);
+                Object(_) => return JsonValue::Object(@{});
+                _ => return input;
+            }
+        }
+
+        if filterIsPipe(pathFilter)
+        {
+            let left = filterPipeLeft(pathFilter);
+            let right = filterPipeRight(pathFilter);
+            if filterIsIdentity(left) { return this.applyDel(input, right, ctx); }
+            let lr = this.evalSingle(left, input, ctx);
+            if lr.isError() { return input; }
+            let subVal = lr.values[0];
+            let newSub = this.applyDel(subVal, right, ctx);
+            return this.applySetAt(input, left, newSub, ctx);
+        }
+
+        return input;
+    }
+
+    fn applySetAt(input: JsonValue, pathFilter: Filter, newValue: JsonValue, ctx: EvalContext) -> JsonValue
+    {
+        let fieldNames = filterFieldName(pathFilter);
+        if fieldNames.len() > 0
+        {
+            let key = fieldNames[0];
+            match input
+            {
+                Object(o) =>
+                {
+                    var newObj: Map<String, JsonValue> = @{};
+                    let ks = JsonValueHelper::objKeys(wrapObj(o));
+                    var ki: Int64 = 0;
+                    while ki < ks.len()
+                    {
+                        let k = ks[ki]; ki = ki + 1;
+                        if (k == key) { newObj[k] = newValue; }
+                        else { newObj[k] = o.get(k); }
+                    }
+                    if !newObj.contains(key) { newObj[key] = newValue; }
+                    return JsonValue::Object(newObj);
+                }
+                _ => return input;
+            }
+        }
+
+        let idxList = filterIndexAccess(pathFilter);
+        if idxList.len() > 0
+        {
+            let idx = idxList[0];
+            match input
+            {
+                Array(a) =>
+                {
+                    let arr = a;
+                    var result: List<JsonValue> = [];
+                    var i: Int64 = 0;
+                    var target = idx;
+                    if target < 0 { target = arr.len() + target; }
+                    while i < arr.len()
+                    {
+                        if i == target { result.push(newValue); }
+                        else { result.push(arr[i]); }
+                        i = i + 1;
+                    }
+                    return JsonValue::Array(result);
+                }
+                _ => return input;
+            }
+        }
+
+        if filterIsIdentity(pathFilter) { return newValue; }
+
+        if filterIsPipe(pathFilter)
+        {
+            let left = filterPipeLeft(pathFilter);
+            let right = filterPipeRight(pathFilter);
+            if filterIsIdentity(left) { return this.applySetAt(input, right, newValue, ctx); }
+            let lr = this.evalSingle(left, input, ctx);
+            if lr.isError() { return input; }
+            let newSub = this.applySetAt(lr.values[0], right, newValue, ctx);
+            return this.applySetAt(input, left, newSub, ctx);
+        }
+
+        return input;
+    }
+
+    fn extractPaths(f: Filter, input: JsonValue, ctx: EvalContext) -> List<JsonValue>
+    {
+        match f
+        {
+            Identity =>
+            {
+                var empty: List<JsonValue> = [];
+                return [JsonValue::Array(empty)];
+            }
+            Field(name) =>
+            {
+                let pathArr: List<JsonValue> = [JsonValue::Str(name)];
+                return [JsonValue::Array(pathArr)];
+            }
+            OptionalField(name) =>
+            {
+                let pathArr: List<JsonValue> = [JsonValue::Str(name)];
+                return [JsonValue::Array(pathArr)];
+            }
+            IndexAccess(idx) =>
+            {
+                let pathArr: List<JsonValue> = [JsonValue::Integer(idx)];
+                return [JsonValue::Array(pathArr)];
+            }
+            IterEach =>
+            {
+                var result: List<JsonValue> = [];
+                match input
+                {
+                    Array(a) =>
+                    {
+                        let arr = a;
+                        var i: Int64 = 0;
+                        while i < arr.len()
+                        {
+                            let pathArr: List<JsonValue> = [JsonValue::Integer(i)];
+                            result.push(JsonValue::Array(pathArr));
+                            i = i + 1;
+                        }
+                    }
+                    Object(o) =>
+                    {
+                        let keys = JsonValueHelper::objKeys(wrapObj(o));
+                        var ki: Int64 = 0;
+                        while ki < keys.len()
+                        {
+                            let k = keys[ki]; ki = ki + 1;
+                            let pathArr: List<JsonValue> = [JsonValue::Str(k)];
+                            result.push(JsonValue::Array(pathArr));
+                        }
+                    }
+                    _ => {}
+                }
+                return result;
+            }
+            OptionalIterator =>
+            {
+                var result: List<JsonValue> = [];
+                match input
+                {
+                    Array(a) =>
+                    {
+                        let arr = a;
+                        var i: Int64 = 0;
+                        while i < arr.len()
+                        {
+                            let pathArr: List<JsonValue> = [JsonValue::Integer(i)];
+                            result.push(JsonValue::Array(pathArr));
+                            i = i + 1;
+                        }
+                    }
+                    Object(o) =>
+                    {
+                        let keys = JsonValueHelper::objKeys(wrapObj(o));
+                        var ki: Int64 = 0;
+                        while ki < keys.len()
+                        {
+                            let k = keys[ki]; ki = ki + 1;
+                            let pathArr: List<JsonValue> = [JsonValue::Str(k)];
+                            result.push(JsonValue::Array(pathArr));
+                        }
+                    }
+                    _ => {}
+                }
+                return result;
+            }
+            Optional(inner) =>
+            {
+                return this.extractPaths(inner, input, ctx);
+            }
+            Pipe(left, right) =>
+            {
+                let leftF = left;
+                let rightF = right;
+                let leftPaths = this.extractPaths(leftF, input, ctx);
+                let leftVals = this.eval(leftF, input, ctx);
+                if leftVals.isError() { return []; }
+                var result: List<JsonValue> = [];
+                var li: Int64 = 0;
+                while li < leftPaths.len() && li < leftVals.values.len()
+                {
+                    let lp = leftPaths[li];
+                    let lv = leftVals.values[li];
+                    li = li + 1;
+                    let rightPaths = this.extractPaths(rightF, lv, ctx);
+                    var ri: Int64 = 0;
+                    while ri < rightPaths.len()
+                    {
+                        let rp = rightPaths[ri]; ri = ri + 1;
+                        var combined: List<JsonValue> = [];
+                        match lp { Array(la) => { let la2 = la; var lai: Int64 = 0; while lai < la2.len() { combined.push(la2[lai]); lai = lai + 1; } } _ => {} }
+                        match rp { Array(ra) => { let ra2 = ra; var rai: Int64 = 0; while rai < ra2.len() { combined.push(ra2[rai]); rai = rai + 1; } } _ => {} }
+                        result.push(JsonValue::Array(combined));
+                    }
+                }
+                return result;
+            }
+            _ =>
+            {
+                var empty: List<JsonValue> = [];
+                return [JsonValue::Array(empty)];
+            }
+        }
+        return [];
+    }
+
+    fn findEqIdx(s: String) -> Int64
+    {
+        var i: Int64 = 0;
+        let n = s.len();
+        while i < n
+        {
+            if s.substring(i, i + 1) == "=" { return i; }
+            i = i + 1;
+        }
+        return -1;
+    }
+
+    fn buildEnvObject() -> JsonValue
+    {
+        var envObj: Map<String, JsonValue> = @{};
+        let dump = envDump();
+        let rawParts = dump.split("\n");
+        var parts: List<String> = [];
+        for p in rawParts { parts.push(p); }
+        for part in parts
+        {
+            let plen = part.len();
+            if plen > 0
+            {
+                let eqIdx = this.findEqIdx(part);
+                if eqIdx > 0
+                {
+                    let k = part.substring(0, eqIdx);
+                    let v = part.substring(eqIdx + 1, plen);
+                    envObj[k] = JsonValue::Str(v);
+                }
+            }
+        }
+        return JsonValue::Object(envObj);
+    }
+
+    fn base64Encode(s: String) -> String
+    {
+        let alpha = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+        var result = "";
+        var i: Int64 = 0;
+        let n = s.len();
+        while i < n
+        {
+            let b0 = s[i] as Int64;
+            var b1: Int64 = 0;
+            var b2: Int64 = 0;
+            if i + 1 < n { b1 = s[i + 1] as Int64; }
+            if i + 2 < n { b2 = s[i + 2] as Int64; }
+            let c0 = (b0 / 4) % 64;
+            let c1 = (b0 % 4) * 16 + (b1 / 16) % 16;
+            let c2 = (b1 % 16) * 4 + (b2 / 64) % 4;
+            let c3 = b2 % 64;
+            result = result + alpha.substring(c0, c0 + 1);
+            result = result + alpha.substring(c1, c1 + 1);
+            if i + 1 < n { result = result + alpha.substring(c2, c2 + 1); }
+            else { result = result + "="; }
+            if i + 2 < n { result = result + alpha.substring(c3, c3 + 1); }
+            else { result = result + "="; }
+            i = i + 3;
+        }
+        return result;
+    }
+
+    fn base64CharVal(c: Int64) -> Int64
+    {
+        if c >= 65 && c <= 90 { return c - 65; }
+        if c >= 97 && c <= 122 { return c - 71; }
+        if c >= 48 && c <= 57 { return c + 4; }
+        if c == 43 { return 62; }
+        if c == 47 { return 63; }
+        return 0;
+    }
+
+    fn base64Decode(s: String) -> String
+    {
+        var result = "";
+        var i: Int64 = 0;
+        let n = s.len();
+        while i + 3 < n + 1
+        {
+            let c0 = s[i] as Int64;
+            var c1: Int64 = 65; if i + 1 < n { c1 = s[i + 1] as Int64; }
+            var c2: Int64 = 61; if i + 2 < n { c2 = s[i + 2] as Int64; }
+            var c3: Int64 = 61; if i + 3 < n { c3 = s[i + 3] as Int64; }
+            let d0 = this.base64CharVal(c0);
+            let d1 = this.base64CharVal(c1);
+            let d2 = this.base64CharVal(c2);
+            let d3 = this.base64CharVal(c3);
+            let b0 = d0 * 4 + d1 / 16;
+            let b1 = (d1 % 16) * 16 + d2 / 4;
+            let b2 = (d2 % 4) * 64 + d3;
+            result = result + JsonSerializer::codePointToStr(b0);
+            if c2 != 61 { result = result + JsonSerializer::codePointToStr(b1); }
+            if c3 != 61 { result = result + JsonSerializer::codePointToStr(b2); }
+            i = i + 4;
+        }
+        return result;
+    }
+
+    fn applyFormat(fmt: String, value: JsonValue) -> String
+    {
+        let s = match value { Str(s) => s; _ => JsonSerializer::stringify(value); };
+        if fmt == "json"   { return JsonSerializer::stringify(value); }
+        if fmt == "text"   { return s; }
+        if fmt == "html"   { return s.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;").replace("\"","&quot;"); }
+        if fmt == "uri"    { return this.uriEncode(s); }
+        if fmt == "csv"    { return this.toCsv(value); }
+        if fmt == "tsv"    { return this.toTsv(value); }
+        if fmt == "sh"     { return "'" + s.replace("'", "'\\''") + "'"; }
+        if fmt == "base64" { return this.base64Encode(s); }
+        if fmt == "base64d" { return this.base64Decode(s); }
+        return s;
+    }
+
+    fn uriEncode(s: String) -> String
+    {
+        var result = "";
+        var i: Int64 = 0;
+        while i < s.len()
+        {
+            let c = s[i] as Int64;
+            if (c >= 65 && c <= 90) || (c >= 97 && c <= 122) || (c >= 48 && c <= 57) ||
+               c == 45 || c == 95 || c == 46 || c == 126
+            {
+                result = result + s.substring(i, i + 1);
+            }
+            else
+            {
+                result = result + "%" + this.toHex2(c);
+            }
+            i = i + 1;
+        }
+        return result;
+    }
+
+    fn toHex2(n: Int64) -> String
+    {
+        let digits = "0123456789ABCDEF";
+        let hi = (n / 16) % 16;
+        let lo = n % 16;
+        return digits.substring(hi, hi + 1) + digits.substring(lo, lo + 1);
+    }
+
+    fn toCsv(value: JsonValue) -> String
+    {
+        match value
+        {
+            Array(a) =>
+            {
+                let arr = a;
+                var parts: List<String> = [];
+                for item in arr
+                {
+                    match item
+                    {
+                        Str(s)     => { parts.push("\"" + s.replace("\"", "\"\"") + "\""); }
+                        Integer(n) => { parts.push(n.toString()); }
+                        Float(f)   => { parts.push(floatDisplay(f)); }
+                        Bool(b)    => { if b { parts.push("true"); } else { parts.push("false"); } }
+                        Null       => { parts.push(""); }
+                        _ => { parts.push(JsonSerializer::stringify(item)); }
+                    }
+                }
+                return parts.join(",");
+            }
+            _ => return JsonSerializer::stringify(value);
+        }
+        return "";
+    }
+
+    fn toTsv(value: JsonValue) -> String
+    {
+        match value
+        {
+            Array(a) =>
+            {
+                let arr = a;
+                var parts: List<String> = [];
+                for item in arr
+                {
+                    match item
+                    {
+                        Str(s) => { parts.push(s.replace("\t", "\\t").replace("\n", "\\n")); }
+                        Integer(n) => { parts.push(n.toString()); }
+                        Float(f)   => { parts.push(floatDisplay(f)); }
+                        Bool(b)    => { if b { parts.push("true"); } else { parts.push("false"); } }
+                        Null => { parts.push(""); }
+                        _ => { parts.push(JsonSerializer::stringify(item)); }
+                    }
+                }
+                return parts.join("\t");
+            }
+            _ => return JsonSerializer::stringify(value);
+        }
+        return "";
+    }
+
+    fn evalBuiltin(name: String, args: List<Filter>, input: JsonValue, ctx: EvalContext) -> EvalResult
+    {
+        if name == "empty"  { return EvalResult::empty(); }
+        if name == "null"   { return EvalResult::single(JsonValue::Null); }
+        if name == "true"   { return EvalResult::single(JsonValue::Bool(true)); }
+        if name == "false"  { return EvalResult::single(JsonValue::Bool(false)); }
+
+        if name == "not"
+        {
+            return EvalResult::single(JsonValue::Bool(!JsonValueHelper::isTruthy(input)));
+        }
+
+        if name == "type"
+        {
+            return EvalResult::single(JsonValue::Str(JsonValueHelper::typeName(input)));
+        }
+
+        if name == "numbers"   { match input { Integer(_) => {} Float(_) => {} _ => return EvalResult::empty(); } return EvalResult::single(input); }
+        if name == "strings"   { match input { Str(_)     => {} _ => return EvalResult::empty(); } return EvalResult::single(input); }
+        if name == "booleans"  { match input { Bool(_)    => {} _ => return EvalResult::empty(); } return EvalResult::single(input); }
+        if name == "nulls"     { match input { Null       => {} _ => return EvalResult::empty(); } return EvalResult::single(input); }
+        if name == "arrays"    { match input { Array(_)   => {} _ => return EvalResult::empty(); } return EvalResult::single(input); }
+        if name == "objects"   { match input { Object(_)  => {} _ => return EvalResult::empty(); } return EvalResult::single(input); }
+        if name == "iterables" { match input { Array(_) => {} Object(_) => {} _ => return EvalResult::empty(); } return EvalResult::single(input); }
+        if name == "scalars"   { match input { Array(_) => return EvalResult::empty(); Object(_) => return EvalResult::empty(); _ => {} } return EvalResult::single(input); }
+        if name == "values"    { match input { Null => return EvalResult::empty(); _ => {} } return EvalResult::single(input); }
+
+        if name == "path"
+        {
+            if args.len() == 0 { return EvalResult::err("path requires an argument"); }
+            let argList = args;
+            let pathFilter = argList[0];
+            let paths = this.extractPaths(pathFilter, input, ctx);
+            return EvalResult::ok(paths);
+        }
+
+        if name == "getpath"
+        {
+            match input
+            {
+                Array(pathArr) =>
+                {
+                    let pa = pathArr;
+                    var current = input;
+                    var pi: Int64 = 0;
+                    while pi < pa.len()
+                    {
+                        let step = pa[pi]; pi = pi + 1;
+                        match step
+                        {
+                            Str(k) => { match current { Object(o) => { current = o.get(k); } _ => { return EvalResult::single(JsonValue::Null); } } }
+                            Integer(i) => { match current { Array(a) => { let aa = a; if i >= 0 && i < aa.len() { current = aa[i]; } else { return EvalResult::single(JsonValue::Null); } } _ => { return EvalResult::single(JsonValue::Null); } } }
+                            _ => return EvalResult::single(JsonValue::Null);
+                        }
+                    }
+                    return EvalResult::single(current);
+                }
+                _ => return EvalResult::err("getpath requires path array");
+            }
+        }
+
+        if name == "length"
+        {
+            match input
+            {
+                Null       => return EvalResult::single(JsonValue::Integer(0));
+                Str(s)     => return EvalResult::single(JsonValue::Integer(s.len()));
+                Array(a)   => { let arr = a; return EvalResult::single(JsonValue::Integer(arr.len())); }
+                Object(o)  => return EvalResult::single(JsonValue::Integer(JsonValueHelper::objLen(wrapObj(o))));
+                Integer(n) => { var absN = n; if n < 0 { absN = -n; } return EvalResult::single(JsonValue::Integer(absN)); }
+                Float(fv)  => { var absF = fv; if fv < 0.0 { absF = -fv; } return EvalResult::single(JsonValue::Float(absF)); }
+                Bool(_)    => return EvalResult::err("boolean has no length");
+            }
+        }
+
+        if name == "utf8bytelength"
+        {
+            match input
+            {
+                Str(s) => return EvalResult::single(JsonValue::Integer(s.len()));
+                _ => return EvalResult::err("utf8bytelength requires string");
+            }
+        }
+
+        if name == "abs"
+        {
+            match input
+            {
+                Integer(n) => { var absN = n; if n < 0 { absN = -n; } return EvalResult::single(JsonValue::Integer(absN)); }
+                Float(fv)  => { var absF = fv; if fv < 0.0 { absF = -fv; } return EvalResult::single(JsonValue::Float(absF)); }
+                _ => return EvalResult::err("abs requires number");
+            }
+        }
+
+        if name == "tostring"
+        {
+            match input
+            {
+                Str(s) => return EvalResult::single(JsonValue::Str(s));
+                _      => return EvalResult::single(JsonValue::Str(JsonSerializer::stringify(input)));
+            }
+        }
+
+        if name == "tonumber"
+        {
+            match input
+            {
+                Integer(n) => return EvalResult::single(JsonValue::Integer(n));
+                Float(s)   => return EvalResult::single(JsonValue::Float(s));
+                Str(s)     =>
+                {
+                    let parsed = JsonParser::tryParse(s);
+                    if parsed.len() == 0 { return EvalResult::err("Invalid number: " + s); }
+                    else
+                    {
+                        match parsed[0]
+                        {
+                            JsonValue::Integer(n) => return EvalResult::single(JsonValue::Integer(n));
+                            JsonValue::Float(f)   => return EvalResult::single(JsonValue::Float(f));
+                            _ => return EvalResult::err("Not a number: " + s);
+                        }
+                    }
+                }
+                _ => return EvalResult::err("tonumber requires string or number");
+            }
+        }
+
+        if name == "tojson"
+        {
+            return EvalResult::single(JsonValue::Str(JsonSerializer::stringify(input)));
+        }
+
+        if name == "fromjson"
+        {
+            match input
+            {
+                Str(s) =>
+                {
+                    let parsed = JsonParser::tryParse(s);
+                    if parsed.len() == 0 { return EvalResult::err("Invalid JSON: " + s); }
+                    else { return EvalResult::single(parsed[0]); }
+                }
+                _ => return EvalResult::err("fromjson requires string");
+            }
+        }
+
+        if name == "keys"
+        {
+            match input
+            {
+                Object(o) =>
+                {
+                    var keys: List<JsonValue> = [];
+                    var ks = JsonValueHelper::objKeys(wrapObj(o));
+                    ks = this.sortStrings(ks);
+                    for k in ks { keys.push(JsonValue::Str(k)); }
+                    return EvalResult::single(JsonValue::Array(keys));
+                }
+                Array(a) =>
+                {
+                    let arr = a;
+                    var indices: List<JsonValue> = [];
+                    var i: Int64 = 0;
+                    while i < arr.len() { indices.push(JsonValue::Integer(i)); i = i + 1; }
+                    return EvalResult::single(JsonValue::Array(indices));
+                }
+                _ => return EvalResult::err("keys requires object or array");
+            }
+        }
+
+        if name == "keys_unsorted"
+        {
+            match input
+            {
+                Object(o) =>
+                {
+                    var keys: List<JsonValue> = [];
+                    let oKs = JsonValueHelper::objKeys(wrapObj(o));
+                    for k in oKs { keys.push(JsonValue::Str(k)); }
+                    return EvalResult::single(JsonValue::Array(keys));
+                }
+                Array(a) =>
+                {
+                    let arr = a;
+                    var indices: List<JsonValue> = [];
+                    var i: Int64 = 0;
+                    while i < arr.len() { indices.push(JsonValue::Integer(i)); i = i + 1; }
+                    return EvalResult::single(JsonValue::Array(indices));
+                }
+                _ => return EvalResult::err("keys_unsorted requires object or array");
+            }
+        }
+
+        if name == "values"
+        {
+            match input
+            {
+                Object(o) =>
+                {
+                    var vals: List<JsonValue> = [];
+                    let oKs = JsonValueHelper::objKeys(wrapObj(o));
+                    for k in oKs { vals.push(o.get(k)); }
+                    return EvalResult::single(JsonValue::Array(vals));
+                }
+                Array(a) => { let arr = a; return EvalResult::single(JsonValue::Array(arr)); }
+                _ => return EvalResult::err("values requires object or array");
+            }
+        }
+
+        if name == "has"
+        {
+            if args.len() == 0 { return EvalResult::err("has requires an argument"); }
+            let ar = this.evalSingle(args[0], input, ctx);
+            if ar.isError() { return ar; }
+            match input
+            {
+                Object(o) =>
+                {
+                    match ar.values[0]
+                    {
+                        Str(key) => return EvalResult::single(JsonValue::Bool(o.contains(key)));
+                        _ => return EvalResult::err("has key must be string for objects");
+                    }
+                }
+                Array(a) =>
+                {
+                    let arr = a;
+                    match ar.values[0]
+                    {
+                        Integer(idx) => return EvalResult::single(JsonValue::Bool(idx >= 0 && idx < arr.len()));
+                        _ => return EvalResult::err("has index must be integer for arrays");
+                    }
+                }
+                _ => return EvalResult::err("has requires object or array");
+            }
+        }
+
+        if name == "in"
+        {
+            if args.len() == 0 { return EvalResult::err("in requires an argument"); }
+            let ar = this.evalSingle(args[0], input, ctx);
+            if ar.isError() { return ar; }
+            match ar.values[0]
+            {
+                Object(o) =>
+                {
+                    match input
+                    {
+                        Str(key) => return EvalResult::single(JsonValue::Bool(o.contains(key)));
+                        _ => return EvalResult::err("in: key must be string for objects");
+                    }
+                }
+                Array(a) =>
+                {
+                    let arr = a;
+                    match input
+                    {
+                        Integer(idx) => return EvalResult::single(JsonValue::Bool(idx >= 0 && idx < arr.len()));
+                        _ => return EvalResult::err("in: index must be integer for arrays");
+                    }
+                }
+                _ => return EvalResult::err("in requires object or array as right side");
+            }
+        }
+
+        if name == "contains"
+        {
+            if args.len() == 0 { return EvalResult::err("contains requires argument"); }
+            let ar = this.evalSingle(args[0], input, ctx);
+            if ar.isError() { return ar; }
+            return EvalResult::single(JsonValue::Bool(this.contains(input, ar.values[0])));
+        }
+
+        if name == "inside"
+        {
+            if args.len() == 0 { return EvalResult::err("inside requires argument"); }
+            let ar = this.evalSingle(args[0], input, ctx);
+            if ar.isError() { return ar; }
+            return EvalResult::single(JsonValue::Bool(this.contains(ar.values[0], input)));
+        }
+
+        if name == "select"
+        {
+            if args.len() == 0 { return EvalResult::err("select requires argument"); }
+            let ar = this.eval(args[0], input, ctx);
+            if ar.isError() { return EvalResult::empty(); }
+            if ar.values.len() == 0 { return EvalResult::empty(); }
+            if JsonValueHelper::isTruthy(ar.values[0]) { return EvalResult::single(input); }
+            return EvalResult::empty();
+        }
+
+        if name == "map"
+        {
+            if args.len() == 0 { return EvalResult::err("map requires argument"); }
+            match input
+            {
+                Array(a) =>
+                {
+                    let arr = a;
+                    var results: List<JsonValue> = [];
+                    for item in arr
+                    {
+                        let r = this.eval(args[0], item, ctx);
+                        if r.isError() { return r; }
+                        for v in r.values { results.push(v); }
+                    }
+                    return EvalResult::single(JsonValue::Array(results));
+                }
+                _ => return EvalResult::err("map requires array");
+            }
+        }
+
+        if name == "map_values"
+        {
+            if args.len() == 0 { return EvalResult::err("map_values requires argument"); }
+            match input
+            {
+                Array(a) =>
+                {
+                    let arr = a;
+                    var results: List<JsonValue> = [];
+                    for item in arr
+                    {
+                        let r = this.evalSingle(args[0], item, ctx);
+                        if r.isError() { return r; }
+                        results.push(r.values[0]);
+                    }
+                    return EvalResult::single(JsonValue::Array(results));
+                }
+                Object(o) =>
+                {
+                    var obj2: Map<String, JsonValue> = @{};
+                    let oKs = JsonValueHelper::objKeys(wrapObj(o));
+                    for key in oKs
+                    {
+                        let r = this.evalSingle(args[0], o.get(key), ctx);
+                        if r.isError() { return r; }
+                        obj2[key] = r.values[0];
+                    }
+                    return EvalResult::single(JsonValue::Object(obj2));
+                }
+                _ => return EvalResult::err("map_values requires array or object");
+            }
+        }
+
+        if name == "add"
+        {
+            match input
+            {
+                Array(a) =>
+                {
+                    let arr = a;
+                    if arr.len() == 0 { return EvalResult::single(JsonValue::Null); }
+                    var acc = arr[0];
+                    var i = 1;
+                    while i < arr.len() { acc = JsonValueHelper::addValues(acc, arr[i]); i = i + 1; }
+                    return EvalResult::single(acc);
+                }
+                _ => return EvalResult::err("add requires array");
+            }
+        }
+
+        if name == "any"
+        {
+            if args.len() == 0
+            {
+                match input
+                {
+                    Array(a) =>
+                    {
+                        let arr = a;
+                        for item in arr { if JsonValueHelper::isTruthy(item) { return EvalResult::single(JsonValue::Bool(true)); } }
+                        return EvalResult::single(JsonValue::Bool(false));
+                    }
+                    _ => return EvalResult::err("any requires array");
+                }
+            }
+            if args.len() == 1
+            {
+                match input
+                {
+                    Array(a) =>
+                    {
+                        let arr = a;
+                        for item in arr
+                        {
+                            let r = this.evalSingle(args[0], item, ctx);
+                            if !r.isError() && JsonValueHelper::isTruthy(r.values[0])
+                            {
+                                return EvalResult::single(JsonValue::Bool(true));
+                            }
+                        }
+                        return EvalResult::single(JsonValue::Bool(false));
+                    }
+                    _ => return EvalResult::err("any(f) requires array");
+                }
+            }
+            return EvalResult::single(JsonValue::Bool(false));
+        }
+
+        if name == "all"
+        {
+            if args.len() == 0
+            {
+                match input
+                {
+                    Array(a) =>
+                    {
+                        let arr = a;
+                        for item in arr { if !JsonValueHelper::isTruthy(item) { return EvalResult::single(JsonValue::Bool(false)); } }
+                        return EvalResult::single(JsonValue::Bool(true));
+                    }
+                    _ => return EvalResult::err("all requires array");
+                }
+            }
+            if args.len() == 1
+            {
+                match input
+                {
+                    Array(a) =>
+                    {
+                        let arr = a;
+                        for item in arr
+                        {
+                            let r = this.evalSingle(args[0], item, ctx);
+                            if r.isError() || !JsonValueHelper::isTruthy(r.values[0])
+                            {
+                                return EvalResult::single(JsonValue::Bool(false));
+                            }
+                        }
+                        return EvalResult::single(JsonValue::Bool(true));
+                    }
+                    _ => return EvalResult::err("all(f) requires array");
+                }
+            }
+            return EvalResult::single(JsonValue::Bool(true));
+        }
+
+        if name == "flatten"
+        {
+            var depth: Int64 = 9999;
+            if args.len() > 0
+            {
+                let r = this.evalSingle(args[0], input, ctx);
+                match r.values[0] { Integer(n) => { depth = n; } _ => {} }
+            }
+            match input
+            {
+                Array(a) =>
+                {
+                    let arr = a;
+                    var results: List<JsonValue> = [];
+                    this.flattenInto(arr, results, depth);
+                    return EvalResult::single(JsonValue::Array(results));
+                }
+                _ => return EvalResult::err("flatten requires array");
+            }
+        }
+
+        if name == "range"
+        {
+            if args.len() == 1
+            {
+                let nr = this.evalSingle(args[0], input, ctx);
+                if nr.isError() { return nr; }
+                match nr.values[0]
+                {
+                    Integer(n) =>
+                    {
+                        var results: List<JsonValue> = [];
+                        var i: Int64 = 0;
+                        while i < n { results.push(JsonValue::Integer(i)); i = i + 1; }
+                        return EvalResult::ok(results);
+                    }
+                    _ => return EvalResult::err("range requires integer");
+                }
+            }
+            if args.len() >= 2
+            {
+                let sr = this.evalSingle(args[0], input, ctx);
+                let er = this.evalSingle(args[1], input, ctx);
+                if sr.isError() { return sr; }
+                if er.isError() { return er; }
+                var step: Int64 = 1;
+                if args.len() >= 3
+                {
+                    let stepr = this.evalSingle(args[2], input, ctx);
+                    if !stepr.isError() { match stepr.values[0] { Integer(n) => { step = n; } _ => {} } }
+                }
+                match sr.values[0]
+                {
+                    Integer(start) =>
+                    {
+                        match er.values[0]
+                        {
+                            Integer(end) =>
+                            {
+                                var results: List<JsonValue> = [];
+                                var i = start;
+                                while i < end { results.push(JsonValue::Integer(i)); i = i + step; }
+                                return EvalResult::ok(results);
+                            }
+                            _ => return EvalResult::err("range end must be integer");
+                        }
+                    }
+                    _ => return EvalResult::err("range start must be integer");
+                }
+            }
+            return EvalResult::err("range requires 1-3 arguments");
+        }
+
+        if name == "sort"
+        {
+            match input
+            {
+                Array(a) =>
+                {
+                    var sorted = a;
+                    sorted = this.sortJsonArray(sorted);
+                    return EvalResult::single(JsonValue::Array(sorted));
+                }
+                _ => return EvalResult::err("sort requires array");
+            }
+        }
+
+        if name == "sort_by"
+        {
+            if args.len() == 0 { return EvalResult::err("sort_by requires argument"); }
+            match input
+            {
+                Array(a) =>
+                {
+                    let arr = a;
+                    var sorted = this.sortBy(arr, args[0], ctx);
+                    return EvalResult::single(JsonValue::Array(sorted));
+                }
+                _ => return EvalResult::err("sort_by requires array");
+            }
+        }
+
+        if name == "reverse"
+        {
+            match input
+            {
+                Array(a) =>
+                {
+                    let arr = a;
+                    var result: List<JsonValue> = [];
+                    var i = arr.len() - 1;
+                    while i >= 0 { result.push(arr[i]); i = i - 1; }
+                    return EvalResult::single(JsonValue::Array(result));
+                }
+                Str(s) =>
+                {
+                    var result = "";
+                    var i = s.len() - 1;
+                    while i >= 0 { result = result + s.substring(i, i + 1); i = i - 1; }
+                    return EvalResult::single(JsonValue::Str(result));
+                }
+                _ => return EvalResult::err("reverse requires array or string");
+            }
+        }
+
+        if name == "unique"
+        {
+            match input
+            {
+                Array(a) =>
+                {
+                    let arr = a;
+                    var seen: List<JsonValue> = [];
+                    var result: List<JsonValue> = [];
+                    for item in arr
+                    {
+                        var found = false;
+                        for s in seen { if JsonValueHelper::equals(item, s) { found = true; break; } }
+                        if !found { result.push(item); seen.push(item); }
+                    }
+                    return EvalResult::single(JsonValue::Array(result));
+                }
+                _ => return EvalResult::err("unique requires array");
+            }
+        }
+
+        if name == "unique_by"
+        {
+            if args.len() == 0 { return EvalResult::err("unique_by requires argument"); }
+            match input
+            {
+                Array(a) =>
+                {
+                    let arr = a;
+                    var sorted = this.sortBy(arr, args[0], ctx);
+                    var seenKeys: List<JsonValue> = [];
+                    var result: List<JsonValue> = [];
+                    for item in sorted
+                    {
+                        let kr = this.evalSingle(args[0], item, ctx);
+                        var key = JsonValue::Null; if !kr.isError() { key = kr.values[0]; }
+                        var found = false;
+                        for sk in seenKeys { if JsonValueHelper::equals(key, sk) { found = true; break; } }
+                        if !found { result.push(item); seenKeys.push(key); }
+                    }
+                    return EvalResult::single(JsonValue::Array(result));
+                }
+                _ => return EvalResult::err("unique_by requires array");
+            }
+        }
+
+        if name == "group_by"
+        {
+            if args.len() == 0 { return EvalResult::err("group_by requires argument"); }
+            match input
+            {
+                Array(a) =>
+                {
+                    let arr = a;
+                    var groups: Map<String, List<JsonValue>> = @{};
+                    var order: List<String> = [];
+                    for item in arr
+                    {
+                        let kr = this.evalSingle(args[0], item, ctx);
+                        var key = "null"; if !kr.isError() { key = JsonSerializer::stringify(kr.values[0]); }
+                        if !groups.contains(key) { var emptyGrp: List<JsonValue> = []; groups[key] = emptyGrp; order.push(key); }
+                        var existing = groups.get(key);
+                        existing.push(item);
+                        groups[key] = existing;
+                    }
+                    order = this.sortStrings(order);
+                    var result: List<JsonValue> = [];
+                    var oi: Int64 = 0;
+                    while oi < order.len()
+                    {
+                        let k = order[oi];
+                        var grp = groups.get(k);
+                        result.push(JsonValue::Array(grp));
+                        oi = oi + 1;
+                    }
+                    return EvalResult::single(JsonValue::Array(result));
+                }
+                _ => return EvalResult::err("group_by requires array");
+            }
+        }
+
+        if name == "min"
+        {
+            match input
+            {
+                Array(a) =>
+                {
+                    let arr = a;
+                    if arr.len() == 0 { return EvalResult::single(JsonValue::Null); }
+                    var minVal = arr[0];
+                    for item in arr { if JsonValueHelper::compare(item, minVal) < 0 { minVal = item; } }
+                    return EvalResult::single(minVal);
+                }
+                _ => return EvalResult::err("min requires array");
+            }
+        }
+
+        if name == "max"
+        {
+            match input
+            {
+                Array(a) =>
+                {
+                    let arr = a;
+                    if arr.len() == 0 { return EvalResult::single(JsonValue::Null); }
+                    var maxVal = arr[0];
+                    for item in arr { if JsonValueHelper::compare(item, maxVal) > 0 { maxVal = item; } }
+                    return EvalResult::single(maxVal);
+                }
+                _ => return EvalResult::err("max requires array");
+            }
+        }
+
+        if name == "min_by"
+        {
+            if args.len() == 0 { return EvalResult::err("min_by requires argument"); }
+            match input
+            {
+                Array(a) =>
+                {
+                    let arr = a;
+                    if arr.len() == 0 { return EvalResult::single(JsonValue::Null); }
+                    var minItem = arr[0];
+                    let mkr = this.evalSingle(args[0], minItem, ctx);
+                    var minKey = JsonValue::Null; if !mkr.isError() { minKey = mkr.values[0]; }
+                    for item in arr
+                    {
+                        let kr = this.evalSingle(args[0], item, ctx);
+                        var key = JsonValue::Null; if !kr.isError() { key = kr.values[0]; }
+                        if JsonValueHelper::compare(key, minKey) < 0 { minItem = item; minKey = key; }
+                    }
+                    return EvalResult::single(minItem);
+                }
+                _ => return EvalResult::err("min_by requires array");
+            }
+        }
+
+        if name == "max_by"
+        {
+            if args.len() == 0 { return EvalResult::err("max_by requires argument"); }
+            match input
+            {
+                Array(a) =>
+                {
+                    let arr = a;
+                    if arr.len() == 0 { return EvalResult::single(JsonValue::Null); }
+                    var maxItem = arr[0];
+                    let mkr = this.evalSingle(args[0], maxItem, ctx);
+                    var maxKey = JsonValue::Null; if !mkr.isError() { maxKey = mkr.values[0]; }
+                    for item in arr
+                    {
+                        let kr = this.evalSingle(args[0], item, ctx);
+                        var key = JsonValue::Null; if !kr.isError() { key = kr.values[0]; }
+                        if JsonValueHelper::compare(key, maxKey) > 0 { maxItem = item; maxKey = key; }
+                    }
+                    return EvalResult::single(maxItem);
+                }
+                _ => return EvalResult::err("max_by requires array");
+            }
+        }
+
+        if name == "first"
+        {
+            if args.len() > 0
+            {
+                let r = this.eval(args[0], input, ctx);
+                if r.isError() { return r; }
+                if r.values.len() > 0 { return EvalResult::single(r.values[0]); }
+                return EvalResult::single(JsonValue::Null);
+            }
+            match input
+            {
+                Array(a) =>
+                {
+                    let arr = a;
+                    if arr.len() > 0 { return EvalResult::single(arr[0]); }
+                    return EvalResult::single(JsonValue::Null);
+                }
+                _ => return EvalResult::err("first requires array");
+            }
+        }
+
+        if name == "last"
+        {
+            if args.len() > 0
+            {
+                let r = this.eval(args[0], input, ctx);
+                if r.isError() { return r; }
+                if r.values.len() > 0 { return EvalResult::single(r.values[r.values.len() - 1]); }
+                return EvalResult::single(JsonValue::Null);
+            }
+            match input
+            {
+                Array(a) =>
+                {
+                    let arr = a;
+                    if arr.len() > 0 { return EvalResult::single(arr[arr.len() - 1]); }
+                    return EvalResult::single(JsonValue::Null);
+                }
+                _ => return EvalResult::err("last requires array");
+            }
+        }
+
+        if name == "nth"
+        {
+            if args.len() == 0 { return EvalResult::err("nth requires argument"); }
+            let nr = this.evalSingle(args[0], input, ctx);
+            if nr.isError() { return nr; }
+            match nr.values[0]
+            {
+                Integer(n) =>
+                {
+                    if args.len() > 1
+                    {
+                        let r = this.eval(args[1], input, ctx);
+                        if r.isError() { return r; }
+                        if n < r.values.len() { return EvalResult::single(r.values[n]); }
+                        return EvalResult::single(JsonValue::Null);
+                    }
+                    match input
+                    {
+                        Array(a) =>
+                        {
+                            let arr = a;
+                            if n >= 0 && n < arr.len() { return EvalResult::single(arr[n]); }
+                            return EvalResult::single(JsonValue::Null);
+                        }
+                        _ => return EvalResult::err("nth requires array");
+                    }
+                }
+                _ => return EvalResult::err("nth requires integer");
+            }
+        }
+
+        if name == "to_entries"
+        {
+            match input
+            {
+                Object(o) =>
+                {
+                    var result: List<JsonValue> = [];
+                    let oKs = this.sortStrings(JsonValueHelper::objKeys(wrapObj(o)));
+                    for key in oKs
+                    {
+                        var entry: Map<String, JsonValue> = @{};
+                        entry["key"] = JsonValue::Str(key);
+                        entry["value"] = o.get(key);
+                        result.push(JsonValue::Object(entry));
+                    }
+                    return EvalResult::single(JsonValue::Array(result));
+                }
+                Array(a) =>
+                {
+                    let arr = a;
+                    var result: List<JsonValue> = [];
+                    var i: Int64 = 0;
+                    for item in arr
+                    {
+                        var entry: Map<String, JsonValue> = @{};
+                        entry["key"] = JsonValue::Integer(i);
+                        entry["value"] = item;
+                        result.push(JsonValue::Object(entry));
+                        i = i + 1;
+                    }
+                    return EvalResult::single(JsonValue::Array(result));
+                }
+                _ => return EvalResult::err("to_entries requires object or array");
+            }
+        }
+
+        if name == "from_entries"
+        {
+            match input
+            {
+                Array(a) =>
+                {
+                    let arr = a;
+                    var obj: Map<String, JsonValue> = @{};
+                    for item in arr
+                    {
+                        match item
+                        {
+                            Object(o) =>
+                            {
+                                var key = "";
+                                if o.contains("key")
+                                {
+                                    match o.get("key")
+                                    {
+                                        Str(s) => { key = s; }
+                                        Integer(n) => { key = n.toString(); }
+                                        _ => {}
+                                    }
+                                }
+                                else if o.contains("name")
+                                {
+                                    match o.get("name")
+                                    {
+                                        Str(s) => { key = s; }
+                                        _ => {}
+                                    }
+                                }
+                                var entryVal = JsonValue::Null; if o.contains("value") { entryVal = o.get("value"); }
+                                obj[key] = entryVal;
+                            }
+                            _ => {}
+                        }
+                    }
+                    return EvalResult::single(JsonValue::Object(obj));
+                }
+                _ => return EvalResult::err("from_entries requires array");
+            }
+        }
+
+        if name == "with_entries"
+        {
+            if args.len() == 0 { return EvalResult::err("with_entries requires argument"); }
+            let toEntriesResult = this.evalBuiltin("to_entries", [], input, ctx);
+            if toEntriesResult.isError() { return toEntriesResult; }
+            let mappedResult = this.evalBuiltin("map", args, toEntriesResult.values[0], ctx);
+            if mappedResult.isError() { return mappedResult; }
+            return this.evalBuiltin("from_entries", [], mappedResult.values[0], ctx);
+        }
+
+        if name == "del"
+        {
+            if args.len() == 0 { return EvalResult::single(input); }
+            return EvalResult::single(this.applyDel(input, args[0], ctx));
+        }
+
+        if name == "split"
+        {
+            if args.len() == 0 { return EvalResult::err("split requires argument"); }
+            let sr = this.evalSingle(args[0], input, ctx);
+            if sr.isError() { return sr; }
+            // split(re; flags) — Regex-Variante (jq: 2-arg = Regex, 1-arg = literal)
+            if args.len() > 1
+            {
+                var flags = "";
+                let fr = this.evalSingle(args[1], input, ctx);
+                if fr.isError() { return fr; }
+                match fr.values[0]
+                {
+                    Str(f) => { flags = f; }
+                    _ => { }
+                }
+                match input
+                {
+                    Str(s) =>
+                    {
+                        match sr.values[0]
+                        {
+                            Str(pattern) =>
+                            {
+                                let parts = regexSplitString(s, pattern, flags);
+                                return EvalResult::single(JsonValue::Array(parts));
+                            }
+                            _ => return EvalResult::err("split pattern must be string");
+                        }
+                    }
+                    _ => return EvalResult::err("split requires string");
+                }
+            }
+            match input
+            {
+                Str(s) =>
+                {
+                    match sr.values[0]
+                    {
+                        Str(sep) =>
+                        {
+                            let parts = s.split(sep);
+                            var result: List<JsonValue> = [];
+                            for p in parts { result.push(JsonValue::Str(p)); }
+                            return EvalResult::single(JsonValue::Array(result));
+                        }
+                        _ => return EvalResult::err("split separator must be string");
+                    }
+                }
+                _ => return EvalResult::err("split requires string");
+            }
+        }
+
+        if name == "join"
+        {
+            if args.len() == 0 { return EvalResult::err("join requires argument"); }
+            let sr = this.evalSingle(args[0], input, ctx);
+            if sr.isError() { return sr; }
+            match input
+            {
+                Array(a) =>
+                {
+                    let arr = a;
+                    let sep = match sr.values[0] { Str(s) => s; _ => ""; };
+                    var parts: List<String> = [];
+                    for item in arr
+                    {
+                        match item
+                        {
+                            Str(s) => { parts.push(s); }
+                            Null   => { parts.push(""); }
+                            Bool(b) => { if b { parts.push("true"); } else { parts.push("false"); } }
+                            Integer(n) => { parts.push(n.toString()); }
+                            Float(f)   => { parts.push(floatDisplay(f)); }
+                            _ => { parts.push(JsonSerializer::stringify(item)); }
+                        }
+                    }
+                    return EvalResult::single(JsonValue::Str(parts.join(sep)));
+                }
+                _ => return EvalResult::err("join requires array");
+            }
+        }
+
+        if name == "ltrimstr"
+        {
+            if args.len() == 0 { return EvalResult::err("ltrimstr requires argument"); }
+            let ar = this.evalSingle(args[0], input, ctx);
+            if ar.isError() { return ar; }
+            match input
+            {
+                Str(s) =>
+                {
+                    match ar.values[0]
+                    {
+                        Str(prefix) =>
+                        {
+                            if s.startsWith(prefix) { return EvalResult::single(JsonValue::Str(s.substring(prefix.len(), s.len()))); }
+                            return EvalResult::single(JsonValue::Str(s));
+                        }
+                        _ => return EvalResult::single(input);
+                    }
+                }
+                _ => return EvalResult::single(input);
+            }
+        }
+
+        if name == "rtrimstr"
+        {
+            if args.len() == 0 { return EvalResult::err("rtrimstr requires argument"); }
+            let ar = this.evalSingle(args[0], input, ctx);
+            if ar.isError() { return ar; }
+            match input
+            {
+                Str(s) =>
+                {
+                    match ar.values[0]
+                    {
+                        Str(suffix) =>
+                        {
+                            if s.endsWith(suffix) { return EvalResult::single(JsonValue::Str(s.substring(0, s.len() - suffix.len()))); }
+                            return EvalResult::single(JsonValue::Str(s));
+                        }
+                        _ => return EvalResult::single(input);
+                    }
+                }
+                _ => return EvalResult::single(input);
+            }
+        }
+
+        if name == "startswith"
+        {
+            if args.len() == 0 { return EvalResult::err("startswith requires argument"); }
+            let ar = this.evalSingle(args[0], input, ctx);
+            if ar.isError() { return ar; }
+            match input
+            {
+                Str(s) =>
+                {
+                    match ar.values[0]
+                    {
+                        Str(prefix) => return EvalResult::single(JsonValue::Bool(s.startsWith(prefix)));
+                        _ => return EvalResult::err("startswith requires string argument");
+                    }
+                }
+                _ => return EvalResult::err("startswith requires string input");
+            }
+        }
+
+        if name == "endswith"
+        {
+            if args.len() == 0 { return EvalResult::err("endswith requires argument"); }
+            let ar = this.evalSingle(args[0], input, ctx);
+            if ar.isError() { return ar; }
+            match input
+            {
+                Str(s) =>
+                {
+                    match ar.values[0]
+                    {
+                        Str(suffix) => return EvalResult::single(JsonValue::Bool(s.endsWith(suffix)));
+                        _ => return EvalResult::err("endswith requires string argument");
+                    }
+                }
+                _ => return EvalResult::err("endswith requires string input");
+            }
+        }
+
+        if name == "ascii_downcase"
+        {
+            match input
+            {
+                Str(s) => return EvalResult::single(JsonValue::Str(s.toLower()));
+                _ => return EvalResult::err("ascii_downcase requires string");
+            }
+        }
+
+        if name == "ascii_upcase"
+        {
+            match input
+            {
+                Str(s) => return EvalResult::single(JsonValue::Str(s.toUpper()));
+                _ => return EvalResult::err("ascii_upcase requires string");
+            }
+        }
+
+        if name == "test" || name == "match" || name == "capture" || name == "scan"
+        {
+            if args.len() == 0 { return EvalResult::err(name + " requires argument"); }
+            let pr = this.evalSingle(args[0], input, ctx);
+            if pr.isError() { return pr; }
+            var flags = "";
+            if args.len() > 1
+            {
+                let fr = this.evalSingle(args[1], input, ctx);
+                if fr.isError() { return fr; }
+                match fr.values[0]
+                {
+                    Str(f) => { flags = f; }
+                    _ => { }
+                }
+            }
+            match input
+            {
+                Str(s) =>
+                {
+                    match pr.values[0]
+                    {
+                        Str(pattern) =>
+                        {
+                            let tr = regexTranslate(pattern);
+                            let posix = rxStrAt(tr, 0);
+                            var icase: Int64 = 0;
+                            if flags.contains("i") { icase = 1; }
+                            var global = flags.contains("g");
+                            if name == "scan" { global = true; }
+
+                            if name == "test"
+                            {
+                                let g = regexMatchGroups(posix, s, 0, icase);
+                                return EvalResult::single(JsonValue::Bool(g.len() > 0));
+                            }
+
+                            var results: List<JsonValue> = [];
+                            var pos: Int64 = 0;
+                            while pos <= s.len()
+                            {
+                                let g = regexMatchGroups(posix, s, pos, icase);
+                                if g.len() == 0 { break; }
+                                if name == "match"
+                                {
+                                    results.push(buildMatchObject(s, g, tr));
+                                }
+                                if name == "capture"
+                                {
+                                    results.push(buildCaptureObject(s, g, tr));
+                                }
+                                if name == "scan"
+                                {
+                                    // Mit Gruppen: Array der Gruppen-Strings, sonst der Match selbst
+                                    if g.len() > 2
+                                    {
+                                        var parts: List<JsonValue> = [];
+                                        var gi: Int64 = 2;
+                                        while gi + 1 < g.len()
+                                        {
+                                            if g[gi] < 0 { parts.push(JsonValue::Null); }
+                                            else { parts.push(JsonValue::Str(s.substring(g[gi], g[gi + 1]))); }
+                                            gi += 2;
+                                        }
+                                        results.push(JsonValue::Array(parts));
+                                    }
+                                    else
+                                    {
+                                        results.push(JsonValue::Str(s.substring(g[0], g[1])));
+                                    }
+                                }
+                                var np = g[1];
+                                if np == g[0] { np += 1; }
+                                pos = np;
+                                if !global { break; }
+                            }
+                            return EvalResult::ok(results);
+                        }
+                        _ => return EvalResult::err(name + " pattern must be string");
+                    }
+                }
+                _ => return EvalResult::err(name + " requires string input");
+            }
+        }
+
+        if name == "sub" || name == "gsub"
+        {
+            if args.len() < 2 { return EvalResult::err(name + " requires 2 arguments"); }
+            let pr = this.evalSingle(args[0], input, ctx);
+            if pr.isError() { return pr; }
+            var flags = "";
+            if args.len() > 2
+            {
+                let fr = this.evalSingle(args[2], input, ctx);
+                if fr.isError() { return fr; }
+                match fr.values[0]
+                {
+                    Str(f) => { flags = f; }
+                    _ => { }
+                }
+            }
+            match input
+            {
+                Str(s) =>
+                {
+                    match pr.values[0]
+                    {
+                        Str(pattern) =>
+                        {
+                            let tr = regexTranslate(pattern);
+                            let posix = rxStrAt(tr, 0);
+                            var icase: Int64 = 0;
+                            if flags.contains("i") { icase = 1; }
+                            var global = flags.contains("g");
+                            if name == "gsub" { global = true; }
+
+                            var out = "";
+                            var pos: Int64 = 0;
+                            while pos <= s.len()
+                            {
+                                let g = regexMatchGroups(posix, s, pos, icase);
+                                if g.len() == 0 { break; }
+                                let ms = g[0];
+                                let me = g[1];
+                                out = out + s.substring(pos, ms);
+                                // Replacement-Filter: Input = Capture-Objekt,
+                                // benannte Gruppen zusätzlich als $name gebunden
+                                let capObj = buildCaptureObject(s, g, tr);
+                                var rctx = ctx;
+                                var ni: Int64 = 1;
+                                var gi: Int64 = 2;
+                                while ni < rxStrCount(tr)
+                                {
+                                    let nm = rxStrAt(tr, ni);
+                                    if nm != ""
+                                    {
+                                        if gi + 1 < g.len() && g[gi] >= 0
+                                        {
+                                            rctx = rctx.withVar(nm, JsonValue::Str(s.substring(g[gi], g[gi + 1])));
+                                        }
+                                        else
+                                        {
+                                            rctx = rctx.withVar(nm, JsonValue::Null);
+                                        }
+                                    }
+                                    ni += 1;
+                                    gi += 2;
+                                }
+                                let rr = this.eval(args[1], capObj, rctx);
+                                if rr.isError() { return rr; }
+                                if rr.values.len() == 0 { return EvalResult::err(name + ": replacement produced no value"); }
+                                match rr.values[0]
+                                {
+                                    Str(rs) => { out = out + rs; }
+                                    _ => return EvalResult::err(name + ": replacement must evaluate to a string");
+                                }
+                                if me == ms
+                                {
+                                    if ms < s.len() { out = out + s.substring(ms, ms + 1); }
+                                    pos = ms + 1;
+                                }
+                                else { pos = me; }
+                                if !global { break; }
+                            }
+                            if pos < s.len() { out = out + s.substring(pos, s.len()); }
+                            return EvalResult::single(JsonValue::Str(out));
+                        }
+                        _ => return EvalResult::err(name + " pattern must be string");
+                    }
+                }
+                _ => return EvalResult::err(name + " requires string input");
+            }
+        }
+
+        if name == "splits"
+        {
+            if args.len() == 0 { return EvalResult::err("splits requires argument"); }
+            let pr = this.evalSingle(args[0], input, ctx);
+            if pr.isError() { return pr; }
+            var flags = "";
+            if args.len() > 1
+            {
+                let fr = this.evalSingle(args[1], input, ctx);
+                if fr.isError() { return fr; }
+                match fr.values[0]
+                {
+                    Str(f) => { flags = f; }
+                    _ => { }
+                }
+            }
+            match input
+            {
+                Str(s) =>
+                {
+                    match pr.values[0]
+                    {
+                        Str(pattern) =>
+                        {
+                            let parts = regexSplitString(s, pattern, flags);
+                            return EvalResult::ok(parts);
+                        }
+                        _ => return EvalResult::err("splits pattern must be string");
+                    }
+                }
+                _ => return EvalResult::err("splits requires string input");
+            }
+        }
+
+        if name == "explode"
+        {
+            match input
+            {
+                Str(s) =>
+                {
+                    var result: List<JsonValue> = [];
+                    var ei: Int64 = 0;
+                    while ei < s.len() { result.push(JsonValue::Integer(s[ei] as Int64)); ei = ei + 1; }
+                    return EvalResult::single(JsonValue::Array(result));
+                }
+                _ => return EvalResult::err("explode requires string");
+            }
+        }
+
+        if name == "implode"
+        {
+            match input
+            {
+                Array(a) =>
+                {
+                    let arr = a;
+                    var result = "";
+                    for item in arr
+                    {
+                        match item
+                        {
+                            Integer(n) => { result = result + JsonSerializer::codePointToStr(n); }
+                            _ => {}
+                        }
+                    }
+                    return EvalResult::single(JsonValue::Str(result));
+                }
+                _ => return EvalResult::err("implode requires array");
+            }
+        }
+
+        if name == "indices"
+        {
+            if args.len() == 0 { return EvalResult::err("indices requires argument"); }
+            let ar = this.evalSingle(args[0], input, ctx);
+            if ar.isError() { return ar; }
+            match input
+            {
+                Str(s) =>
+                {
+                    match ar.values[0]
+                    {
+                        Str(needle) =>
+                        {
+                            var result: List<JsonValue> = [];
+                            var pos: Int64 = 0;
+                            let sLen = s.len();
+                            let nLen = needle.len();
+                            while pos <= sLen - nLen
+                            {
+                                if s.substring(pos, pos + nLen) == needle
+                                {
+                                    result.push(JsonValue::Integer(pos));
+                                    pos = pos + nLen;
+                                }
+                                else { pos = pos + 1; }
+                            }
+                            return EvalResult::single(JsonValue::Array(result));
+                        }
+                        _ => return EvalResult::err("indices needle must match input type");
+                    }
+                }
+                Array(a) =>
+                {
+                    let arr = a;
+                    var result: List<JsonValue> = [];
+                    var i: Int64 = 0;
+                    for item in arr
+                    {
+                        if JsonValueHelper::equals(item, ar.values[0]) { result.push(JsonValue::Integer(i)); }
+                        i = i + 1;
+                    }
+                    return EvalResult::single(JsonValue::Array(result));
+                }
+                _ => return EvalResult::err("indices requires string or array");
+            }
+        }
+
+        if name == "index"
+        {
+            if args.len() == 0 { return EvalResult::err("index requires argument"); }
+            let indicesResult = this.evalBuiltin("indices", args, input, ctx);
+            if indicesResult.isError() { return indicesResult; }
+            match indicesResult.values[0]
+            {
+                Array(a) =>
+                {
+                    let arr = a;
+                    if arr.len() > 0 { return EvalResult::single(arr[0]); }
+                    return EvalResult::single(JsonValue::Null);
+                }
+                _ => return EvalResult::single(JsonValue::Null);
+            }
+        }
+
+        if name == "rindex"
+        {
+            if args.len() == 0 { return EvalResult::err("rindex requires argument"); }
+            let indicesResult = this.evalBuiltin("indices", args, input, ctx);
+            if indicesResult.isError() { return indicesResult; }
+            match indicesResult.values[0]
+            {
+                Array(a) =>
+                {
+                    let arr = a;
+                    if arr.len() > 0 { return EvalResult::single(arr[arr.len() - 1]); }
+                    return EvalResult::single(JsonValue::Null);
+                }
+                _ => return EvalResult::single(JsonValue::Null);
+            }
+        }
+
+        if name == "error"
+        {
+            if args.len() > 0
+            {
+                let mr = this.evalSingle(args[0], input, ctx);
+                if !mr.isError() { return EvalResult::err(JsonSerializer::stringify(mr.values[0])); }
+            }
+            return EvalResult::err(JsonSerializer::stringify(input));
+        }
+
+        if name == "builtins"
+        {
+            var names: List<JsonValue> = [];
+            for n in ["empty","null","not","type","length","utf8bytelength","abs","floor","ceil","round","sqrt",
+                      "tostring","tonumber","tojson","fromjson","keys","keys_unsorted","values","has","in",
+                      "contains","inside","select","map","map_values","add","any","all","flatten","range",
+                      "sort","sort_by","reverse","unique","unique_by","group_by","min","max","min_by","max_by",
+                      "first","last","nth","to_entries","from_entries","with_entries","del","split","join",
+                      "ltrimstr","rtrimstr","startswith","endswith","ascii_downcase","ascii_upcase",
+                      "test","match","capture","scan","sub","gsub","splits","explode","implode","indices","index","rindex",
+                      "now","todate","fromdate","todateiso8601","fromdateiso8601","strftime","error","debug","stderr","builtins"]
+            {
+                names.push(JsonValue::Str(n));
+            }
+            return EvalResult::single(JsonValue::Array(names));
+        }
+
+        if name == "recurse"
+        {
+            if args.len() > 0
+            {
+                return this.eval(Filter::Recurse(true, args[0]), input, ctx);
+            }
+            return this.eval(Filter::RecursiveDescent, input, ctx);
+        }
+
+        if name == "paths"
+        {
+            return EvalResult::single(JsonValue::Array([]));
+        }
+
+        if name == "leaf_paths"
+        {
+            return EvalResult::single(JsonValue::Array([]));
+        }
+
+        if name == "getpath"
+        {
+            return EvalResult::single(JsonValue::Null);
+        }
+
+        if name == "setpath"
+        {
+            return EvalResult::single(input);
+        }
+
+        if name == "delpaths"
+        {
+            return EvalResult::single(input);
+        }
+
+        if name == "walk"
+        {
+            if args.len() == 0 { return EvalResult::err("walk requires argument"); }
+            return this.evalWalk(args[0], input, ctx);
+        }
+
+        if name == "limit"
+        {
+            if args.len() < 2 { return EvalResult::err("limit requires 2 arguments"); }
+            let nr = this.evalSingle(args[0], input, ctx);
+            if nr.isError() { return nr; }
+            match nr.values[0]
+            {
+                Integer(n) =>
+                {
+                    let r = this.eval(args[1], input, ctx);
+                    if r.isError() { return r; }
+                    var result: List<JsonValue> = [];
+                    var i: Int64 = 0;
+                    while i < n && i < r.values.len() { result.push(r.values[i]); i = i + 1; }
+                    return EvalResult::ok(result);
+                }
+                _ => return EvalResult::err("limit first arg must be integer");
+            }
+        }
+
+        if name == "until"
+        {
+            if args.len() < 2 { return EvalResult::err("until requires 2 arguments"); }
+            return this.eval(Filter::Until(args[0], args[1]), input, ctx);
+        }
+
+        if name == "while"
+        {
+            if args.len() < 2 { return EvalResult::err("while requires 2 arguments"); }
+            return this.eval(Filter::While(args[0], args[1]), input, ctx);
+        }
+
+        if name == "repeat"
+        {
+            if args.len() == 0 { return EvalResult::err("repeat requires argument"); }
+            var results: List<JsonValue> = [];
+            var current = input;
+            var iters = 0;
+            while iters < 1000
+            {
+                let r = this.evalSingle(args[0], current, ctx);
+                if r.isError() { break; }
+                results.push(r.values[0]);
+                current = r.values[0];
+                iters = iters + 1;
+            }
+            return EvalResult::ok(results);
+        }
+
+        if name == "nan"      { return EvalResult::single(JsonValue::Float(mathNan())); }
+        if name == "infinite" { return EvalResult::single(JsonValue::Float(mathInf())); }
+        if name == "isinfinite" { match input { Float(f) => return EvalResult::single(JsonValue::Bool(mathIsInfinite(f) != 0)); _ => return EvalResult::single(JsonValue::Bool(false)); } return EvalResult::single(JsonValue::Bool(false)); }
+        if name == "isnan"    { match input { Float(f) => return EvalResult::single(JsonValue::Bool(mathIsNan(f) != 0)); _ => return EvalResult::single(JsonValue::Bool(false)); } return EvalResult::single(JsonValue::Bool(false)); }
+        if name == "isnormal" { match input { Float(f) => return EvalResult::single(JsonValue::Bool(mathIsNormal(f) != 0)); Integer(n) => return EvalResult::single(JsonValue::Bool(n != 0)); _ => return EvalResult::single(JsonValue::Bool(false)); } return EvalResult::single(JsonValue::Bool(false)); }
+
+        if name == "pow"
+        {
+            if args.len() == 0 { return EvalResult::err("pow requires argument"); }
+            let er = this.evalSingle(args[0], input, ctx);
+            if er.isError() { return er; }
+            match input
+            {
+                Integer(base) =>
+                {
+                    match er.values[0]
+                    {
+                        Integer(exp) =>
+                        {
+                            var result: Int64 = 1;
+                            var i: Int64 = 0;
+                            while i < exp { result = result * base; i = i + 1; }
+                            return EvalResult::single(JsonValue::Integer(result));
+                        }
+                        _ => return EvalResult::err("pow exponent must be integer");
+                    }
+                }
+                Float(base) =>
+                {
+                    match er.values[0]
+                    {
+                        Integer(exp) => return EvalResult::single(JsonValue::Float(pow(base, exp as Float64)));
+                        Float(expF)  => return EvalResult::single(JsonValue::Float(pow(base, expF)));
+                        _ => return EvalResult::err("pow exponent must be number");
+                    }
+                }
+                _ => return EvalResult::err("pow requires number input");
+            }
+        }
+
+        if name == "ascii"
+        {
+            if args.len() == 0 { return EvalResult::err("ascii requires argument"); }
+            let nr = this.evalSingle(args[0], input, ctx);
+            if nr.isError() { return nr; }
+            match nr.values[0]
+            {
+                Integer(n) => return EvalResult::single(JsonValue::Str(JsonSerializer::codePointToStr(n)));
+                _ => return EvalResult::err("ascii requires integer");
+            }
+        }
+
+        if name == "env"
+        {
+            return EvalResult::single(this.buildEnvObject());
+        }
+
+        if name == "debug"
+        {
+            var msg = "";
+            if args.len() > 0
+            {
+                let mr = this.evalSingle(args[0], input, ctx);
+                if !mr.isError() { msg = JsonSerializer::stringify(mr.values[0]); }
+            }
+            else { msg = JsonSerializer::stringify(input); }
+            printStderr("DEBUG: " + msg);
+            return EvalResult::single(input);
+        }
+
+        if name == "stderr"
+        {
+            printStderr(JsonSerializer::stringify(input));
+            return EvalResult::single(input);
+        }
+
+        if name == "nan_value" { return EvalResult::single(JsonValue::Float(mathNan())); }
+
+        if name == "isfinite"
+        {
+            match input
+            {
+                Float(f) => { return EvalResult::single(JsonValue::Bool(mathIsInfinite(f) == 0 && mathIsNan(f) == 0)); }
+                Integer(_) => return EvalResult::single(JsonValue::Bool(true));
+                _ => return EvalResult::err("isfinite requires number");
+            }
+        }
+
+        if name == "floor"
+        {
+            match input
+            {
+                Float(f) => { return EvalResult::single(JsonValue::Integer(floor(f) as Int64)); }
+                Integer(n) => return EvalResult::single(JsonValue::Integer(n));
+                _ => return EvalResult::err("floor requires number");
+            }
+        }
+
+        if name == "ceil"
+        {
+            match input
+            {
+                Float(f) => { return EvalResult::single(JsonValue::Integer(ceil(f) as Int64)); }
+                Integer(n) => return EvalResult::single(JsonValue::Integer(n));
+                _ => return EvalResult::err("ceil requires number");
+            }
+        }
+
+        if name == "round"
+        {
+            match input
+            {
+                Float(f) => { return EvalResult::single(JsonValue::Integer(round(f) as Int64)); }
+                Integer(n) => return EvalResult::single(JsonValue::Integer(n));
+                _ => return EvalResult::err("round requires number");
+            }
+        }
+
+        if name == "sqrt"
+        {
+            match input
+            {
+                Float(f) => { return EvalResult::single(JsonValue::Float(sqrt(f))); }
+                Integer(n) => { return EvalResult::single(JsonValue::Float(sqrt(n as Float64))); }
+                _ => return EvalResult::err("sqrt requires number");
+            }
+        }
+
+        if name == "log"
+        {
+            match input
+            {
+                Float(f) => { return EvalResult::single(JsonValue::Float(log(f))); }
+                Integer(n) => { return EvalResult::single(JsonValue::Float(log(n as Float64))); }
+                _ => return EvalResult::err("log requires number");
+            }
+        }
+
+        if name == "exp"
+        {
+            match input
+            {
+                Float(f) => { return EvalResult::single(JsonValue::Float(exp(f))); }
+                Integer(n) => { return EvalResult::single(JsonValue::Float(exp(n as Float64))); }
+                _ => return EvalResult::err("exp requires number");
+            }
+        }
+
+        if name == "fabs"
+        {
+            match input
+            {
+                Float(f) => { return EvalResult::single(JsonValue::Float(fabs(f))); }
+                Integer(n) => { if n < 0 { return EvalResult::single(JsonValue::Integer(0 - n)); } return EvalResult::single(JsonValue::Integer(n)); }
+                _ => return EvalResult::err("fabs requires number");
+            }
+        }
+
+        if name == "now"
+        {
+            let t = currentTimeSecs();
+            return EvalResult::single(JsonValue::Float(t as Float64));
+        }
+
+        if name == "todate" || name == "todateiso8601"
+        {
+            var ts: Int64 = 0;
+            match input { Integer(n) => { ts = n; } Float(f) => { ts = f as Int64; } _ => {} }
+            let dateStr = strftimeStr("%Y-%m-%dT%H:%M:%SZ", ts);
+            return EvalResult::single(JsonValue::Str(dateStr));
+        }
+
+        if name == "strftime"
+        {
+            if args.len() == 0 { return EvalResult::err("strftime requires format argument"); }
+            let fmtR = this.evalSingle(args[0], input, ctx);
+            if fmtR.isError() { return fmtR; }
+            var fmtStr = "%Y-%m-%dT%H:%M:%SZ";
+            match fmtR.values[0] { Str(s) => { fmtStr = s; } _ => {} }
+            var ts: Int64 = 0;
+            match input { Integer(n) => { ts = n; } Float(f) => { ts = f as Int64; } _ => {} }
+            let dateStr = strftimeStr(fmtStr, ts);
+            return EvalResult::single(JsonValue::Str(dateStr));
+        }
+
+        if name == "strptime"
+        {
+            if args.len() == 0 { return EvalResult::err("strptime requires format argument"); }
+            match input
+            {
+                Str(s) =>
+                {
+                    let ts = fromdateStr(s);
+                    return EvalResult::single(JsonValue::Integer(ts));
+                }
+                _ => return EvalResult::err("strptime requires string input");
+            }
+        }
+
+        if name == "fromdate" || name == "fromdateiso8601"
+        {
+            match input
+            {
+                Str(s) =>
+                {
+                    let ts = fromdateStr(s);
+                    return EvalResult::single(JsonValue::Integer(ts));
+                }
+                _ => return EvalResult::err("fromdate requires string input");
+            }
+        }
+
+        if ctx.defs.contains(name)
+        {
+            let defBody = ctx.defs.get(name);
+            var newCtx = ctx;
+            if args.len() > 0
+            {
+                var i = 0;
+                while i < args.len() { newCtx = newCtx.withVar("arg" + i.toString(), input); i = i + 1; }
+            }
+            return this.eval(defBody, input, newCtx);
+        }
+
+        if name == "input"
+        {
+            let qlen = this.inputQueue.len();
+            if this.inputQueuePos < qlen
+            {
+                let v = this.inputQueue[this.inputQueuePos];
+                this.inputQueuePos = this.inputQueuePos + 1;
+                return EvalResult::single(v);
+            }
+            return EvalResult::err("input: no more input values");
+        }
+
+        if name == "inputs"
+        {
+            var results: List<JsonValue> = [];
+            let qlen = this.inputQueue.len();
+            while this.inputQueuePos < qlen
+            {
+                results.push(this.inputQueue[this.inputQueuePos]);
+                this.inputQueuePos = this.inputQueuePos + 1;
+            }
+            return EvalResult::ok(results);
+        }
+
+        return EvalResult::err("Unknown function: " + name);
+    }
+
+    fn contains(a: JsonValue, b: JsonValue) -> Bool
+    {
+        match b
+        {
+            Null    => return true;
+            Bool(bv) =>
+            {
+                match a { Bool(av) => return av == bv; _ => return false; }
+            }
+            Integer(_) =>
+            {
+                return JsonValueHelper::equals(a, b);
+            }
+            Float(_) =>
+            {
+                return JsonValueHelper::equals(a, b);
+            }
+            Str(bs) =>
+            {
+                match a { Str(sv) => return sv.contains(bs); _ => return false; }
+            }
+            Array(ba) =>
+            {
+                match a
+                {
+                    Array(aa) =>
+                    {
+                        let baArr = ba;
+                        let aaArr = aa;
+                        for bitem in baArr
+                        {
+                            var found = false;
+                            for aitem in aaArr { if this.contains(aitem, bitem) { found = true; break; } }
+                            if !found { return false; }
+                        }
+                        return true;
+                    }
+                    _ => return false;
+                }
+            }
+            Object(bo) =>
+            {
+                match a
+                {
+                    Object(ao) =>
+                    {
+                        let boKeys = JsonValueHelper::objKeys(wrapObj(bo));
+                        for key in boKeys
+                        {
+                            if !ao.contains(key) { return false; }
+                            if !this.contains(ao.get(key), bo.get(key)) { return false; }
+                        }
+                        return true;
+                    }
+                    _ => return false;
+                }
+            }
+        }
+        return false;
+    }
+
+    fn flattenInto(arr: List<JsonValue>, result: List<JsonValue>, depth: Int64)
+    {
+        for item in arr
+        {
+            match item
+            {
+                Array(inner) =>
+                {
+                    let innerArr = inner;
+                    if depth > 0 { this.flattenInto(innerArr, result, depth - 1); }
+                    else { result.push(item); }
+                }
+                _ => result.push(item);
+            }
+        }
+    }
+
+    fn sortStrings(strs: List<String>) -> List<String>
+    {
+        var result: List<String> = [];
+        for s in strs
+        {
+            var inserted = false;
+            var tmp: List<String> = [];
+            for r in result
+            {
+                if !inserted && s <= r
+                {
+                    tmp.push(s);
+                    inserted = true;
+                }
+                tmp.push(r);
+            }
+            if !inserted { tmp.push(s); }
+            result = tmp;
+        }
+        return result;
+    }
+
+    fn sortJsonArray(arr: List<JsonValue>) -> List<JsonValue>
+    {
+        var sorted: List<JsonValue> = [];
+        for v in arr { sorted.push(v); }
+        var n = sorted.len();
+        var i = 0;
+        while i < n
+        {
+            var j = i + 1;
+            while j < n
+            {
+                if JsonValueHelper::compare(sorted[i], sorted[j]) > 0
+                {
+                    let tmp = sorted[i];
+                    sorted[i] = sorted[j];
+                    sorted[j] = tmp;
+                }
+                j = j + 1;
+            }
+            i = i + 1;
+        }
+        return sorted;
+    }
+
+    fn sortBy(arr: List<JsonValue>, keyFilter: Filter, ctx: EvalContext) -> List<JsonValue>
+    {
+        var keyedKeys: List<JsonValue> = [];
+        var keyedVals: List<JsonValue> = [];
+        for item in arr
+        {
+            let kr = this.evalSingle(keyFilter, item, ctx);
+            var key = JsonValue::Null; if !kr.isError() { key = kr.values[0]; }
+            keyedKeys.push(key);
+            keyedVals.push(item);
+        }
+        var n = keyedKeys.len();
+        var i = 0;
+        while i < n
+        {
+            var j = i + 1;
+            while j < n
+            {
+                let ki = keyedKeys[i];
+                let kj = keyedKeys[j];
+                if JsonValueHelper::compare(ki, kj) > 0
+                {
+                    let tmpKey = keyedKeys[i];
+                    keyedKeys[i] = keyedKeys[j];
+                    keyedKeys[j] = tmpKey;
+                    let tmpVal = keyedVals[i];
+                    keyedVals[i] = keyedVals[j];
+                    keyedVals[j] = tmpVal;
+                }
+                j = j + 1;
+            }
+            i = i + 1;
+        }
+        var result: List<JsonValue> = [];
+        for v in keyedVals { result.push(v); }
+        return result;
+    }
+
+    fn evalWalk(f: Filter, value: JsonValue, ctx: EvalContext) -> EvalResult
+    {
+        match value
+        {
+            Array(a) =>
+            {
+                let walkArr = a;
+                var walked: List<JsonValue> = [];
+                for item in walkArr
+                {
+                    let r = this.evalWalk(f, item, ctx);
+                    if r.isError() { return r; }
+                    if r.values.len() > 0 { walked.push(r.values[0]); }
+                }
+                let arr = JsonValue::Array(walked);
+                return this.evalSingle(f, arr, ctx);
+            }
+            Object(o) =>
+            {
+                let oKeys = JsonValueHelper::objKeys(wrapObj(o));
+                var obj: Map<String, JsonValue> = @{};
+                for key in oKeys
+                {
+                    let r = this.evalWalk(f, o.get(key), ctx);
+                    if r.isError() { return r; }
+                    var walkVal = JsonValue::Null; if r.values.len() > 0 { walkVal = r.values[0]; } obj[key] = walkVal;
+                }
+                let walked = JsonValue::Object(obj);
+                return this.evalSingle(f, walked, ctx);
+            }
+            _ => return this.evalSingle(f, value, ctx);
+        }
+        return EvalResult::empty();
+    }
+}

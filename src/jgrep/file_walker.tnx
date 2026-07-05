@@ -1,0 +1,100 @@
+module jgrep.file_walker;
+
+class FileWalker
+{
+    fnc isJsonFile(path: String) -> Bool
+    {
+        return path.endsWith(".json") || path.endsWith(".ndjson") || path.endsWith(".jsonl");
+    }
+
+    fnc isYamlFile(path: String) -> Bool
+    {
+        return path.endsWith(".yaml") || path.endsWith(".yml");
+    }
+
+    fnc listJsonFiles(path: String, recursive: Bool) -> List<String>
+    {
+        var result: List<String> = [];
+        if FileWalker::isJsonFile(path)
+        {
+            if fileExists(path) { result.push(path); }
+        }
+        else
+        {
+            var entries = dirList(path);
+            var entLen: Int64 = entries.len();
+            var files: List<String> = [];
+            var dirs: List<String> = [];
+            var ei: Int64 = 0;
+            while ei < entLen
+            {
+                let entry = entries[ei];
+                let fullPath = path + "/" + entry;
+                if FileWalker::isJsonFile(fullPath)
+                {
+                    if fileExists(fullPath) { files.push(fullPath); }
+                }
+                else
+                {
+                    if recursive { dirs.push(fullPath); }
+                }
+                ei = ei + 1;
+            }
+
+            var fi: Int64 = 0;
+            while fi < files.len() { result.push(files[fi]); fi = fi + 1; }
+
+            if recursive
+            {
+                var di: Int64 = 0;
+                while di < dirs.len()
+                {
+                    let sub = FileWalker::listJsonFiles(dirs[di], true);
+                    var si: Int64 = 0;
+                    while si < sub.len() { result.push(sub[si]); si = si + 1; }
+                    di = di + 1;
+                }
+            }
+        }
+        return result;
+    }
+
+    fnc listFiles(paths: List<String>, recursive: Bool) -> List<String>
+    {
+        var result: List<String> = [];
+        for path in paths
+        {
+            let files = FileWalker::listJsonFiles(path, recursive);
+            for f in files { result.push(f); }
+        }
+        return result;
+    }
+
+    fnc sortStrings(strs: List<String>) -> List<String>
+    {
+        var remaining = strs;
+        var result: List<String> = [];
+        var n = remaining.len();
+        while n > 0
+        {
+            var minIdx: Int64 = 0;
+            var i: Int64 = 1;
+            while i < n
+            {
+                if remaining[i] < remaining[minIdx] { minIdx = i; }
+                i = i + 1;
+            }
+            result.push(remaining[minIdx]);
+            var next: List<String> = [];
+            var j: Int64 = 0;
+            while j < n
+            {
+                if j != minIdx { next.push(remaining[j]); }
+                j = j + 1;
+            }
+            remaining = next;
+            n = remaining.len();
+        }
+        return result;
+    }
+}

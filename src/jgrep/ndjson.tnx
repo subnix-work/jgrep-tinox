@@ -1,0 +1,47 @@
+module jgrep.ndjson;
+
+import json_value;
+import json_parser;
+
+class NdjsonReader
+{
+    var docs: List<JsonValue>;
+    var pos: Int64;
+    var errorCount: Int64;
+
+    fnc fromFile(path: String) -> NdjsonReader
+    {
+        let content = fileReadAllText(path);
+        return NdjsonReader::fromString(content);
+    }
+
+    fnc fromString(content: String) -> NdjsonReader
+    {
+        let parsed = JsonParser::parseAll(content);
+        return NdjsonReader { docs: parsed, pos: 0, errorCount: 0 };
+    }
+
+    fn hasNext() -> Bool
+    {
+        return this.pos < this.docs.len();
+    }
+
+    fn tryParseNext() -> List<JsonValue>
+    {
+        if !this.hasNext() { return []; }
+        let doc = this.docs[this.pos];
+        this.pos = this.pos + 1;
+        return [doc];
+    }
+
+    fn readAll() -> List<JsonValue>
+    {
+        var results: List<JsonValue> = [];
+        while this.hasNext()
+        {
+            let r = this.tryParseNext();
+            if r.len() > 0 { results.push(r[0]); }
+        }
+        return results;
+    }
+}
