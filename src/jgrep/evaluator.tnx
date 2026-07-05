@@ -289,6 +289,88 @@ fn regexSplitString(s: String, pattern: String, flags: String) -> List<JsonValue
     return parts;
 }
 
+// ---- Datum-Helfer (gmtime/mktime) ----
+// Civil-Calendar-Arithmetik nach Howard Hinnant (proleptischer Gregorianischer Kalender)
+
+fn daysFromCivil(y: Int64, m: Int64, d: Int64) -> Int64
+{
+    var yy = y;
+    if m <= 2 { yy -= 1; }
+    var era: Int64 = 0;
+    if yy >= 0 { era = yy / 400; } else { era = (yy - 399) / 400; }
+    let yoe = yy - era * 400;
+    var mp = m + 9;
+    if mp >= 12 { mp -= 12; }
+    let doy = (153 * mp + 2) / 5 + d - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    return era * 146097 + doe - 719468;
+}
+
+// [Jahr, Monat (1-basiert), Tag] aus Tagen seit Epoch
+fn civilFromDays(z: Int64) -> List<Int64>
+{
+    let zz = z + 719468;
+    var era: Int64 = 0;
+    if zz >= 0 { era = zz / 146097; } else { era = (zz - 146096) / 146097; }
+    let doe = zz - era * 146097;
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+    let y = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    var m = mp + 3;
+    if mp >= 10 { m = mp - 9; }
+    var yr = y;
+    if m <= 2 { yr += 1; }
+    return [yr, m, d];
+}
+
+// jq-"broken down time": [Jahr, Monat 0-basiert, Tag, Stunde, Minute, Sekunde, Wochentag, Jahrestag]
+fn gmtimeArray(secs: Int64) -> List<JsonValue>
+{
+    var days = secs / 86400;
+    var rem = secs % 86400;
+    if rem < 0 { rem += 86400; days -= 1; }
+    let ymd = civilFromDays(days);
+    let y = ymd[0];
+    let m = ymd[1];
+    let d = ymd[2];
+    var wday = (days + 4) % 7;
+    if wday < 0 { wday += 7; }
+    let yday = days - daysFromCivil(y, 1, 1);
+    var result: List<JsonValue> = [];
+    result.push(JsonValue::Integer(y));
+    result.push(JsonValue::Integer(m - 1));
+    result.push(JsonValue::Integer(d));
+    result.push(JsonValue::Integer(rem / 3600));
+    result.push(JsonValue::Integer((rem % 3600) / 60));
+    result.push(JsonValue::Integer(rem % 60));
+    result.push(JsonValue::Integer(wday));
+    result.push(JsonValue::Integer(yday));
+    return result;
+}
+
+fn jsonToInt(v: JsonValue) -> Int64
+{
+    match v
+    {
+        Integer(n) => return n;
+        Float(f) => return f as Int64;
+        _ => return 0;
+    }
+    return 0;
+}
+
+// Einheit für dateadd/datesub → Sekunden (0 = unbekannt)
+fn dateUnitSecs(unit: String) -> Int64
+{
+    if unit == "seconds" || unit == "second" { return 1; }
+    if unit == "minutes" || unit == "minute" { return 60; }
+    if unit == "hours" || unit == "hour" { return 3600; }
+    if unit == "days" || unit == "day" { return 86400; }
+    return 0;
+}
+
 // Capture-Objekt für sub/gsub/capture: nur benannte Gruppen, name → String|Null
 fn buildCaptureObject(s: String, groups: List<Int64>, tr: List<String>) -> JsonValue
 {
@@ -3253,6 +3335,69 @@ class Evaluator
                 }
                 _ => return EvalResult::err("fromdate requires string input");
             }
+        }
+
+        if name == "gmtime" || name == "localtime"
+        {
+            // localtime = gmtime: keine Zeitzonen-Unterstützung (UTC)
+            var ts: Int64 = 0;
+            match input
+            {
+                Integer(n) => { ts = n; }
+                Float(f) => { ts = f as Int64; }
+                _ => return EvalResult::err(name + " requires a number");
+            }
+            return EvalResult::single(JsonValue::Array(gmtimeArray(ts)));
+        }
+
+        if name == "mktime"
+        {
+            match input
+            {
+                Array(a) =>
+                {
+                    let tm = a;
+                    if tm.len() < 6 { return EvalResult::err("mktime requires a broken down time array"); }
+                    let y = jsonToInt(tm[0]);
+                    let mon0 = jsonToInt(tm[1]);
+                    let d = jsonToInt(tm[2]);
+                    let h = jsonToInt(tm[3]);
+                    let mi = jsonToInt(tm[4]);
+                    let se = jsonToInt(tm[5]);
+                    let secs = daysFromCivil(y, mon0 + 1, d) * 86400 + h * 3600 + mi * 60 + se;
+                    return EvalResult::single(JsonValue::Integer(secs));
+                }
+                // jgrep-strptime liefert direkt einen Timestamp — durchreichen
+                Integer(n) => return EvalResult::single(JsonValue::Integer(n));
+                _ => return EvalResult::err("mktime requires a broken down time array");
+            }
+        }
+
+        if name == "dateadd" || name == "datesub"
+        {
+            if args.len() < 2 { return EvalResult::err(name + " requires 2 arguments"); }
+            let ur = this.evalSingle(args[0], input, ctx);
+            if ur.isError() { return ur; }
+            let nr = this.evalSingle(args[1], input, ctx);
+            if nr.isError() { return nr; }
+            var unitSecs: Int64 = 0;
+            match ur.values[0]
+            {
+                Str(u) => { unitSecs = dateUnitSecs(u); }
+                Integer(n) => { unitSecs = n; }
+                _ => { }
+            }
+            if unitSecs == 0 { return EvalResult::err(name + ": unknown unit"); }
+            let amount = jsonToInt(nr.values[0]);
+            var ts: Int64 = 0;
+            match input
+            {
+                Integer(n) => { ts = n; }
+                Float(f) => { ts = f as Int64; }
+                _ => return EvalResult::err(name + " requires a number input");
+            }
+            if name == "dateadd" { return EvalResult::single(JsonValue::Integer(ts + unitSecs * amount)); }
+            return EvalResult::single(JsonValue::Integer(ts - unitSecs * amount));
         }
 
         if ctx.defs.contains(name)
