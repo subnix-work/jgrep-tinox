@@ -1,0 +1,21 @@
+---
+timestamp: "2024-01-15T10:00:01Z"
+level: INFO
+message: Server started
+service: api
+---
+timestamp: "2024-01-15T10:00:05Z"
+level: DEBUG
+message: Config loaded
+service: api
+---
+timestamp: "2024-01-15T10:02:00Z"
+level: ERROR
+message: Database connection failed
+service: api
+retries: 3
+---
+timestamp: "2024-01-15T10:02:30Z"
+level: WARN
+message: Retrying connection
+service: api

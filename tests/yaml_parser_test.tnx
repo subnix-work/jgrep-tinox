@@ -1,0 +1,269 @@
+import jgrep.json_value;
+import jgrep.json_parser;
+import jgrep.yaml_parser;
+
+class YamlParserTest
+{
+    fnc one(input: String) -> String
+    {
+        let docs = YamlParser::parseAll(input);
+        if docs.len() != 1 { return "<expected 1 doc, got " + docs.len().toString() + ">"; }
+        return JsonSerializer::stringify(docs[0]);
+    }
+
+    @Test("scalar null")
+    fn testScalarNull() -> Bool
+    {
+        return YamlParserTest::one("null") == "null" && YamlParserTest::one("~") == "null";
+    }
+
+    @Test("scalar bool")
+    fn testScalarBool() -> Bool
+    {
+        return YamlParserTest::one("true") == "true" && YamlParserTest::one("false") == "false";
+    }
+
+    @Test("scalar int")
+    fn testScalarInt() -> Bool
+    {
+        return YamlParserTest::one("42") == "42" && YamlParserTest::one("-17") == "-17";
+    }
+
+    @Test("scalar float")
+    fn testScalarFloat() -> Bool
+    {
+        return YamlParserTest::one("3.5") == "3.5";
+    }
+
+    @Test("plain string")
+    fn testPlainString() -> Bool
+    {
+        return YamlParserTest::one("hello world") == "\"hello world\"";
+    }
+
+    @Test("double quoted string with escapes")
+    fn testDoubleQuoted() -> Bool
+    {
+        return YamlParserTest::one("\"a\\nb\"") == "\"a\\nb\"";
+    }
+
+    @Test("single quoted string")
+    fn testSingleQuoted() -> Bool
+    {
+        return YamlParserTest::one("'it''s'") == "\"it's\"";
+    }
+
+    @Test("quoted number stays string")
+    fn testQuotedNumber() -> Bool
+    {
+        return YamlParserTest::one("\"42\"") == "\"42\"";
+    }
+
+    @Test("simple mapping")
+    fn testSimpleMapping() -> Bool
+    {
+        return YamlParserTest::one("name: Alice\nage: 30") == "{\"age\":30,\"name\":\"Alice\"}";
+    }
+
+    @Test("nested mapping")
+    fn testNestedMapping() -> Bool
+    {
+        return YamlParserTest::one("a:\n  b:\n    c: 1") == "{\"a\":{\"b\":{\"c\":1}}}";
+    }
+
+    @Test("empty value is null")
+    fn testEmptyValue() -> Bool
+    {
+        return YamlParserTest::one("a:\nb: 1") == "{\"a\":null,\"b\":1}";
+    }
+
+    @Test("sequence of scalars")
+    fn testSequence() -> Bool
+    {
+        return YamlParserTest::one("- 1\n- 2\n- 3") == "[1,2,3]";
+    }
+
+    @Test("sequence of mappings")
+    fn testSequenceOfMappings() -> Bool
+    {
+        return YamlParserTest::one("- id: 1\n  ok: true\n- id: 2") == "[{\"id\":1,\"ok\":true},{\"id\":2}]";
+    }
+
+    @Test("sequence under key same indent")
+    fn testSeqSameIndent() -> Bool
+    {
+        return YamlParserTest::one("items:\n- 1\n- 2") == "{\"items\":[1,2]}";
+    }
+
+    @Test("sequence under key deeper indent")
+    fn testSeqDeeperIndent() -> Bool
+    {
+        return YamlParserTest::one("items:\n  - 1\n  - 2") == "{\"items\":[1,2]}";
+    }
+
+    @Test("nested sequence inline")
+    fn testNestedSeq() -> Bool
+    {
+        return YamlParserTest::one("- - 1\n  - 2\n- 3") == "[[1,2],3]";
+    }
+
+    @Test("flow sequence")
+    fn testFlowSeq() -> Bool
+    {
+        return YamlParserTest::one("nums: [1, 2, 3]") == "{\"nums\":[1,2,3]}";
+    }
+
+    @Test("flow mapping")
+    fn testFlowMap() -> Bool
+    {
+        return YamlParserTest::one("obj: {a: 1, b: two}") == "{\"obj\":{\"a\":1,\"b\":\"two\"}}";
+    }
+
+    @Test("nested flow")
+    fn testNestedFlow() -> Bool
+    {
+        return YamlParserTest::one("m: {l: [1, {x: y}]}") == "{\"m\":{\"l\":[1,{\"x\":\"y\"}]}}";
+    }
+
+    @Test("multiline flow")
+    fn testMultilineFlow() -> Bool
+    {
+        return YamlParserTest::one("nums: [1,\n  2,\n  3]") == "{\"nums\":[1,2,3]}";
+    }
+
+    @Test("comments stripped")
+    fn testComments() -> Bool
+    {
+        return YamlParserTest::one("# top\na: 1 # tail\n# full line\nb: 2") == "{\"a\":1,\"b\":2}";
+    }
+
+    @Test("hash inside string kept")
+    fn testHashInString() -> Bool
+    {
+        return YamlParserTest::one("u: http://x/y#z\nm: \"a # b\"") == "{\"m\":\"a # b\",\"u\":\"http://x/y#z\"}";
+    }
+
+    @Test("colon in value")
+    fn testColonInValue() -> Bool
+    {
+        return YamlParserTest::one("t: 10:30:00") == "{\"t\":\"10:30:00\"}";
+    }
+
+    @Test("quoted key")
+    fn testQuotedKey() -> Bool
+    {
+        return YamlParserTest::one("\"a: b\": 1") == "{\"a: b\":1}";
+    }
+
+    @Test("multi document")
+    fn testMultiDoc() -> Bool
+    {
+        let docs = YamlParser::parseAll("a: 1\n---\nb: 2\n---\nc: 3\n");
+        if docs.len() != 3 { return false; }
+        return JsonSerializer::stringify(docs[1]) == "{\"b\":2}";
+    }
+
+    @Test("leading document separator")
+    fn testLeadingSeparator() -> Bool
+    {
+        let docs = YamlParser::parseAll("---\na: 1\n");
+        return docs.len() == 1 && JsonSerializer::stringify(docs[0]) == "{\"a\":1}";
+    }
+
+    @Test("document end marker")
+    fn testDocEnd() -> Bool
+    {
+        let docs = YamlParser::parseAll("a: 1\n...\n");
+        return docs.len() == 1 && JsonSerializer::stringify(docs[0]) == "{\"a\":1}";
+    }
+
+    @Test("block literal scalar")
+    fn testBlockLiteral() -> Bool
+    {
+        return YamlParserTest::one("t: |\n  line1\n  line2") == "{\"t\":\"line1\\nline2\\n\"}";
+    }
+
+    @Test("block literal strip chomp")
+    fn testBlockLiteralStrip() -> Bool
+    {
+        return YamlParserTest::one("t: |-\n  x") == "{\"t\":\"x\"}";
+    }
+
+    @Test("block literal with blank line")
+    fn testBlockLiteralBlank() -> Bool
+    {
+        return YamlParserTest::one("t: |\n  a\n\n  b") == "{\"t\":\"a\\n\\nb\\n\"}";
+    }
+
+    @Test("block folded scalar")
+    fn testBlockFolded() -> Bool
+    {
+        return YamlParserTest::one("t: >\n  a\n  b") == "{\"t\":\"a b\\n\"}";
+    }
+
+    @Test("block scalar keeps deeper indent")
+    fn testBlockLiteralIndent() -> Bool
+    {
+        return YamlParserTest::one("t: |\n  a\n    b") == "{\"t\":\"a\\n  b\\n\"}";
+    }
+
+    @Test("null variants in mapping")
+    fn testNullVariants() -> Bool
+    {
+        return YamlParserTest::one("a: ~\nb: null\nc: Null") == "{\"a\":null,\"b\":null,\"c\":null}";
+    }
+
+    @Test("tags and anchors stripped")
+    fn testTagsAnchors() -> Bool
+    {
+        return YamlParserTest::one("a: !!int 5\nb: &x 7") == "{\"a\":5,\"b\":7}";
+    }
+
+    @Test("alias becomes null")
+    fn testAlias() -> Bool
+    {
+        return YamlParserTest::one("a: &x 1\nb: *x") == "{\"a\":1,\"b\":null}";
+    }
+
+    @Test("parse error reported")
+    fn testParseError() -> Bool
+    {
+        let r = YamlParser::parseAllTracked("a: [1, 2\n");
+        return r.errorCount > 0 && r.docs.len() == 0;
+    }
+
+    @Test("empty input yields no docs")
+    fn testEmptyInput() -> Bool
+    {
+        let docs = YamlParser::parseAll("\n# nur Kommentar\n\n");
+        return docs.len() == 0;
+    }
+
+    @Test("directive skipped")
+    fn testDirective() -> Bool
+    {
+        let docs = YamlParser::parseAll("%YAML 1.2\n---\na: 1\n");
+        return docs.len() == 1 && JsonSerializer::stringify(docs[0]) == "{\"a\":1}";
+    }
+
+    @Test("yaml reader interface")
+    fn testYamlReader() -> Bool
+    {
+        var reader = YamlReader::fromString("a: 1\n---\nb: 2\n");
+        var count: Int64 = 0;
+        while reader.hasNext()
+        {
+            let d = reader.tryParseNext();
+            if d.len() > 0 { count = count + 1; }
+        }
+        return count == 2 && reader.errorCount == 0;
+    }
+
+    @Test("kubernetes style document")
+    fn testK8sStyle() -> Bool
+    {
+        let y = "apiVersion: v1\nkind: Pod\nmetadata:\n  name: web\n  labels:\n    app: nginx\nspec:\n  containers:\n  - name: nginx\n    image: nginx:1.25\n    ports:\n    - containerPort: 80\n";
+        let expected = "{\"apiVersion\":\"v1\",\"kind\":\"Pod\",\"metadata\":{\"labels\":{\"app\":\"nginx\"},\"name\":\"web\"},\"spec\":{\"containers\":[{\"image\":\"nginx:1.25\",\"name\":\"nginx\",\"ports\":[{\"containerPort\":80}]}]}}";
+        return YamlParserTest::one(y) == expected;
+    }
+}

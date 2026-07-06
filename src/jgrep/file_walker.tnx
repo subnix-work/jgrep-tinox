@@ -12,62 +12,89 @@ class FileWalker
         return path.endsWith(".yaml") || path.endsWith(".yml");
     }
 
-    fnc listJsonFiles(path: String, recursive: Bool) -> List<String>
+    fnc matchesMode(path: String, yamlMode: Bool) -> Bool
+    {
+        if yamlMode { return FileWalker::isYamlFile(path); }
+        return FileWalker::isJsonFile(path);
+    }
+
+    fnc listModeFiles(path: String, recursive: Bool, yamlMode: Bool) -> List<String>
     {
         var result: List<String> = [];
-        if FileWalker::isJsonFile(path)
+        if FileWalker::isJsonFile(path) || FileWalker::isYamlFile(path)
         {
             if fileExists(path) { result.push(path); }
         }
         else
         {
-            var entries = dirList(path);
-            var entLen: Int64 = entries.len();
-            var files: List<String> = [];
-            var dirs: List<String> = [];
-            var ei: Int64 = 0;
-            while ei < entLen
+            let sub = FileWalker::walkDir(path, recursive, yamlMode);
+            for f in sub { result.push(f); }
+        }
+        return result;
+    }
+
+    fnc walkDir(path: String, recursive: Bool, yamlMode: Bool) -> List<String>
+    {
+        var result: List<String> = [];
+        var entries = dirList(path);
+        var entLen: Int64 = entries.len();
+        var files: List<String> = [];
+        var dirs: List<String> = [];
+        var ei: Int64 = 0;
+        while ei < entLen
+        {
+            let entry = entries[ei];
+            let fullPath = path + "/" + entry;
+            if FileWalker::matchesMode(fullPath, yamlMode)
             {
-                let entry = entries[ei];
-                let fullPath = path + "/" + entry;
-                if FileWalker::isJsonFile(fullPath)
-                {
-                    if fileExists(fullPath) { files.push(fullPath); }
-                }
-                else
-                {
-                    if recursive { dirs.push(fullPath); }
-                }
-                ei = ei + 1;
+                if fileExists(fullPath) { files.push(fullPath); }
             }
-
-            var fi: Int64 = 0;
-            while fi < files.len() { result.push(files[fi]); fi = fi + 1; }
-
-            if recursive
+            else
             {
-                var di: Int64 = 0;
-                while di < dirs.len()
+                if recursive && !FileWalker::isJsonFile(fullPath) && !FileWalker::isYamlFile(fullPath)
                 {
-                    let sub = FileWalker::listJsonFiles(dirs[di], true);
-                    var si: Int64 = 0;
-                    while si < sub.len() { result.push(sub[si]); si = si + 1; }
-                    di = di + 1;
+                    dirs.push(fullPath);
                 }
             }
+            ei = ei + 1;
+        }
+
+        var fi: Int64 = 0;
+        while fi < files.len() { result.push(files[fi]); fi = fi + 1; }
+
+        if recursive
+        {
+            var di: Int64 = 0;
+            while di < dirs.len()
+            {
+                let sub = FileWalker::walkDir(dirs[di], true, yamlMode);
+                var si: Int64 = 0;
+                while si < sub.len() { result.push(sub[si]); si = si + 1; }
+                di = di + 1;
+            }
+        }
+        return result;
+    }
+
+    fnc listJsonFiles(path: String, recursive: Bool) -> List<String>
+    {
+        return FileWalker::listModeFiles(path, recursive, false);
+    }
+
+    fnc listFilesMode(paths: List<String>, recursive: Bool, yamlMode: Bool) -> List<String>
+    {
+        var result: List<String> = [];
+        for path in paths
+        {
+            let files = FileWalker::listModeFiles(path, recursive, yamlMode);
+            for f in files { result.push(f); }
         }
         return result;
     }
 
     fnc listFiles(paths: List<String>, recursive: Bool) -> List<String>
     {
-        var result: List<String> = [];
-        for path in paths
-        {
-            let files = FileWalker::listJsonFiles(path, recursive);
-            for f in files { result.push(f); }
-        }
-        return result;
+        return FileWalker::listFilesMode(paths, recursive, false);
     }
 
     fnc sortStrings(strs: List<String>) -> List<String>

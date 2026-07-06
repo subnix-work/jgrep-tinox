@@ -90,3 +90,27 @@ Die alten Compiler-Bug-Workarounds sind zurückgebaut: wrapObj +
 objLen/objKeys (34 Stellen) durch direkte Map-Methoden ersetzt,
 strCmp inlined. Verbleibende Indirektionen (z. B. `__reduce__`-Encoding
 im Filter-AST) sind funktional und bleiben.
+
+## ygrep (2026-07-06)
+
+Das in TASKS.md als optional genannte ygrep ist umgesetzt — gleiche Binärdatei,
+Verhalten schaltet über argv[0] (`ygrep`) bzw. `--yaml`/`--json`:
+
+- [x] `src/jgrep/yaml_parser.tnx` — YAML-Subset-Parser → JsonValue
+      (Block-Mappings/-Sequenzen, Flow-Kollektionen auch mehrzeilig,
+      Block-Skalare `|`/`>` mit Chomping, Kommentare, Multi-Dokument
+      `---`/`...`, Tags/Anchors werden gestrippt, Alias → null)
+- [x] `FileWalker`: modusabhängige Verzeichnissuche (`listFilesMode`);
+      explizit benannte Dateien werden nach Endung geparst (jgrep liest
+      .yaml, ygrep liest .json)
+- [x] CLI: `--yaml`/`--json`, Programmname in Hilfe/Version/Completion
+- [x] `tests/yaml_parser_test.tnx` — 40 Tests, alle grün (Gesamt: 161)
+- [x] `testdata/simple.yaml`, `nested.yaml`, `multi.yaml` (K8s-Stil), `logs.yaml`
+- [x] Beim Port gefixt (nebenbei): `-l` druckte den Dateinamen einmal pro
+      Dokument statt einmal pro Datei; rekursiver Walker stieg in Dateien
+      mit Fremd-Endung „hinein"
+
+Dabei gefundene und im Tinox-Repo gefixte Compiler-Bugs (bugs.md 15+16):
+`.len()` auf List<String>-Elementen aus Funktions-/Feldzugriffen lief durch
+Map-Dispatch (Zeilen mit 15–16 Zeichen verschwanden), und String-Literale
+mit führendem `#` wurden als Raw-String gelext (Escapes blieben roh).

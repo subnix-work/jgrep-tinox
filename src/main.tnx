@@ -1,5 +1,6 @@
 import jgrep.json_value;
 import jgrep.json_parser;
+import jgrep.yaml_parser;
 import jgrep.filter;
 import jgrep.evaluator;
 import jgrep.ndjson;
@@ -24,6 +25,10 @@ class CliOptions
     var showHelp: Bool;
     var showVersion: Bool;
     var completionShell: String;
+    var yamlFlag: Bool;
+    var jsonFlag: Bool;
+    var yamlInput: Bool;
+    var progName: String;
 
     fnc defaults() -> CliOptions
     {
@@ -42,7 +47,11 @@ class CliOptions
             noColor: false,
             showHelp: false,
             showVersion: false,
-            completionShell: ""
+            completionShell: "",
+            yamlFlag: false,
+            jsonFlag: false,
+            yamlInput: false,
+            progName: "jgrep"
         };
     }
 }
@@ -113,6 +122,16 @@ class ArgParser
             else if arg == "--no-color"
             {
                 opts.noColor = true;
+                i = i + 1;
+            }
+            else if arg == "--yaml"
+            {
+                opts.yamlFlag = true;
+                i = i + 1;
+            }
+            else if arg == "--json"
+            {
+                opts.jsonFlag = true;
                 i = i + 1;
             }
             else if arg == "-f" || arg == "--from-file"
@@ -254,11 +273,7 @@ class JGrep
 
         if this.opts.filesWithMatches
         {
-            if results.len() > 0
-            {
-                if prefix != "" { println(prefix); }
-                return countRef + 1;
-            }
+            if results.len() > 0 { return countRef + 1; }
             return countRef;
         }
 
@@ -275,31 +290,60 @@ class JGrep
         return countRef;
     }
 
-    fn processSource(path: String, content: String, prefix: String)
+    fn isYamlSource(path: String) -> Bool
     {
-        let reader = NdjsonReader::fromString(content);
-        var count: Int64 = 0;
-        var foundMatchInFile = false;
+        if path == "" { return this.opts.yamlInput; }
+        if FileWalker::isYamlFile(path) { return true; }
+        if FileWalker::isJsonFile(path) { return false; }
+        return this.opts.yamlInput;
+    }
 
-        while reader.hasNext()
+    fn docsFromContent(path: String, content: String) -> List<JsonValue>
+    {
+        var docs: List<JsonValue> = [];
+        if this.isYamlSource(path)
         {
-            let docList = reader.tryParseNext();
-            if docList.len() == 0
+            let yres = YamlParser::parseAllTracked(content);
+            if yres.errorCount > 0
             {
                 this.hadError = true;
+                var label = path;
+                if label == "" { label = "<stdin>"; }
+                printStderr(this.opts.progName + ": " + label + ": YAML parse error: " + yres.errorMsg);
             }
-            else
+            docs = yres.docs;
+        }
+        else
+        {
+            let reader = NdjsonReader::fromString(content);
+            while reader.hasNext()
             {
-                let doc = docList[0];
-                let prevMatch = this.hadMatch;
-                count = this.processDocument(doc, prefix, count);
-                if this.hadMatch && !prevMatch { foundMatchInFile = true; }
-
-                if this.opts.filesWithMatches && foundMatchInFile { break; }
+                let docList = reader.tryParseNext();
+                if docList.len() == 0 { this.hadError = true; }
+                else { docs.push(docList[0]); }
             }
         }
+        return docs;
+    }
 
-        if this.opts.count && !this.opts.filesWithMatches
+    fn processSource(path: String, content: String, prefix: String)
+    {
+        let docs = this.docsFromContent(path, content);
+        var count: Int64 = 0;
+
+        for doc in docs
+        {
+            count = this.processDocument(doc, prefix, count);
+            if this.opts.filesWithMatches && count > 0 { break; }
+        }
+
+        if this.opts.filesWithMatches
+        {
+            if count > 0 && path != "" { println(path); }
+            return;
+        }
+
+        if this.opts.count
         {
             if prefix == "" { println(count.toString()); }
             else { println(prefix + ":" + count.toString()); }
@@ -311,30 +355,22 @@ class JGrep
         var queue: List<JsonValue> = [];
         if this.opts.files.len() > 0
         {
-            let allFiles = FileWalker::listFiles(this.opts.files, this.opts.recursive);
+            let allFiles = FileWalker::listFilesMode(this.opts.files, this.opts.recursive, this.opts.yamlInput);
             for fp in allFiles
             {
                 if fileExists(fp)
                 {
                     let content = fileReadAllText(fp);
-                    let reader = NdjsonReader::fromString(content);
-                    while reader.hasNext()
-                    {
-                        let docList = reader.tryParseNext();
-                        if docList.len() > 0 { queue.push(docList[0]); }
-                    }
+                    let docs = this.docsFromContent(fp, content);
+                    for d in docs { queue.push(d); }
                 }
             }
         }
         else if isStdinTty() == 0
         {
             let stdinContent = fileReadAllText("/dev/stdin");
-            let reader = NdjsonReader::fromString(stdinContent);
-            while reader.hasNext()
-            {
-                let docList = reader.tryParseNext();
-                if docList.len() > 0 { queue.push(docList[0]); }
-            }
+            let docs = this.docsFromContent("", stdinContent);
+            for d in docs { queue.push(d); }
         }
         this.matcher.setInputQueue(queue);
     }
@@ -377,7 +413,7 @@ class JGrep
         }
         else
         {
-            let allFiles = FileWalker::listFiles(this.opts.files, this.opts.recursive);
+            let allFiles = FileWalker::listFilesMode(this.opts.files, this.opts.recursive, this.opts.yamlInput);
             let usePrefix = allFiles.len() > 1;
 
             for filePath in allFiles
@@ -385,7 +421,7 @@ class JGrep
                 var skipFile = false;
                 if !fileExists(filePath)
                 {
-                    println("jgrep: " + filePath + ": No such file or directory");
+                    println(this.opts.progName + ": " + filePath + ": No such file or directory");
                     this.hadError = true;
                     skipFile = true;
                 }
@@ -414,24 +450,24 @@ class JGrep
 
 class CompletionGenerator
 {
-    fnc generate(shell: String) -> Int64
+    fnc generate(shell: String, prog: String) -> Int64
     {
         if shell == "bash"
         {
-            println("# jgrep bash completion");
-            println("_jgrep_complete() {");
+            println("# " + prog + " bash completion");
+            println("_" + prog + "_complete() {");
             println("  local cur flags");
             println("  cur=\"" + "$" + "{COMP_WORDS[COMP_CWORD]}\"");
-            println("  flags=\"-r -l -c -s -n -f --recursive --files-with-matches --count --slurp --null-input --from-file --pretty --color-level --color-level-field --no-color\"");
+            println("  flags=\"-r -l -c -s -n -f --recursive --files-with-matches --count --slurp --null-input --from-file --pretty --color-level --color-level-field --no-color --yaml --json\"");
             println("  COMPREPLY=($(" + "compgen -W \"" + "$" + "flags\" -- \"" + "$" + "cur\") $(" + "compgen -f -- \"" + "$" + "cur\"))");
             println("}");
-            println("complete -F _jgrep_complete jgrep");
+            println("complete -F _" + prog + "_complete " + prog);
             return 0;
         }
         if shell == "zsh"
         {
-            println("#compdef jgrep");
-            println("_jgrep() {");
+            println("#compdef " + prog);
+            println("_" + prog + "() {");
             println("  _arguments \\");
             println("    '(-r --recursive)-r[recurse into directories]' \\");
             println("    '(-l --files-with-matches)-l[print only matching filenames]' \\");
@@ -443,33 +479,37 @@ class CompletionGenerator
             println("    '--color-level[colorize by log level]' \\");
             println("    '--color-level-field[log level field]:field' \\");
             println("    '--no-color[disable color]' \\");
+            println("    '--yaml[treat input as YAML]' \\");
+            println("    '--json[treat input as JSON]' \\");
             println("    ':filter:' \\");
             println("    '*:file:_files'");
             println("}");
-            println("_jgrep \"" + "$" + "@\"");
+            println("_" + prog + " \"" + "$" + "@\"");
             return 0;
         }
         if shell == "fish"
         {
-            println("complete -c jgrep -s r -l recursive -d 'Recurse into directories'");
-            println("complete -c jgrep -s l -l files-with-matches -d 'Print only matching filenames'");
-            println("complete -c jgrep -s c -l count -d 'Print match count per file'");
-            println("complete -c jgrep -s s -l slurp -d 'Collect all results into one array'");
-            println("complete -c jgrep -s n -l null-input -d 'Use null as input'");
-            println("complete -c jgrep -s f -l from-file -d 'Read filter from file' -r");
-            println("complete -c jgrep -l pretty -d 'Pretty-print JSON output'");
-            println("complete -c jgrep -l color-level -d 'Colorize by log level'");
-            println("complete -c jgrep -l color-level-field -d 'Log level field' -r");
-            println("complete -c jgrep -l no-color -d 'Disable color output'");
+            println("complete -c " + prog + " -s r -l recursive -d 'Recurse into directories'");
+            println("complete -c " + prog + " -s l -l files-with-matches -d 'Print only matching filenames'");
+            println("complete -c " + prog + " -s c -l count -d 'Print match count per file'");
+            println("complete -c " + prog + " -s s -l slurp -d 'Collect all results into one array'");
+            println("complete -c " + prog + " -s n -l null-input -d 'Use null as input'");
+            println("complete -c " + prog + " -s f -l from-file -d 'Read filter from file' -r");
+            println("complete -c " + prog + " -l pretty -d 'Pretty-print JSON output'");
+            println("complete -c " + prog + " -l color-level -d 'Colorize by log level'");
+            println("complete -c " + prog + " -l color-level-field -d 'Log level field' -r");
+            println("complete -c " + prog + " -l no-color -d 'Disable color output'");
+            println("complete -c " + prog + " -l yaml -d 'Treat input as YAML'");
+            println("complete -c " + prog + " -l json -d 'Treat input as JSON'");
             return 0;
         }
         if shell == "powershell"
         {
-            println("Register-ArgumentCompleter -Native -CommandName jgrep -ScriptBlock {");
+            println("Register-ArgumentCompleter -Native -CommandName " + prog + " -ScriptBlock {");
             println("  param(" + "$" + "wordToComplete, " + "$" + "commandAst, " + "$" + "cursorPosition)");
             println("  " + "$" + "flags = @('-r','-l','-c','-s','-n','-f','--recursive','--files-with-matches',");
             println("             '--count','--slurp','--null-input','--from-file','--pretty',");
-            println("             '--color-level','--color-level-field','--no-color')");
+            println("             '--color-level','--color-level-field','--no-color','--yaml','--json')");
             println("  " + "$" + "flags | Where-Object { " + "$" + "_ -like \"" + "$" + "wordToComplete*\" } |");
             println("    ForEach-Object { [System.Management.Automation.CompletionResult]::new(" + "$" + "_) }");
             println("}");
@@ -480,11 +520,14 @@ class CompletionGenerator
     }
 }
 
-fn printHelp()
+fn printHelp(prog: String)
 {
-    println("Usage: jgrep [-rclsnhV] [-f FILE] [--pretty] [--color-level] [--color-level-field FIELD] [--no-color] [FILTER] [FILE...]");
+    var desc = "grep for JSON — powered by Tinox";
+    var dataExt = "json";
+    if prog == "ygrep" { desc = "grep for YAML — powered by Tinox"; dataExt = "yaml"; }
+    println("Usage: " + prog + " [-rclsnhV] [-f FILE] [--pretty] [--color-level] [--color-level-field FIELD] [--no-color] [--yaml|--json] [FILTER] [FILE...]");
     println("");
-    println("grep for JSON — powered by Tinox");
+    println(desc);
     println("");
     println("Arguments:");
     println("  FILTER     jq filter expression (default: '.')");
@@ -501,24 +544,49 @@ fn printHelp()
     println("      --color-level            Colorize output by log level field");
     println("      --color-level-field F    Override log level field (dot-notation)");
     println("      --no-color               Disable ANSI color output");
+    println("      --yaml                   Treat stdin/unknown files as YAML");
+    println("      --json                   Treat stdin/unknown files as JSON");
     println("  -h, --help                   Show this help");
     println("  -V, --version                Show version");
     println("");
     println("  completion SHELL             Generate shell completion (bash/zsh/fish/powershell)");
     println("");
+    println("File extensions decide the input format: .yaml/.yml is parsed as YAML,");
+    println(".json/.ndjson/.jsonl as JSON. For stdin the program name or --yaml/--json decides.");
+    println("");
     println("Examples:");
-    println("  jgrep '.name' data.json");
-    println("  jgrep 'select(.level == \"ERROR\")' logs.ndjson");
-    println("  jgrep '.[] | select(.active) | .name' items.json");
-    println("  jgrep -r '.id' ./data/");
-    println("  jgrep -c '.' *.json");
-    println("  jgrep --color-level '.' logs.ndjson");
-    println("  echo '{\"x\":1}' | jgrep '.x'");
+    println("  " + prog + " '.name' data." + dataExt);
+    println("  " + prog + " 'select(.level == \"ERROR\")' logs." + dataExt);
+    println("  " + prog + " '.[] | select(.active) | .name' items." + dataExt);
+    println("  " + prog + " -r '.id' ./data/");
+    println("  " + prog + " -c '.' *." + dataExt);
+    println("  " + prog + " --color-level '.' logs." + dataExt);
+    if prog == "ygrep" { println("  echo 'x: 1' | ygrep '.x'"); }
+    else { println("  echo '{\"x\":1}' | jgrep '.x'"); }
+}
+
+fn baseName(path: String) -> String
+{
+    var idx: Int64 = -1;
+    var i: Int64 = 0;
+    while i < path.len()
+    {
+        if (path[i] as Int64) == 47 { idx = i; }
+        i = i + 1;
+    }
+    return path.substring(idx + 1, path.len());
 }
 
 fn main() -> Int64
 {
     let allArgs = processArgs();
+
+    var progName = "jgrep";
+    if allArgs.len() > 0
+    {
+        let invoked = baseName(allArgs[0]);
+        if invoked.endsWith("ygrep") { progName = "ygrep"; }
+    }
 
     var args: List<String> = [];
     var i = 1;
@@ -526,33 +594,37 @@ fn main() -> Int64
 
     if args.len() == 0
     {
-        printHelp();
+        printHelp(progName);
         return 2;
     }
 
     let firstArg = args[0];
     if firstArg == "completion" && args.len() > 1
     {
-        return CompletionGenerator::generate(args[1]);
+        return CompletionGenerator::generate(args[1], progName);
     }
 
-    let opts = ArgParser::parse(args);
+    var opts = ArgParser::parse(args);
+    opts.progName = progName;
+    opts.yamlInput = progName == "ygrep";
+    if opts.yamlFlag { opts.yamlInput = true; }
+    if opts.jsonFlag { opts.yamlInput = false; }
 
     if opts.showHelp
     {
-        printHelp();
+        printHelp(progName);
         return 0;
     }
 
     if opts.showVersion
     {
-        println("jgrep 1.0.0 (Tinox)");
+        println(progName + " 1.0.0 (Tinox)");
         return 0;
     }
 
     if opts.count && opts.filesWithMatches
     {
-        println("jgrep: --count and --files-with-matches are mutually exclusive");
+        println(progName + ": --count and --files-with-matches are mutually exclusive");
         return 2;
     }
 

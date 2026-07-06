@@ -1,11 +1,12 @@
-# jgrep
+# jgrep / ygrep
 
-A reimplementation of [jq](https://jqlang.github.io/jq/) in [Tinox](https://github.com/tuvbunn2/tinox). Filters JSON from stdin, files, or directory trees.
+A reimplementation of [jq](https://jqlang.github.io/jq/) in [Tinox](https://github.com/tuvbunn2/tinox). Filters JSON from stdin, files, or directory trees. The same binary doubles as **ygrep** — grep for YAML: invoked as `ygrep` (or with `--yaml`) it parses YAML input and applies the same jq filters.
 
 ## Build
 
 ```bash
 tinox build src/main.tnx -o jgrep
+tinox build src/main.tnx -o ygrep   # same code; behavior switches on the binary name
 ```
 
 Requires the Tinox compiler at `/home/tg7c49/git/tinox/target/release/tinox` (or `tinox` on PATH).
@@ -14,7 +15,10 @@ Requires the Tinox compiler at `/home/tg7c49/git/tinox/target/release/tinox` (or
 
 ```
 jgrep [OPTIONS] FILTER [FILE...]
+ygrep [OPTIONS] FILTER [FILE...]
 ```
+
+The input format is chosen per file by extension: `.yaml`/`.yml` is parsed as YAML, `.json`/`.ndjson`/`.jsonl` as JSON — in both tools. For stdin (and unknown extensions) the program name decides, overridable with `--yaml`/`--json`. Directory scans (`-r`) pick up `.json`-family files under jgrep and `.yaml`/`.yml` under ygrep.
 
 ### Options
 
@@ -29,6 +33,8 @@ jgrep [OPTIONS] FILTER [FILE...]
 | `--pretty` | Pretty-print JSON output |
 | `--color-level` | Colorize output by log level field |
 | `--no-color` | Disable color output |
+| `--yaml` | Treat stdin/unknown files as YAML |
+| `--json` | Treat stdin/unknown files as JSON |
 
 ## Examples
 
@@ -85,6 +91,30 @@ echo '[{"k":"b"},{"k":"a"},{"k":"b"}]' | jgrep 'group_by(.k)'
 echo '[{"k":"b"},{"k":"a"},{"k":"b"}]' | jgrep 'unique_by(.k)'
 ```
 
+### ygrep (YAML)
+
+```bash
+# Field access on YAML
+printf 'name: Alice\nage: 30\n' | ygrep '.name'
+# → Alice
+
+# Multi-document YAML (--- separators), e.g. Kubernetes manifests
+ygrep '.kind' testdata/multi.yaml
+# → Pod  Service  ConfigMap
+
+ygrep 'select(.kind == "Service") | .metadata.name' testdata/multi.yaml
+# → web-svc
+
+# YAML logs by level
+ygrep 'select(.level == "ERROR") | .message' testdata/logs.yaml
+
+# Recursive search over .yaml/.yml files
+ygrep -rl '.spec.containers' ./manifests/
+
+# jgrep reads explicitly named YAML files too (extension decides)
+jgrep '.age' testdata/simple.yaml
+```
+
 ## Supported jq Features
 
 - Identity (`.`), field access (`.foo`, `.foo.bar`), index access (`.[0]`, `.[-1]`)
@@ -108,9 +138,19 @@ echo '[{"k":"b"},{"k":"a"},{"k":"b"}]' | jgrep 'unique_by(.k)'
 - Recursive descent: `..`
 - NDJSON / multi-document input
 
+## Supported YAML Features (ygrep)
+
+- Block mappings and sequences (indentation-based), including sequences at the same indent as their key
+- Flow collections `[...]`/`{...}`, also spanning multiple lines
+- Scalars: null (`null`/`~`/empty), booleans, integers, floats, plain/single-/double-quoted strings (with escapes)
+- Block scalars `|` (literal) and `>` (folded) with `-`/`+` chomping
+- Comments (`#`), quoted keys, multi-document streams (`---`/`...`), `%`-directives skipped
+- Tags (`!!int` etc.) and anchors (`&x`) are stripped; the value is parsed by its content
+
 ## Known Limitations
 
 - Float arithmetic uses string representation (Tinox Float64 bug workaround); very large or very precise floats may display unexpectedly
 - `label`/`break` is parsed but not fully evaluated
 - No `$__loc__`, `modulemeta`, streaming builtins (`tostream`, `fromstream`)
 - `log2`, `tgamma`, `lgamma` and other advanced math functions not implemented
+- YAML: no aliases (`*x` → null), no merge keys (`<<:`), no complex keys (`? `), no multi-line plain scalars; YAML-1.1-style `yes`/`no`/`on`/`off` are strings (YAML 1.2 semantics); tabs in indentation unsupported
