@@ -123,7 +123,7 @@ jgrep '.age' testdata/simple.yaml
 - Pipe (`|`), comma (`,`), try-catch (`try … catch …`)
 - Comparison operators, `if-then-else-end`, `and`/`or`/`not`
 - String interpolation (`"\(.foo)"`)
-- Format strings: `@base64`, `@base64d`, `@uri`, `@html`, `@csv`, `@tsv`, `@sh`, `@json`, `@text`
+- Format strings: `@base64`, `@base64d`, `@base32`, `@base32d`, `@uri`, `@html`, `@csv`, `@tsv`, `@sh`, `@json`, `@text`
 - `reduce`, `foreach`, `until`, `while`, `limit`, `label`/`break`
 - Path operations: `path(expr)`, `getpath`, `setpath`, `delpaths`
 - Builtins: `length`, `keys`, `values`, `has`, `in`, `contains`, `type`, `ascii_downcase`, `ascii_upcase`, `ltrimstr`, `rtrimstr`, `startswith`, `endswith`, `split`, `join`, `test`, `capture`, `match`, `ascii`, `explode`, `implode`

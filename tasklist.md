@@ -1,8 +1,8 @@
 # jgrep-tinox — Aufgaben
 
-Stand: 2026-07-05 — **alle offenen Punkte abgearbeitet.** 121 Tests grün
-(89 bestehende + 32 neue in `tests/builtins_test.tnx`). Repo ist jetzt ein
-Git-Repository mit Feature-Historie.
+Stand: 2026-07-07 — **alle offenen Punkte abgearbeitet.** 170 Tests grün
+(mit repariertem Testrunner, siehe Performance-Abschnitt unten). Repo ist
+jetzt ein Git-Repository mit Feature-Historie.
 
 ## Bugs (alle behoben)
 
@@ -114,3 +114,56 @@ Dabei gefundene und im Tinox-Repo gefixte Compiler-Bugs (bugs.md 15+16):
 `.len()` auf List<String>-Elementen aus Funktions-/Feldzugriffen lief durch
 Map-Dispatch (Zeilen mit 15–16 Zeichen verschwanden), und String-Literale
 mit führendem `#` wurden als Raw-String gelext (Escapes blieben roh).
+
+## Performance-Sprint (2026-07-07)
+
+Ausgangslage: jq schafft 200k NDJSON-Zeilen (38 MB) in 0,3 s — jgrep war nach
+5 Minuten nicht fertig (superquadratische Skalierung: 1k→2,4 s, 8k→197 s).
+Endstand: **200k Zeilen in ~1,0 s, Ausgabe byte-identisch zu jq** (diff über
+50k Ergebniszeilen), Skalierung linear (1k→4 ms, 8k→27 ms).
+
+Drei Quadrat-Terme gefunden und beseitigt:
+
+- [x] `.len()` in Lexer-Schleifenbedingungen — `tinox_string_length` ist ein
+      strlen-Walk über den ganzen Quellstring. Fix: Länge einmal im
+      Konstruktor cachen (`srcLen`/`sLen` in JsonLexer, FilterLexer, YamlFlow).
+- [x] `substring(pos-1, pos)` pro Zeichen in readString & Co. —
+      `tinox_string_substring` macht intern `strlen(s)` über die ganze Datei.
+      Fix: `charAt` (O(1), kein strlen) für Einzelzeichen-Kopien.
+- [x] Token-/Dokumentlisten per `push` materialisiert — `tinox_array_push`
+      kopiert das ganze Array pro Push (O(n²)). Fix: Streaming statt Listen:
+      `JsonParser` zieht Tokens direkt vom Lexer (1-Token-Lookahead, keine
+      Tokenliste mehr), `NdjsonReader` parst Dokumente on-demand,
+      `processSource` verarbeitet NDJSON-Dokumente direkt aus dem Reader.
+      (Ein Runtime-Fix via GC_size-In-Place-Growth wurde verworfen — bricht
+      die Copy-Semantik aliasierter Listen, Details in tinox bugs.md.)
+
+Dabei im Tinox-Repo gefixt (bugs.md 17): **Der Testrunner las die
+Bool-Rückgabe der @Test-Methoden als i64** (ABI-Mismatch i1/i64) — Tests,
+deren letzter Ausdruck ein Vergleich war, konnten nie fehlschlagen. Nach dem
+Fix fielen zwei bis dahin „grüne" jgrep-Tests als echte Bugs auf:
+
+- [x] `flatten`/`flatten(1)` gab immer `[]` zurück: `flattenInto` pushte in
+      einen Out-Parameter — Copy-Semantik von `push` macht das wirkungslos.
+      Fix: Akkumulator wird zurückgegeben.
+- [x] NDJSON-Error-Recovery gab es real nicht (parseAll brach beim ersten
+      Fehler ab, Rest der Datei wurde verworfen, kein Fehler gemeldet).
+      Fix: `recoverToNextLine` (Resync auf nächste Zeile), errorCount zählt,
+      Exit-Code 2, Folge-Dokumente werden geliefert.
+
+Außerdem nachgezogen (Lücken aus TASKS.md):
+
+- [x] `@base32` / `@base32d` — waren stille No-ops; jetzt RFC 4648,
+      gegen Python `base64.b32encode` für alle Padding-Fälle verifiziert.
+- [x] `strptime(fmt)` — gab Timestamp statt jq-Zeitarray zurück und
+      ignorierte das Format. Jetzt format-gesteuerter Parser
+      (%Y %m %d %e %H %M %S %T %Z %z %%), Rückgabe `[y, mon0, d, h, mi, s,
+      wday, yday]` identisch zu jq inkl. `mktime`-Roundtrip; bei
+      Nicht-Match jq-konformer Fehler.
+
+Testsuite: 170 Tests grün (161 alte — jetzt mit ehrlichem Runner — plus 9
+neue für base32, flatten, strptime, NDJSON-Recovery).
+
+Bekannte verbleibende Grenze: `-s`/slurp und andere große Ergebnis-Arrays
+bauen weiter per `push` auf (O(n²) ab ~100k Ergebnissen in einem Array) —
+Fix bräuchte Kapazitäts-Arrays in der Tinox-Runtime (bugs.md, Notiz).

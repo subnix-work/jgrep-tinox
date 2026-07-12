@@ -156,28 +156,29 @@ enum FilterToken
 class FilterLexer
 {
     var source: String;
+    var srcLen: Int64;
     var pos: Int64;
 
     fnc new(src: String) -> FilterLexer
     {
-        return FilterLexer { source: src, pos: 0 };
+        return FilterLexer { source: src, srcLen: src.len(), pos: 0 };
     }
 
     fn peek() -> Int64
     {
-        if this.pos >= this.source.len() { return 0; }
+        if this.pos >= this.srcLen { return 0; }
         return this.source[this.pos] as Int64;
     }
 
     fn peek2() -> Int64
     {
-        if this.pos + 1 >= this.source.len() { return 0; }
+        if this.pos + 1 >= this.srcLen { return 0; }
         return this.source[this.pos + 1] as Int64;
     }
 
     fn next() -> Int64
     {
-        if this.pos >= this.source.len() { return 0; }
+        if this.pos >= this.srcLen { return 0; }
         let code = this.source[this.pos] as Int64;
         this.pos = this.pos + 1;
         return code;
@@ -198,13 +199,13 @@ class FilterLexer
     fn skipWhitespace()
     {
         var skipping = true;
-        while this.pos < this.source.len() && skipping
+        while this.pos < this.srcLen && skipping
         {
             let ch = this.peek();
             if ch == 32 || ch == 9 || ch == 10 || ch == 13 { this.next(); }
             else if ch == 35
             {
-                while this.pos < this.source.len() && this.peek() != 10 { this.next(); }
+                while this.pos < this.srcLen && this.peek() != 10 { this.next(); }
             }
             else { skipping = false; }
         }
@@ -213,12 +214,12 @@ class FilterLexer
     fn readIdent(firstCode: Int64) -> String
     {
         var s = FilterLexer::codePointToStr(firstCode);
-        while this.pos < this.source.len()
+        while this.pos < this.srcLen
         {
             let ch = this.peek();
             if (ch >= 97 && ch <= 122) || (ch >= 65 && ch <= 90) || (ch >= 48 && ch <= 57) || ch == 95
             {
-                s = s + this.source.substring(this.pos, this.pos + 1);
+                s = s + this.source.charAt(this.pos);
                 this.next();
             }
             else { break; }
@@ -230,10 +231,10 @@ class FilterLexer
     {
         var s = FilterLexer::codePointToStr(firstCode);
         var isFloat = false;
-        while this.pos < this.source.len()
+        while this.pos < this.srcLen
         {
             let ch = this.peek();
-            if ch >= 48 && ch <= 57 { s = s + this.source.substring(this.pos, this.pos + 1); this.next(); }
+            if ch >= 48 && ch <= 57 { s = s + this.source.charAt(this.pos); this.next(); }
             else if ch == 46 && !isFloat && this.peek2() != 46
             {
                 isFloat = true;
@@ -243,10 +244,10 @@ class FilterLexer
             else if ch == 101 || ch == 69
             {
                 isFloat = true;
-                s = s + this.source.substring(this.pos, this.pos + 1);
+                s = s + this.source.charAt(this.pos);
                 this.next();
                 let sign = this.peek();
-                if sign == 43 || sign == 45 { s = s + this.source.substring(this.pos, this.pos + 1); this.next(); }
+                if sign == 43 || sign == 45 { s = s + this.source.charAt(this.pos); this.next(); }
             }
             else { break; }
         }
@@ -260,7 +261,7 @@ class FilterLexer
         var current = "";
         var hasInterp = false;
 
-        while this.pos < this.source.len()
+        while this.pos < this.srcLen
         {
             let ch = this.next();
             if ch == 34
@@ -288,19 +289,19 @@ class FilterLexer
                     if current.len() > 0 { parts.push(StringPart::Text(current)); current = ""; }
                     var depth = 1;
                     var innerSrc = "";
-                    while this.pos < this.source.len() && depth > 0
+                    while this.pos < this.srcLen && depth > 0
                     {
                         let ic = this.next();
                         if ic == 40 { depth = depth + 1; innerSrc = innerSrc + FilterLexer::codePointToStr(ic); }
                         else if ic == 41 { depth = depth - 1; if depth > 0 { innerSrc = innerSrc + FilterLexer::codePointToStr(ic); } }
-                        else { innerSrc = innerSrc + this.source.substring(this.pos - 1, this.pos); }
+                        else { innerSrc = innerSrc + this.source.charAt(this.pos - 1); }
                     }
                     let innerFilter = FilterParser::parseExprStr(innerSrc);
                     parts.push(StringPart::Expr(innerFilter));
                 }
-                else { current = current + this.source.substring(this.pos - 1, this.pos); }
+                else { current = current + this.source.charAt(this.pos - 1); }
             }
-            else { current = current + this.source.substring(this.pos - 1, this.pos); }
+            else { current = current + this.source.charAt(this.pos - 1); }
         }
         return FilterToken::StrLit(current);
     }
@@ -311,7 +312,7 @@ class FilterLexer
         loop
         {
             this.skipWhitespace();
-            if this.pos >= this.source.len() { tokens.push(FilterToken::EOF); break; }
+            if this.pos >= this.srcLen { tokens.push(FilterToken::EOF); break; }
 
             let ch = this.next();
 

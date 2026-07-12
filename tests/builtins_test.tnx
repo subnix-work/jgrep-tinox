@@ -2,6 +2,7 @@ import jgrep.json_value;
 import jgrep.json_parser;
 import jgrep.filter;
 import jgrep.evaluator;
+import jgrep.ndjson;
 
 // Tests für die 2026-07-05 nachgerüsteten Builtins:
 // sub/gsub/splits, label/break, gmtime/mktime, Mathe, Pfad-Maschinerie, Streaming
@@ -215,5 +216,69 @@ class BuiltinsTest
     fn testModulemeta() -> Bool
     {
         return BuiltinsHelper::run("modulemeta", "\"foo\"") == "ERROR:module not found: foo";
+    }
+
+    @Test("base32 encodes with padding")
+    fn testBase32Encode() -> Bool
+    {
+        if BuiltinsHelper::run("@base32", "\"hi\"") != "\"NBUQ====\"" { return false; }
+        if BuiltinsHelper::run("@base32", "\"hello\"") != "\"NBSWY3DP\"" { return false; }
+        if BuiltinsHelper::run("@base32", "\"a\"") != "\"ME======\"" { return false; }
+        return BuiltinsHelper::run("@base32", "\"abcd\"") == "\"MFRGGZA=\"";
+    }
+
+    @Test("base32d decodes")
+    fn testBase32Decode() -> Bool
+    {
+        if BuiltinsHelper::run("@base32d", "\"NBSWY3DP\"") != "\"hello\"" { return false; }
+        return BuiltinsHelper::run("@base32d", "\"ME======\"") == "\"a\"";
+    }
+
+    @Test("base32 roundtrip")
+    fn testBase32Roundtrip() -> Bool
+    {
+        return BuiltinsHelper::run("@base32 | @base32d", "\"jgrep rocks!\"") == "\"jgrep rocks!\"";
+    }
+
+    @Test("flatten depth one keeps deeper nesting")
+    fn testFlattenDepthOne() -> Bool
+    {
+        return BuiltinsHelper::run("flatten(1)", "[[1,2],[3,[4]]]") == "[1,2,3,[4]]";
+    }
+
+    @Test("flatten default flattens fully")
+    fn testFlattenFull() -> Bool
+    {
+        return BuiltinsHelper::run("flatten", "[[1,[2]],[3,[4,[5]]]]") == "[1,2,3,4,5]";
+    }
+
+    @Test("strptime returns broken down time")
+    fn testStrptimeArray() -> Bool
+    {
+        return BuiltinsHelper::run("strptime(\"%Y-%m-%d\")", "\"2024-01-15\"")
+            == "[2024,0,15,0,0,0,1,14]";
+    }
+
+    @Test("strptime mktime roundtrip")
+    fn testStrptimeMktime() -> Bool
+    {
+        return BuiltinsHelper::run("strptime(\"%Y-%m-%dT%H:%M:%SZ\") | mktime", "\"2024-06-15T10:30:00Z\"")
+            == "1718447400";
+    }
+
+    @Test("strptime rejects mismatched input")
+    fn testStrptimeMismatch() -> Bool
+    {
+        return BuiltinsHelper::run("strptime(\"%Y-%m-%d\")", "\"nodate\"")
+            == "ERROR:date \"nodate\" does not match format \"%Y-%m-%d\"";
+    }
+
+    @Test("ndjson recovery continues after bad line")
+    fn testNdjsonRecoveryContinues() -> Bool
+    {
+        let reader = NdjsonReader::fromString("{\"id\":1}\n{invalid}\n{\"id\":3}");
+        let docs = reader.readAll();
+        if docs.len() != 2 { return false; }
+        return reader.errorCount == 1;
     }
 }
