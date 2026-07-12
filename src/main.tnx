@@ -328,13 +328,32 @@ class JGrep
 
     fn processSource(path: String, content: String, prefix: String)
     {
-        let docs = this.docsFromContent(path, content);
         var count: Int64 = 0;
 
-        for doc in docs
+        if this.isYamlSource(path)
         {
-            count = this.processDocument(doc, prefix, count);
-            if this.opts.filesWithMatches && count > 0 { break; }
+            let docs = this.docsFromContent(path, content);
+            for doc in docs
+            {
+                count = this.processDocument(doc, prefix, count);
+                if this.opts.filesWithMatches && count > 0 { break; }
+            }
+        }
+        else
+        {
+            // JSON/NDJSON streamt Dokument für Dokument — die Datei wird nie
+            // als komplette Dokumentliste materialisiert.
+            let reader = NdjsonReader::fromString(content);
+            while reader.hasNext()
+            {
+                let docList = reader.tryParseNext();
+                if docList.len() == 0 { this.hadError = true; }
+                else
+                {
+                    count = this.processDocument(docList[0], prefix, count);
+                    if this.opts.filesWithMatches && count > 0 { break; }
+                }
+            }
         }
 
         if this.opts.filesWithMatches

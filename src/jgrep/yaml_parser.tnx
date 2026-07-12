@@ -58,7 +58,7 @@ class YamlScalar
                 }
                 else { out = out + YamlScalar::escChar(e); }
             }
-            else { out = out + text.substring(i, i + 1); }
+            else { out = out + text.charAt(i); }
             i = i + 1;
         }
         return out;
@@ -82,7 +82,7 @@ class YamlScalar
             }
             else
             {
-                out = out + text.substring(i, i + 1);
+                out = out + text.charAt(i);
                 i = i + 1;
             }
         }
@@ -192,24 +192,25 @@ class YamlScalar
 class YamlFlow
 {
     var s: String;
+    var sLen: Int64;
     var pos: Int64;
     var hasError: Bool;
     var errorMsg: String;
 
     fnc new(text: String) -> YamlFlow
     {
-        return YamlFlow { s: text, pos: 0, hasError: false, errorMsg: "" };
+        return YamlFlow { s: text, sLen: text.len(), pos: 0, hasError: false, errorMsg: "" };
     }
 
     fn peek() -> Int64
     {
-        if this.pos >= this.s.len() { return 0; }
+        if this.pos >= this.sLen { return 0; }
         return this.s[this.pos] as Int64;
     }
 
     fn skipSpaces()
     {
-        while this.pos < this.s.len()
+        while this.pos < this.sLen
         {
             let c = this.s[this.pos] as Int64;
             if c == 32 || c == 9 { this.pos = this.pos + 1; }
@@ -288,12 +289,12 @@ class YamlFlow
     fn readPlain(stopAtColon: Bool) -> String
     {
         var out = "";
-        while this.pos < this.s.len()
+        while this.pos < this.sLen
         {
             let c = this.peek();
             if c == 44 || c == 93 || c == 125 { break; }
             if stopAtColon && c == 58 { break; }
-            out = out + this.s.substring(this.pos, this.pos + 1);
+            out = out + this.s.charAt(this.pos);
             this.pos = this.pos + 1;
         }
         return out.trim();
@@ -303,21 +304,21 @@ class YamlFlow
     {
         this.pos = this.pos + 1;
         var out = "";
-        while this.pos < this.s.len()
+        while this.pos < this.sLen
         {
             let c = this.s[this.pos] as Int64;
             this.pos = this.pos + 1;
             if c == 34 { return out; }
             if c == 92
             {
-                if this.pos >= this.s.len() { break; }
+                if this.pos >= this.sLen { break; }
                 let e = this.s[this.pos] as Int64;
                 this.pos = this.pos + 1;
                 if e == 117
                 {
                     var cp: Int64 = 0;
                     var k: Int64 = 0;
-                    while k < 4 && this.pos < this.s.len()
+                    while k < 4 && this.pos < this.sLen
                     {
                         cp = cp * 16 + YamlScalar::hexVal(this.s[this.pos] as Int64);
                         this.pos = this.pos + 1;
@@ -327,7 +328,7 @@ class YamlFlow
                 }
                 else { out = out + YamlScalar::escChar(e); }
             }
-            else { out = out + this.s.substring(this.pos - 1, this.pos); }
+            else { out = out + this.s.charAt(this.pos - 1); }
         }
         this.fail("Unterminated double-quoted string");
         return out;
@@ -337,20 +338,20 @@ class YamlFlow
     {
         this.pos = this.pos + 1;
         var out = "";
-        while this.pos < this.s.len()
+        while this.pos < this.sLen
         {
             let c = this.s[this.pos] as Int64;
             this.pos = this.pos + 1;
             if c == 39
             {
-                if this.pos < this.s.len() && (this.s[this.pos] as Int64) == 39
+                if this.pos < this.sLen && (this.s[this.pos] as Int64) == 39
                 {
                     out = out + "'";
                     this.pos = this.pos + 1;
                 }
                 else { return out; }
             }
-            else { out = out + this.s.substring(this.pos - 1, this.pos); }
+            else { out = out + this.s.charAt(this.pos - 1); }
         }
         this.fail("Unterminated single-quoted string");
         return out;
@@ -380,7 +381,7 @@ class YamlParser
             let c = content[i] as Int64;
             if c == 10 { lines.push(cur); cur = ""; }
             else if c == 13 { }
-            else { cur = cur + content.substring(i, i + 1); }
+            else { cur = cur + content.charAt(i); }
             i = i + 1;
         }
         if cur.len() > 0 { lines.push(cur); }

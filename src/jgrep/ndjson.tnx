@@ -5,8 +5,7 @@ import json_parser;
 
 class NdjsonReader
 {
-    var docs: List<JsonValue>;
-    var pos: Int64;
+    var parser: JsonParser;
     var errorCount: Int64;
 
     fnc fromFile(path: String) -> NdjsonReader
@@ -17,20 +16,29 @@ class NdjsonReader
 
     fnc fromString(content: String) -> NdjsonReader
     {
-        let parsed = JsonParser::parseAll(content);
-        return NdjsonReader { docs: parsed, pos: 0, errorCount: 0 };
+        return NdjsonReader { parser: JsonParser::new(content), errorCount: 0 };
     }
 
     fn hasNext() -> Bool
     {
-        return this.pos < this.docs.len();
+        match this.parser.peek()
+        {
+            EOF => return false;
+            _   => return true;
+        }
+        return false;
     }
 
     fn tryParseNext() -> List<JsonValue>
     {
         if !this.hasNext() { return []; }
-        let doc = this.docs[this.pos];
-        this.pos = this.pos + 1;
+        let doc = this.parser.parseValue();
+        if this.parser.hasError
+        {
+            this.errorCount = this.errorCount + 1;
+            this.parser.recoverToNextLine();
+            return [];
+        }
         return [doc];
     }
 

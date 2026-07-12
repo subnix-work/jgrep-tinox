@@ -350,6 +350,170 @@ fn gmtimeArray(secs: Int64) -> List<JsonValue>
     return result;
 }
 
+// parst bis zu maxDigits Ziffern ab pos; Rückgabe [wert, neuePos], wert = -1 wenn keine Ziffer
+fn strptimeNum(s: String, pos: Int64, maxDigits: Int64) -> List<Int64>
+{
+    var i = pos;
+    let n = s.len();
+    var v: Int64 = 0;
+    var count: Int64 = 0;
+    while i < n && count < maxDigits
+    {
+        let c = s[i] as Int64;
+        if c < 48 || c > 57 { break; }
+        v = v * 10 + (c - 48);
+        i = i + 1;
+        count = count + 1;
+    }
+    if count == 0 { return [-1, pos]; }
+    return [v, i];
+}
+
+// Format-gesteuertes strptime (Subset: %Y %m %d %e %H %M %S %T %Z %z %%).
+// Rückgabe: [ok, Jahr, Monat 1-basiert, Tag, Stunde, Minute, Sekunde, UTC-Offset in Sekunden]
+fn strptimeParse(s: String, fmt: String) -> List<Int64>
+{
+    var y: Int64 = 1970;
+    var mon: Int64 = 1;
+    var d: Int64 = 1;
+    var h: Int64 = 0;
+    var mi: Int64 = 0;
+    var se: Int64 = 0;
+    var offset: Int64 = 0;
+    var i: Int64 = 0;
+    var f: Int64 = 0;
+    let sn = s.len();
+    let fl = fmt.len();
+    let fail: List<Int64> = [0, 0, 0, 0, 0, 0, 0, 0];
+
+    while f < fl
+    {
+        let fc = fmt[f] as Int64;
+        if fc != 37
+        {
+            if i >= sn { return fail; }
+            if (s[i] as Int64) != fc { return fail; }
+            i = i + 1;
+            f = f + 1;
+            continue;
+        }
+        f = f + 1;
+        if f >= fl { return fail; }
+        let dir = fmt[f] as Int64;
+        f = f + 1;
+
+        if dir == 37
+        {
+            if i >= sn { return fail; }
+            if (s[i] as Int64) != 37 { return fail; }
+            i = i + 1;
+        }
+        else if dir == 89
+        {
+            var neg = false;
+            if i < sn && (s[i] as Int64) == 45 { neg = true; i = i + 1; }
+            let r = strptimeNum(s, i, 4);
+            if r[0] < 0 { return fail; }
+            y = r[0];
+            if neg { y = 0 - y; }
+            i = r[1];
+        }
+        else if dir == 109
+        {
+            let r = strptimeNum(s, i, 2);
+            if r[0] < 1 || r[0] > 12 { return fail; }
+            mon = r[0];
+            i = r[1];
+        }
+        else if dir == 100 || dir == 101
+        {
+            if dir == 101 && i < sn && (s[i] as Int64) == 32 { i = i + 1; }
+            let r = strptimeNum(s, i, 2);
+            if r[0] < 1 || r[0] > 31 { return fail; }
+            d = r[0];
+            i = r[1];
+        }
+        else if dir == 72
+        {
+            let r = strptimeNum(s, i, 2);
+            if r[0] < 0 || r[0] > 23 { return fail; }
+            h = r[0];
+            i = r[1];
+        }
+        else if dir == 77
+        {
+            let r = strptimeNum(s, i, 2);
+            if r[0] < 0 || r[0] > 59 { return fail; }
+            mi = r[0];
+            i = r[1];
+        }
+        else if dir == 83
+        {
+            let r = strptimeNum(s, i, 2);
+            if r[0] < 0 || r[0] > 60 { return fail; }
+            se = r[0];
+            i = r[1];
+        }
+        else if dir == 84
+        {
+            let rh = strptimeNum(s, i, 2);
+            if rh[0] < 0 || rh[0] > 23 { return fail; }
+            i = rh[1];
+            if i >= sn || (s[i] as Int64) != 58 { return fail; }
+            i = i + 1;
+            let rm = strptimeNum(s, i, 2);
+            if rm[0] < 0 || rm[0] > 59 { return fail; }
+            i = rm[1];
+            if i >= sn || (s[i] as Int64) != 58 { return fail; }
+            i = i + 1;
+            let rs = strptimeNum(s, i, 2);
+            if rs[0] < 0 || rs[0] > 60 { return fail; }
+            i = rs[1];
+            h = rh[0];
+            mi = rm[0];
+            se = rs[0];
+        }
+        else if dir == 90
+        {
+            // %Z: Zonenname (Buchstaben) überspringen — keine TZ-Datenbank
+            while i < sn
+            {
+                let c = s[i] as Int64;
+                if (c >= 65 && c <= 90) || (c >= 97 && c <= 122) { i = i + 1; }
+                else { break; }
+            }
+        }
+        else if dir == 122
+        {
+            // %z: [+-]HHMM oder [+-]HH:MM oder "Z"
+            if i < sn && ((s[i] as Int64) == 90 || (s[i] as Int64) == 122)
+            {
+                i = i + 1;
+            }
+            else
+            {
+                if i >= sn { return fail; }
+                let sc = s[i] as Int64;
+                var sign: Int64 = 1;
+                if sc == 45 { sign = -1; }
+                else if sc != 43 { return fail; }
+                i = i + 1;
+                let rh = strptimeNum(s, i, 2);
+                if rh[0] < 0 { return fail; }
+                i = rh[1];
+                if i < sn && (s[i] as Int64) == 58 { i = i + 1; }
+                var mm: Int64 = 0;
+                let rm = strptimeNum(s, i, 2);
+                if rm[0] >= 0 { mm = rm[0]; i = rm[1]; }
+                offset = sign * (rh[0] * 3600 + mm * 60);
+            }
+        }
+        else { return fail; }
+    }
+
+    return [1, y, mon, d, h, mi, se, offset];
+}
+
 fn jsonToInt(v: JsonValue) -> Int64
 {
     match v
@@ -1534,6 +1698,87 @@ class Evaluator
         return result;
     }
 
+    fn base32Encode(s: String) -> String
+    {
+        let alpha = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+        var result = "";
+        var i: Int64 = 0;
+        let n = s.len();
+        while i < n
+        {
+            let b0 = s[i] as Int64;
+            var b1: Int64 = 0;
+            var b2: Int64 = 0;
+            var b3: Int64 = 0;
+            var b4: Int64 = 0;
+            if i + 1 < n { b1 = s[i + 1] as Int64; }
+            if i + 2 < n { b2 = s[i + 2] as Int64; }
+            if i + 3 < n { b3 = s[i + 3] as Int64; }
+            if i + 4 < n { b4 = s[i + 4] as Int64; }
+            let c0 = (b0 / 8) % 32;
+            let c1 = (b0 % 8) * 4 + b1 / 64;
+            let c2 = (b1 / 2) % 32;
+            let c3 = (b1 % 2) * 16 + b2 / 16;
+            let c4 = (b2 % 16) * 2 + b3 / 128;
+            let c5 = (b3 / 4) % 32;
+            let c6 = (b3 % 4) * 8 + b4 / 32;
+            let c7 = b4 % 32;
+            result = result + alpha.substring(c0, c0 + 1);
+            result = result + alpha.substring(c1, c1 + 1);
+            if i + 1 < n { result = result + alpha.substring(c2, c2 + 1) + alpha.substring(c3, c3 + 1); }
+            else { result = result + "=="; }
+            if i + 2 < n { result = result + alpha.substring(c4, c4 + 1); }
+            else { result = result + "="; }
+            if i + 3 < n { result = result + alpha.substring(c5, c5 + 1) + alpha.substring(c6, c6 + 1); }
+            else { result = result + "=="; }
+            if i + 4 < n { result = result + alpha.substring(c7, c7 + 1); }
+            else { result = result + "="; }
+            i = i + 5;
+        }
+        return result;
+    }
+
+    fn base32CharVal(c: Int64) -> Int64
+    {
+        if c >= 65 && c <= 90 { return c - 65; }
+        if c >= 50 && c <= 55 { return c - 24; }
+        return 0;
+    }
+
+    fn base32Decode(s: String) -> String
+    {
+        var result = "";
+        var i: Int64 = 0;
+        let n = s.len();
+        while i + 8 < n + 1
+        {
+            let c2 = s[i + 2] as Int64;
+            let c4 = s[i + 4] as Int64;
+            let c5 = s[i + 5] as Int64;
+            let c7 = s[i + 7] as Int64;
+            let d0 = this.base32CharVal(s[i] as Int64);
+            let d1 = this.base32CharVal(s[i + 1] as Int64);
+            let d2 = this.base32CharVal(c2);
+            let d3 = this.base32CharVal(s[i + 3] as Int64);
+            let d4 = this.base32CharVal(c4);
+            let d5 = this.base32CharVal(c5);
+            let d6 = this.base32CharVal(s[i + 6] as Int64);
+            let d7 = this.base32CharVal(c7);
+            let b0 = d0 * 8 + d1 / 4;
+            let b1 = (d1 % 4) * 64 + d2 * 2 + d3 / 16;
+            let b2 = (d3 % 16) * 16 + d4 / 2;
+            let b3 = (d4 % 2) * 128 + d5 * 4 + d6 / 8;
+            let b4 = (d6 % 8) * 32 + d7;
+            result = result + JsonSerializer::codePointToStr(b0);
+            if c2 != 61 { result = result + JsonSerializer::codePointToStr(b1); }
+            if c4 != 61 { result = result + JsonSerializer::codePointToStr(b2); }
+            if c5 != 61 { result = result + JsonSerializer::codePointToStr(b3); }
+            if c7 != 61 { result = result + JsonSerializer::codePointToStr(b4); }
+            i = i + 8;
+        }
+        return result;
+    }
+
     fn applyFormat(fmt: String, value: JsonValue) -> String
     {
         let s = match value { Str(s) => s; _ => JsonSerializer::stringify(value); };
@@ -1546,6 +1791,8 @@ class Evaluator
         if fmt == "sh"     { return "'" + s.replace("'", "'\\''") + "'"; }
         if fmt == "base64" { return this.base64Encode(s); }
         if fmt == "base64d" { return this.base64Decode(s); }
+        if fmt == "base32" { return this.base32Encode(s); }
+        if fmt == "base32d" { return this.base32Decode(s); }
         return s;
     }
 
@@ -2332,7 +2579,7 @@ class Evaluator
                 {
                     let arr = a;
                     var results: List<JsonValue> = [];
-                    this.flattenInto(arr, results, depth);
+                    results = this.flattenInto(arr, results, depth);
                     return EvalResult::single(JsonValue::Array(results));
                 }
                 _ => return EvalResult::err("flatten requires array");
@@ -3803,12 +4050,25 @@ class Evaluator
         if name == "strptime"
         {
             if args.len() == 0 { return EvalResult::err("strptime requires format argument"); }
+            let fr = this.evalSingle(args[0], input, ctx);
+            if fr.isError() { return fr; }
+            var fmt = "";
+            match fr.values[0]
+            {
+                Str(f) => { fmt = f; }
+                _ => return EvalResult::err("strptime requires string format");
+            }
             match input
             {
                 Str(s) =>
                 {
-                    let ts = fromdateStr(s);
-                    return EvalResult::single(JsonValue::Integer(ts));
+                    let p = strptimeParse(s, fmt);
+                    if p[0] == 0
+                    {
+                        return EvalResult::err("date \"" + s + "\" does not match format \"" + fmt + "\"");
+                    }
+                    let ts = daysFromCivil(p[1], p[2], p[3]) * 86400 + p[4] * 3600 + p[5] * 60 + p[6] - p[7];
+                    return EvalResult::single(JsonValue::Array(gmtimeArray(ts)));
                 }
                 _ => return EvalResult::err("strptime requires string input");
             }
@@ -4034,8 +4294,9 @@ class Evaluator
         return false;
     }
 
-    fn flattenInto(arr: List<JsonValue>, result: List<JsonValue>, depth: Int64)
+    fn flattenInto(arr: List<JsonValue>, result: List<JsonValue>, depth: Int64) -> List<JsonValue>
     {
+        var acc = result;
         for item in arr
         {
             match item
@@ -4043,12 +4304,13 @@ class Evaluator
                 Array(inner) =>
                 {
                     let innerArr = inner;
-                    if depth > 0 { this.flattenInto(innerArr, result, depth - 1); }
-                    else { result.push(item); }
+                    if depth > 0 { acc = this.flattenInto(innerArr, acc, depth - 1); }
+                    else { acc.push(item); }
                 }
-                _ => result.push(item);
+                _ => acc.push(item);
             }
         }
+        return acc;
     }
 
     fn sortStrings(strs: List<String>) -> List<String>

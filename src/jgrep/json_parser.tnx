@@ -22,24 +22,25 @@ enum JsonToken
 class JsonLexer
 {
     var source: String;
+    var srcLen: Int64;
     var pos: Int64;
     var line: Int64;
     var col: Int64;
 
     fnc new(src: String) -> JsonLexer
     {
-        return JsonLexer { source: src, pos: 0, line: 1, col: 1 };
+        return JsonLexer { source: src, srcLen: src.len(), pos: 0, line: 1, col: 1 };
     }
 
     fn peekChar() -> Int64
     {
-        if this.pos >= this.source.len() { return 0; }
+        if this.pos >= this.srcLen { return 0; }
         return this.source[this.pos] as Int64;
     }
 
     fn nextChar() -> Int64
     {
-        if this.pos >= this.source.len() { return 0; }
+        if this.pos >= this.srcLen { return 0; }
         let code = this.source[this.pos] as Int64;
         this.pos = this.pos + 1;
         if code == 10 { this.line = this.line + 1; this.col = 1; }
@@ -49,7 +50,7 @@ class JsonLexer
 
     fn skipWhitespace()
     {
-        while this.pos < this.source.len()
+        while this.pos < this.srcLen
         {
             let ch = this.peekChar();
             if ch == 32 || ch == 9 || ch == 10 || ch == 13
@@ -83,7 +84,7 @@ class JsonLexer
     fn readString() -> String
     {
         var result = "";
-        while this.pos < this.source.len()
+        while this.pos < this.srcLen
         {
             let ch = this.nextChar();
             if ch == 34 { return result; }
@@ -111,9 +112,9 @@ class JsonLexer
                     }
                     result = result + JsonLexer::codePointToStr(codepoint);
                 }
-                else { result = result + this.source.substring(this.pos - 1, this.pos); }
+                else { result = result + this.source.charAt(this.pos - 1); }
             }
-            else { result = result + this.source.substring(this.pos - 1, this.pos); }
+            else { result = result + this.source.charAt(this.pos - 1); }
         }
         return result;
     }
@@ -123,7 +124,7 @@ class JsonLexer
         var numStr = JsonLexer::codePointToStr(firstCode);
         var isFloat = false;
 
-        while this.pos < this.source.len()
+        while this.pos < this.srcLen
         {
             let ch = this.peekChar();
             if ch >= 48 && ch <= 57 { numStr = numStr + JsonLexer::codePointToStr(ch); this.nextChar(); }
@@ -155,7 +156,7 @@ class JsonLexer
     fn nextToken() -> JsonToken
     {
         this.skipWhitespace();
-        if this.pos >= this.source.len() { return JsonToken::EOF; }
+        if this.pos >= this.srcLen { return JsonToken::EOF; }
 
         let ch = this.nextChar();
 
@@ -197,31 +198,60 @@ class JsonLexer
         }
         return tokens;
     }
+
+    fn resyncToNewline()
+    {
+        while this.pos < this.srcLen
+        {
+            let c = this.source[this.pos] as Int64;
+            this.pos = this.pos + 1;
+            if c == 10
+            {
+                this.line = this.line + 1;
+                this.col = 1;
+                break;
+            }
+        }
+    }
 }
 
 class JsonParser
 {
-    var tokens: List<JsonToken>;
-    var pos: Int64;
+    var lexer: JsonLexer;
+    var cur: JsonToken;
     var errorMsg: String;
     var hasError: Bool;
 
-    fnc new(toks: List<JsonToken>) -> JsonParser
+    fnc new(src: String) -> JsonParser
     {
-        return JsonParser { tokens: toks, pos: 0, errorMsg: "", hasError: false };
+        var p = JsonParser { lexer: JsonLexer::new(src), cur: JsonToken::EOF, errorMsg: "", hasError: false };
+        p.advance();
+        return p;
+    }
+
+    fn advance()
+    {
+        this.cur = this.lexer.nextToken();
     }
 
     fn peek() -> JsonToken
     {
-        if this.pos >= this.tokens.len() { return JsonToken::EOF; }
-        return this.tokens[this.pos];
+        return this.cur;
     }
 
     fn consume() -> JsonToken
     {
-        let tok = this.peek();
-        this.pos = this.pos + 1;
+        let tok = this.cur;
+        this.advance();
         return tok;
+    }
+
+    fn recoverToNextLine()
+    {
+        this.lexer.resyncToNewline();
+        this.hasError = false;
+        this.errorMsg = "";
+        this.advance();
     }
 
     fn parseValue() -> JsonValue
@@ -335,9 +365,7 @@ class JsonParser
 
     fnc parse(input: String) -> JsonValue
     {
-        let lexer = JsonLexer::new(input);
-        let tokens = lexer.tokenize();
-        var parser = JsonParser::new(tokens);
+        var parser = JsonParser::new(input);
         let result = parser.parseValue();
         if parser.hasError
         {
@@ -351,9 +379,7 @@ class JsonParser
     {
         let trimmed = input.trim();
         if trimmed.len() == 0 { return []; }
-        let lexer = JsonLexer::new(trimmed);
-        let tokens = lexer.tokenize();
-        var parser = JsonParser::new(tokens);
+        var parser = JsonParser::new(trimmed);
         let result = parser.parseValue();
         if parser.hasError { return []; }
         return [result];
@@ -361,11 +387,7 @@ class JsonParser
 
     fnc parseAll(input: String) -> List<JsonValue>
     {
-        let trimmed = input.trim();
-        if trimmed.len() == 0 { return []; }
-        let lexer = JsonLexer::new(trimmed);
-        let tokens = lexer.tokenize();
-        var parser = JsonParser::new(tokens);
+        var parser = JsonParser::new(input);
         var results: List<JsonValue> = [];
         var go = true;
         while go
@@ -376,7 +398,7 @@ class JsonParser
                 _ =>
                 {
                     let v = parser.parseValue();
-                    if parser.hasError { go = false; }
+                    if parser.hasError { parser.recoverToNextLine(); }
                     else { results.push(v); }
                 }
             }
