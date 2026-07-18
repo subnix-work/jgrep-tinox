@@ -35,14 +35,16 @@ class ColorConfig
         return ColorConfig { enabled: enabled, colorLevel: colorLevel, colorLevelField: colorLevelField };
     }
 
-    fnc detectEnabled(noColorFlag: Bool) -> Bool
+    fnc detectEnabled(mode: String, noColorFlag: Bool) -> Bool
     {
         if noColorFlag { return false; }
+        if mode == "never" { return false; }
+        if mode == "always" { return true; }
         let noColorEnv = envGet("NO_COLOR");
         if noColorEnv != "" { return false; }
         let term = envGet("TERM");
         if term == "dumb" { return false; }
-        return true;
+        return isStdoutTty() == 1;
     }
 }
 
@@ -223,15 +225,5 @@ class LevelColorizer
         if upper == "ALERT"     { return ColorResult::some(Ansi::boldRed()); }
         if upper == "EMERGENCY" { return ColorResult::some(Ansi::boldRed()); }
         return ColorResult::none();
-    }
-
-    fnc colorizeByLevel(line: String, value: JsonValue, config: ColorConfig) -> String
-    {
-        if !config.enabled || !config.colorLevel { return line; }
-        let level = LevelColorizer::getLogLevel(value, config.colorLevelField);
-        if level == "" { return line; }
-        let colorResult = LevelColorizer::colorForLevel(level);
-        if !colorResult.found { return line; }
-        return Ansi::colorize(line, colorResult.color);
     }
 }
