@@ -102,7 +102,7 @@ fn main() -> Int64
 
     if opts.showVersion
     {
-        println(progName + " 1.0.0 (Tinox)");
+        println(progName + " 1.0.1 (Tinox)");
         return 0;
     }
 
