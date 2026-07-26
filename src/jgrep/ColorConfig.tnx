@@ -1,0 +1,25 @@
+module jgrep.color;
+
+class ColorConfig
+{
+    var enabled: Bool;
+    var colorLevel: Bool;
+    var colorLevelField: String;
+
+    fnc new(enabled: Bool, colorLevel: Bool, colorLevelField: String) -> ColorConfig
+    {
+        return ColorConfig { enabled: enabled, colorLevel: colorLevel, colorLevelField: colorLevelField };
+    }
+
+    fnc detectEnabled(mode: String, noColorFlag: Bool) -> Bool
+    {
+        if noColorFlag { return false; }
+        if mode == "never" { return false; }
+        if mode == "always" { return true; }
+        let noColorEnv = envGet("NO_COLOR");
+        if noColorEnv != "" { return false; }
+        let term = envGet("TERM");
+        if term == "dumb" { return false; }
+        return isStdoutTty() == 1;
+    }
+}

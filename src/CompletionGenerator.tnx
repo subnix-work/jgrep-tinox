@@ -1,0 +1,73 @@
+class CompletionGenerator
+{
+    fnc generate(shell: String, prog: String) -> Int64
+    {
+        if shell == "bash"
+        {
+            println("# " + prog + " bash completion");
+            println("_" + prog + "_complete() {");
+            println("  local cur flags");
+            println("  cur=\"" + "$" + "{COMP_WORDS[COMP_CWORD]}\"");
+            println("  flags=\"-r -l -c -s -n -f --recursive --files-with-matches --count --slurp --null-input --from-file --pretty --color --color-level --color-level-field --no-color --yaml --json\"");
+            println("  COMPREPLY=($(" + "compgen -W \"" + "$" + "flags\" -- \"" + "$" + "cur\") $(" + "compgen -f -- \"" + "$" + "cur\"))");
+            println("}");
+            println("complete -F _" + prog + "_complete " + prog);
+            return 0;
+        }
+        if shell == "zsh"
+        {
+            println("#compdef " + prog);
+            println("_" + prog + "() {");
+            println("  _arguments \\");
+            println("    '(-r --recursive)-r[recurse into directories]' \\");
+            println("    '(-l --files-with-matches)-l[print only matching filenames]' \\");
+            println("    '(-c --count)-c[print match count]' \\");
+            println("    '(-s --slurp)-s[slurp all results into array]' \\");
+            println("    '(-n --null-input)-n[use null as input]' \\");
+            println("    '(-f --from-file)-f[read filter from file]:file:_files' \\");
+            println("    '--pretty[pretty-print JSON]' \\");
+            println("    '--color[when to use color]:when:(auto always never)' \\");
+            println("    '--color-level[colorize by log level]' \\");
+            println("    '--color-level-field[log level field]:field' \\");
+            println("    '--no-color[disable color]' \\");
+            println("    '--yaml[treat input as YAML]' \\");
+            println("    '--json[treat input as JSON]' \\");
+            println("    ':filter:' \\");
+            println("    '*:file:_files'");
+            println("}");
+            println("_" + prog + " \"" + "$" + "@\"");
+            return 0;
+        }
+        if shell == "fish"
+        {
+            println("complete -c " + prog + " -s r -l recursive -d 'Recurse into directories'");
+            println("complete -c " + prog + " -s l -l files-with-matches -d 'Print only matching filenames'");
+            println("complete -c " + prog + " -s c -l count -d 'Print match count per file'");
+            println("complete -c " + prog + " -s s -l slurp -d 'Collect all results into one array'");
+            println("complete -c " + prog + " -s n -l null-input -d 'Use null as input'");
+            println("complete -c " + prog + " -s f -l from-file -d 'Read filter from file' -r");
+            println("complete -c " + prog + " -l pretty -d 'Pretty-print JSON output'");
+            println("complete -c " + prog + " -l color -d 'When to use color (auto/always/never)' -x -a 'auto always never'");
+            println("complete -c " + prog + " -l color-level -d 'Colorize by log level'");
+            println("complete -c " + prog + " -l color-level-field -d 'Log level field' -r");
+            println("complete -c " + prog + " -l no-color -d 'Disable color output'");
+            println("complete -c " + prog + " -l yaml -d 'Treat input as YAML'");
+            println("complete -c " + prog + " -l json -d 'Treat input as JSON'");
+            return 0;
+        }
+        if shell == "powershell"
+        {
+            println("Register-ArgumentCompleter -Native -CommandName " + prog + " -ScriptBlock {");
+            println("  param(" + "$" + "wordToComplete, " + "$" + "commandAst, " + "$" + "cursorPosition)");
+            println("  " + "$" + "flags = @('-r','-l','-c','-s','-n','-f','--recursive','--files-with-matches',");
+            println("             '--count','--slurp','--null-input','--from-file','--pretty',");
+            println("             '--color','--color-level','--color-level-field','--no-color','--yaml','--json')");
+            println("  " + "$" + "flags | Where-Object { " + "$" + "_ -like \"" + "$" + "wordToComplete*\" } |");
+            println("    ForEach-Object { [System.Management.Automation.CompletionResult]::new(" + "$" + "_) }");
+            println("}");
+            return 0;
+        }
+        println("Unsupported shell: " + shell);
+        return 2;
+    }
+}

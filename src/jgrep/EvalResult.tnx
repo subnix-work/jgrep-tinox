@@ -1,0 +1,41 @@
+module jgrep.evaluator;
+
+import JsonValue;
+
+class EvalResult
+{
+    values: List<JsonValue>;
+    hadError: Bool;
+    errorMsg: String;
+    breakLabel: String;
+
+    fnc ok(vals: List<JsonValue>) -> EvalResult
+    {
+        return EvalResult { values: vals, hadError: false, errorMsg: "", breakLabel: "" };
+    }
+
+    fnc err(msg: String) -> EvalResult
+    {
+        return EvalResult { values: [], hadError: true, errorMsg: msg, breakLabel: "" };
+    }
+
+    fnc empty() -> EvalResult
+    {
+        return EvalResult { values: [], hadError: false, errorMsg: "", breakLabel: "" };
+    }
+
+    fnc single(v: JsonValue) -> EvalResult
+    {
+        return EvalResult { values: [v], hadError: false, errorMsg: "", breakLabel: "" };
+    }
+
+    // break $label unterwegs: values = bis dahin produzierte Outputs
+    fnc brk(label: String, vals: List<JsonValue>) -> EvalResult
+    {
+        return EvalResult { values: vals, hadError: false, errorMsg: "", breakLabel: label };
+    }
+
+    fn isError() -> Bool { return this.hadError; }
+    fn isBreak() -> Bool { return this.breakLabel != ""; }
+    fn isEmpty() -> Bool { return this.values.len() == 0 && !this.hadError; }
+}

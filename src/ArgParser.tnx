@@ -1,0 +1,145 @@
+import CliOptions;
+
+class ArgParser
+{
+    fnc parse(args: List<String>) -> CliOptions
+    {
+        var opts = CliOptions::defaults();
+        var i = 0;
+        var filterSet = false;
+
+        while i < args.len()
+        {
+            let arg = args[i];
+
+            if arg == "-h" || arg == "--help"
+            {
+                opts.showHelp = true;
+                i = i + 1;
+            }
+            else if arg == "-V" || arg == "--version"
+            {
+                opts.showVersion = true;
+                i = i + 1;
+            }
+            else if arg == "-r" || arg == "--recursive"
+            {
+                opts.recursive = true;
+                i = i + 1;
+            }
+            else if arg == "-l" || arg == "--files-with-matches"
+            {
+                opts.filesWithMatches = true;
+                i = i + 1;
+            }
+            else if arg == "-c" || arg == "--count"
+            {
+                opts.count = true;
+                i = i + 1;
+            }
+            else if arg == "-s" || arg == "--slurp"
+            {
+                opts.slurp = true;
+                i = i + 1;
+            }
+            else if arg == "-n" || arg == "--null-input"
+            {
+                opts.nullInput = true;
+                i = i + 1;
+            }
+            else if arg == "--pretty"
+            {
+                opts.pretty = true;
+                i = i + 1;
+            }
+            else if arg == "--color-level"
+            {
+                opts.colorLevel = true;
+                i = i + 1;
+            }
+            else if arg == "--color-level-field"
+            {
+                i = i + 1;
+                if i < args.len() { opts.colorLevelField = args[i]; }
+                i = i + 1;
+            }
+            else if arg == "--no-color"
+            {
+                opts.noColor = true;
+                i = i + 1;
+            }
+            else if arg == "--color"
+            {
+                i = i + 1;
+                if i < args.len() { opts.colorMode = args[i]; }
+                i = i + 1;
+            }
+            else if arg.startsWith("--color=")
+            {
+                opts.colorMode = arg.substring(8, arg.len());
+                i = i + 1;
+            }
+            else if arg == "--yaml"
+            {
+                opts.yamlFlag = true;
+                i = i + 1;
+            }
+            else if arg == "--json"
+            {
+                opts.jsonFlag = true;
+                i = i + 1;
+            }
+            else if arg == "-f" || arg == "--from-file"
+            {
+                i = i + 1;
+                if i < args.len() { opts.fromFile = args[i]; }
+                i = i + 1;
+            }
+            else if arg == "completion"
+            {
+                i = i + 1;
+                if i < args.len() { opts.completionShell = args[i]; }
+                i = i + 1;
+            }
+            else if arg.startsWith("--")
+            {
+                opts.badOption = arg;
+                i = i + 1;
+            }
+            else if arg.startsWith("-")
+            {
+                let flags = arg.substring(1, arg.len());
+                var fi: Int64 = 0;
+                while fi < flags.len()
+                {
+                    let fcode = flags[fi] as Int64;
+                    if fcode == 114 { opts.recursive = true; }
+                    else if fcode == 108 { opts.filesWithMatches = true; }
+                    else if fcode == 99 { opts.count = true; }
+                    else if fcode == 115 { opts.slurp = true; }
+                    else if fcode == 110 { opts.nullInput = true; }
+                    else if fcode == 104 { opts.showHelp = true; }
+                    else if fcode == 86 { opts.showVersion = true; }
+                    else { opts.badOption = arg; }
+                    fi = fi + 1;
+                }
+                i = i + 1;
+            }
+            else
+            {
+                if filterSet == false && opts.fromFile == ""
+                {
+                    opts.filterExpr = arg;
+                    filterSet = true;
+                }
+                else
+                {
+                    opts.files.push(arg);
+                }
+                i = i + 1;
+            }
+        }
+
+        return opts;
+    }
+}

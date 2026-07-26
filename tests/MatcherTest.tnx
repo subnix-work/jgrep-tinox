@@ -1,8 +1,8 @@
-import jgrep.json_value;
-import jgrep.json_parser;
-import jgrep.filter;
-import jgrep.matcher;
-import jgrep.ndjson;
+import jgrep.JsonValue;
+import jgrep.JsonParser;
+import jgrep.FilterParser;
+import jgrep.Matcher;
+import jgrep.NdjsonReader;
 
 class MatcherTest
 {

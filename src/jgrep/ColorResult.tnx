@@ -1,0 +1,10 @@
+module jgrep.color;
+
+class ColorResult
+{
+    var found: Bool;
+    var color: String;
+
+    fnc none() -> ColorResult { return ColorResult { found: false, color: "" }; }
+    fnc some(c: String) -> ColorResult { return ColorResult { found: true, color: c }; }
+}

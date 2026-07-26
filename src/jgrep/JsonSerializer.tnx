@@ -1,0 +1,152 @@
+module jgrep.json_parser;
+
+import JsonValue;
+
+class JsonSerializer
+{
+    fnc codePointToStr(code: Int64) -> String
+    {
+        let ascii = " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~";
+        if code >= 32 && code <= 126 { return ascii.substring(code - 32, code - 31); }
+        if code == 10 { return "\n"; }
+        if code == 13 { return "\r"; }
+        if code == 9  { return "\t"; }
+        if code == 8  { return "\x08"; }
+        if code == 12 { return "\x0c"; }
+        return "?";
+    }
+
+    fnc stringify(value: JsonValue) -> String
+    {
+        match value
+        {
+            Null       => return "null";
+            Bool(b)    => { if b { return "true"; } return "false"; }
+            Integer(n) => return n.toString();
+            Float(s)   => return floatDisplay(s);
+            Str(s)     => return "\"" + JsonSerializer::escapeString(s) + "\"";
+            Array(a)   =>
+            {
+                let aa = a;
+                if aa.len() == 0 { return "[]"; }
+                var result = "[";
+                var i = 0;
+                for item in aa
+                {
+                    if i > 0 { result = result + ","; }
+                    result = result + JsonSerializer::stringify(item);
+                    i = i + 1;
+                }
+                return result + "]";
+            }
+            Object(o)  =>
+            {
+                let oLen = o.len();
+                if oLen == 0 { return "{}"; }
+                var result = "{";
+                var i = 0;
+                let oKs = sortStringList(o.keys());
+                for key in oKs
+                {
+                    if i > 0 { result = result + ","; }
+                    result = result + "\"" + JsonSerializer::escapeString(key) + "\":" + JsonSerializer::stringify(o.get(key));
+                    i = i + 1;
+                }
+                return result + "}";
+            }
+        }
+        return "null";
+    }
+
+    fnc prettyStringify(value: JsonValue, indent: Int64) -> String
+    {
+        return JsonSerializer::prettyStringifyInner(value, indent, 0);
+    }
+
+    fnc prettyStringifyInner(value: JsonValue, indent: Int64, depth: Int64) -> String
+    {
+        let pad = JsonSerializer::spaces((depth + 1) * indent);
+        let closePad = JsonSerializer::spaces(depth * indent);
+
+        match value
+        {
+            Null       => return "null";
+            Bool(b)    => { if b { return "true"; } return "false"; }
+            Integer(n) => return n.toString();
+            Float(s)   => return floatDisplay(s);
+            Str(s)     => return "\"" + JsonSerializer::escapeString(s) + "\"";
+            Array(a)   =>
+            {
+                let pa = a;
+                if pa.len() == 0 { return "[]"; }
+                var result = "[\n";
+                var i = 0;
+                for item in pa
+                {
+                    if i > 0 { result = result + ",\n"; }
+                    result = result + pad + JsonSerializer::prettyStringifyInner(item, indent, depth + 1);
+                    i = i + 1;
+                }
+                return result + "\n" + closePad + "]";
+            }
+            Object(o)  =>
+            {
+                let poLen = o.len();
+                if poLen == 0 { return "{}"; }
+                var result = "{\n";
+                var i = 0;
+                let poKs = sortStringList(o.keys());
+                for key in poKs
+                {
+                    if i > 0 { result = result + ",\n"; }
+                    result = result + pad + "\"" + JsonSerializer::escapeString(key) + "\": " + JsonSerializer::prettyStringifyInner(o.get(key), indent, depth + 1);
+                    i = i + 1;
+                }
+                return result + "\n" + closePad + "}";
+            }
+        }
+        return "null";
+    }
+
+    fnc escapeString(s: String) -> String
+    {
+        var result = "";
+        var i: Int64 = 0;
+        while i < s.len()
+        {
+            let code = s[i] as Int64;
+            if code == 34       { result = result + "\\\""; }
+            else if code == 92  { result = result + "\\\\"; }
+            else if code == 10  { result = result + "\\n"; }
+            else if code == 13  { result = result + "\\r"; }
+            else if code == 9   { result = result + "\\t"; }
+            else if code == 8   { result = result + "\\b"; }
+            else if code == 12  { result = result + "\\f"; }
+            else                { result = result + s.substring(i, i + 1); }
+            i = i + 1;
+        }
+        return result;
+    }
+
+    fnc spaces(n: Int64) -> String
+    {
+        var s = "";
+        var i: Int64 = 0;
+        while i < n { s = s + " "; i = i + 1; }
+        return s;
+    }
+
+    fnc formatForOutput(value: JsonValue, pretty: Bool) -> String
+    {
+        match value
+        {
+            Str(s) => return s;
+            _ =>
+            {
+                if pretty { return JsonSerializer::prettyStringify(value, 2); }
+                return JsonSerializer::stringify(value);
+            }
+        }
+        return "";
+    }
+}

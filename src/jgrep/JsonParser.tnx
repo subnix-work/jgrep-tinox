@@ -1,0 +1,197 @@
+module jgrep.json_parser;
+
+import JsonValue;
+import JsonToken;
+import JsonLexer;
+
+class JsonParser
+{
+    var lexer: JsonLexer;
+    var cur: JsonToken;
+    var errorMsg: String;
+    var hasError: Bool;
+
+    fnc new(src: String) -> JsonParser
+    {
+        var p = JsonParser { lexer: JsonLexer::new(src), cur: JsonToken::EOF, errorMsg: "", hasError: false };
+        p.advance();
+        return p;
+    }
+
+    fn advance()
+    {
+        this.cur = this.lexer.nextToken();
+    }
+
+    fn peek() -> JsonToken
+    {
+        return this.cur;
+    }
+
+    fn consume() -> JsonToken
+    {
+        let tok = this.cur;
+        this.advance();
+        return tok;
+    }
+
+    fn recoverToNextLine()
+    {
+        this.lexer.resyncToNewline();
+        this.hasError = false;
+        this.errorMsg = "";
+        this.advance();
+    }
+
+    fn parseValue() -> JsonValue
+    {
+        let tok = this.consume();
+        match tok
+        {
+            NullToken        => return JsonValue::Null;
+            TrueToken        => return JsonValue::Bool(true);
+            FalseToken       => return JsonValue::Bool(false);
+            IntToken(n)      => return JsonValue::Integer(n);
+            FloatToken(s)    => return JsonValue::Float(s);
+            StringToken(s)   => return JsonValue::Str(s);
+            LBrace           => return this.parseObject();
+            LBracket         => return this.parseArray();
+            _ =>
+            {
+                this.hasError = true;
+                this.errorMsg = "Unexpected token in JSON value";
+                return JsonValue::Null;
+            }
+        }
+        return JsonValue::Null;
+    }
+
+    fn parseObject() -> JsonValue
+    {
+        var obj: Map<String, JsonValue> = @{};
+
+        match this.peek()
+        {
+            RBrace => { this.consume(); return JsonValue::Object(obj); }
+            _ => {}
+        }
+
+        loop
+        {
+            let keyTok = this.consume();
+            var key = "";
+            match keyTok
+            {
+                StringToken(s) => { key = s; }
+                _ =>
+                {
+                    this.hasError = true;
+                    this.errorMsg = "Expected string key in object";
+                    return JsonValue::Object(obj);
+                }
+            }
+
+            match this.consume()
+            {
+                Colon => {}
+                _ =>
+                {
+                    this.hasError = true;
+                    this.errorMsg = "Expected ':' after object key";
+                    return JsonValue::Object(obj);
+                }
+            }
+
+            let value = this.parseValue();
+            obj[key] = value;
+
+            match this.peek()
+            {
+                Comma  => { this.consume(); }
+                RBrace => { this.consume(); break; }
+                _ =>
+                {
+                    this.hasError = true;
+                    this.errorMsg = "Expected ',' or '}' in object";
+                    break;
+                }
+            }
+        }
+
+        return JsonValue::Object(obj);
+    }
+
+    fn parseArray() -> JsonValue
+    {
+        var arr: List<JsonValue> = [];
+
+        match this.peek()
+        {
+            RBracket => { this.consume(); return JsonValue::Array(arr); }
+            _ => {}
+        }
+
+        loop
+        {
+            let value = this.parseValue();
+            arr.push(value);
+
+            match this.peek()
+            {
+                Comma    => { this.consume(); }
+                RBracket => { this.consume(); break; }
+                _ =>
+                {
+                    this.hasError = true;
+                    this.errorMsg = "Expected ',' or ']' in array";
+                    break;
+                }
+            }
+        }
+
+        return JsonValue::Array(arr);
+    }
+
+    fnc parse(input: String) -> JsonValue
+    {
+        var parser = JsonParser::new(input);
+        let result = parser.parseValue();
+        if parser.hasError
+        {
+            println("JSON parse error: " + parser.errorMsg);
+            processExit(2);
+        }
+        return result;
+    }
+
+    fnc tryParse(input: String) -> List<JsonValue>
+    {
+        let trimmed = input.trim();
+        if trimmed.len() == 0 { return []; }
+        var parser = JsonParser::new(trimmed);
+        let result = parser.parseValue();
+        if parser.hasError { return []; }
+        return [result];
+    }
+
+    fnc parseAll(input: String) -> List<JsonValue>
+    {
+        var parser = JsonParser::new(input);
+        var results: List<JsonValue> = [];
+        var go = true;
+        while go
+        {
+            match parser.peek()
+            {
+                EOF => { go = false; }
+                _ =>
+                {
+                    let v = parser.parseValue();
+                    if parser.hasError { parser.recoverToNextLine(); }
+                    else { results.push(v); }
+                }
+            }
+        }
+        return results;
+    }
+}

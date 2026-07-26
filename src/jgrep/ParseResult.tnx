@@ -1,0 +1,12 @@
+module jgrep.json_parser;
+
+import JsonValue;
+
+class ParseResult
+{
+    var ok: Bool;
+    var value: JsonValue;
+
+    fnc success(v: JsonValue) -> ParseResult { return ParseResult { ok: true, value: v }; }
+    fnc failure() -> ParseResult { return ParseResult { ok: false, value: JsonValue::Null }; }
+}

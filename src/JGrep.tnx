@@ -1,0 +1,321 @@
+import jgrep.JsonValue;
+import jgrep.Filter;
+import jgrep.FilterParser;
+import jgrep.Matcher;
+import jgrep.EvalResult;
+import jgrep.ColorConfig;
+import jgrep.ColorResult;
+import jgrep.Ansi;
+import jgrep.JsonHighlighter;
+import jgrep.JsonSerializer;
+import jgrep.LevelColorizer;
+import jgrep.YamlParser;
+import jgrep.YamlParseResult;
+import jgrep.NdjsonReader;
+import jgrep.FileWalker;
+import CliOptions;
+
+class JGrep
+{
+    var hadMatch: Bool;
+    var hadError: Bool;
+    var slurpResults: List<JsonValue>;
+    var colorConfig: ColorConfig;
+    var compiledFilter: Filter;
+    var opts: CliOptions;
+    var matcher: Matcher;
+
+    fnc new(opts: CliOptions) -> JGrep
+    {
+        let colorEnabled = ColorConfig::detectEnabled(opts.colorMode, opts.noColor);
+        let colorCfg = ColorConfig::new(colorEnabled, opts.colorLevel, opts.colorLevelField);
+
+        var filterSrc = opts.filterExpr;
+        if opts.fromFile != ""
+        {
+            let fromFileRaw = fileReadAllText(opts.fromFile);
+            filterSrc = fromFileRaw.trim();
+        }
+
+        let compiled = FilterParser::compile(filterSrc);
+
+        return JGrep {
+            hadMatch: false,
+            hadError: false,
+            slurpResults: [],
+            colorConfig: colorCfg,
+            compiledFilter: compiled,
+            opts: opts,
+            matcher: Matcher::new()
+        };
+    }
+
+    fn formatOutput(value: JsonValue) -> String
+    {
+        match value
+        {
+            Str(s) => return s;
+            _ =>
+            {
+                if this.colorConfig.enabled
+                {
+                    if this.opts.pretty
+                    {
+                        return JsonHighlighter::highlightPrettyValue(value, 0);
+                    }
+                    return JsonHighlighter::highlightValue(value);
+                }
+                if this.opts.pretty { return JsonSerializer::prettyStringify(value, 2); }
+                return JsonSerializer::stringify(value);
+            }
+        }
+        return "";
+    }
+
+    fn formatPlain(value: JsonValue) -> String
+    {
+        match value
+        {
+            Str(s) => return s;
+            _ =>
+            {
+                if this.opts.pretty { return JsonSerializer::prettyStringify(value, 2); }
+                return JsonSerializer::stringify(value);
+            }
+        }
+        return "";
+    }
+
+    fn levelColorFor(sourceValue: JsonValue) -> ColorResult
+    {
+        if !this.colorConfig.enabled || !this.opts.colorLevel { return ColorResult::none(); }
+        let level = LevelColorizer::getLogLevel(sourceValue, this.opts.colorLevelField);
+        if level == "" { return ColorResult::none(); }
+        return LevelColorizer::colorForLevel(level);
+    }
+
+    fn printLine(prefix: String, value: JsonValue, sourceValue: JsonValue)
+    {
+        // Level-Farbe gilt für die ganze Zeile; Syntax-Highlighting würde sie
+        // mit seinen Resets nach dem ersten Token löschen, daher plain färben.
+        var output: String = "";
+        let levelColor = this.levelColorFor(sourceValue);
+        if levelColor.found
+        {
+            output = Ansi::colorize(this.formatPlain(value), levelColor.color);
+        }
+        else
+        {
+            output = this.formatOutput(value);
+        }
+        if prefix == "" { println(output); }
+        else { println(prefix + ":" + output); }
+    }
+
+    fn processDocument(doc: JsonValue, prefix: String, countRef: Int64) -> Int64
+    {
+        this.matcher.noteDocRead();
+        let results = this.matcher.matchRaw(this.compiledFilter, doc);
+
+        if results.len() > 0 { this.hadMatch = true; }
+
+        if this.opts.slurp
+        {
+            for v in results { this.slurpResults.push(v); }
+            return countRef + results.len();
+        }
+
+        if this.opts.filesWithMatches
+        {
+            if results.len() > 0 { return countRef + 1; }
+            return countRef;
+        }
+
+        if this.opts.count
+        {
+            return countRef + results.len();
+        }
+
+        for v in results
+        {
+            this.printLine(prefix, v, doc);
+        }
+        return countRef;
+    }
+
+    fn isYamlSource(path: String) -> Bool
+    {
+        if path == "" { return this.opts.yamlInput; }
+        if FileWalker::isYamlFile(path) { return true; }
+        if FileWalker::isJsonFile(path) { return false; }
+        return this.opts.yamlInput;
+    }
+
+    fn docsFromContent(path: String, content: String) -> List<JsonValue>
+    {
+        var docs: List<JsonValue> = [];
+        if this.isYamlSource(path)
+        {
+            let yres = YamlParser::parseAllTracked(content);
+            if yres.errorCount > 0
+            {
+                this.hadError = true;
+                var label = path;
+                if label == "" { label = "<stdin>"; }
+                printStderr(this.opts.progName + ": " + label + ": YAML parse error: " + yres.errorMsg);
+            }
+            docs = yres.docs;
+        }
+        else
+        {
+            let reader = NdjsonReader::fromString(content);
+            while reader.hasNext()
+            {
+                let docList = reader.tryParseNext();
+                if docList.len() == 0 { this.hadError = true; }
+                else { docs.push(docList[0]); }
+            }
+        }
+        return docs;
+    }
+
+    fn processSource(path: String, content: String, prefix: String)
+    {
+        var count: Int64 = 0;
+
+        if this.isYamlSource(path)
+        {
+            let docs = this.docsFromContent(path, content);
+            for doc in docs
+            {
+                count = this.processDocument(doc, prefix, count);
+                if this.opts.filesWithMatches && count > 0 { break; }
+            }
+        }
+        else
+        {
+            // JSON/NDJSON streamt Dokument für Dokument — die Datei wird nie
+            // als komplette Dokumentliste materialisiert.
+            let reader = NdjsonReader::fromString(content);
+            while reader.hasNext()
+            {
+                let docList = reader.tryParseNext();
+                if docList.len() == 0 { this.hadError = true; }
+                else
+                {
+                    count = this.processDocument(docList[0], prefix, count);
+                    if this.opts.filesWithMatches && count > 0 { break; }
+                }
+            }
+        }
+
+        if this.opts.filesWithMatches
+        {
+            if count > 0 && path != "" { println(path); }
+            return;
+        }
+
+        if this.opts.count
+        {
+            if prefix == "" { println(count.toString()); }
+            else { println(prefix + ":" + count.toString()); }
+        }
+    }
+
+    fn populateInputQueue()
+    {
+        var queue: List<JsonValue> = [];
+        if this.opts.files.len() > 0
+        {
+            let allFiles = FileWalker::listFilesMode(this.opts.files, this.opts.recursive, this.opts.yamlInput);
+            for fp in allFiles
+            {
+                if fileExists(fp)
+                {
+                    let content = fileReadAllText(fp);
+                    let docs = this.docsFromContent(fp, content);
+                    for d in docs { queue.push(d); }
+                }
+            }
+        }
+        else if isStdinTty() == 0
+        {
+            let stdinContent = fileReadAllText("/dev/stdin");
+            let docs = this.docsFromContent("", stdinContent);
+            for d in docs { queue.push(d); }
+        }
+        this.matcher.setInputQueue(queue);
+    }
+
+    fn processNullInput()
+    {
+        this.populateInputQueue();
+        let evalResult = this.matcher.runEval(this.compiledFilter, JsonValue::Null);
+        if evalResult.isError()
+        {
+            println("Error: " + evalResult.errorMsg);
+            this.hadError = true;
+            return;
+        }
+        if evalResult.values.len() > 0 { this.hadMatch = true; }
+
+        if this.opts.slurp
+        {
+            for v in evalResult.values { this.slurpResults.push(v); }
+            return;
+        }
+
+        for v in evalResult.values
+        {
+            let formatted = this.formatOutput(v);
+            println(formatted);
+        }
+    }
+
+    fn run() -> Int64
+    {
+        if this.opts.nullInput
+        {
+            this.processNullInput();
+        }
+        else if this.opts.files.len() == 0
+        {
+            let content = fileReadAllText("/dev/stdin");
+            this.processSource("", content, "");
+        }
+        else
+        {
+            let allFiles = FileWalker::listFilesMode(this.opts.files, this.opts.recursive, this.opts.yamlInput);
+            let usePrefix = allFiles.len() > 1;
+
+            for filePath in allFiles
+            {
+                var skipFile = false;
+                if !fileExists(filePath)
+                {
+                    println(this.opts.progName + ": " + filePath + ": No such file or directory");
+                    this.hadError = true;
+                    skipFile = true;
+                }
+                if !skipFile
+                {
+                    let content = fileReadAllText(filePath);
+                    var prefix: String = "";
+                    if usePrefix { prefix = filePath; }
+                    this.processSource(filePath, content, prefix);
+                }
+            }
+        }
+
+        if this.opts.slurp
+        {
+            let arrValue = JsonValue::Array(this.slurpResults);
+            let formatted = this.formatOutput(arrValue);
+            println(formatted);
+        }
+
+        if this.hadError { return 2; }
+        if !this.hadMatch { return 1; }
+        return 0;
+    }
+}

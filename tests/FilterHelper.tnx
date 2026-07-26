@@ -1,0 +1,26 @@
+import jgrep.JsonValue;
+import jgrep.FilterParser;
+import jgrep.JsonParser;
+import jgrep.Evaluator;
+import jgrep.EvalContext;
+
+class FilterHelper
+{
+    fnc run(filterStr: String, inputJson: String) -> List<JsonValue>
+    {
+        let f = FilterParser::compile(filterStr);
+        let input = JsonParser::parse(inputJson);
+        let ev = Evaluator::new();
+        let ctx = EvalContext::new();
+        let r = ev.eval(f, input, ctx);
+        if r.isError() { return []; }
+        return r.values;
+    }
+
+    fnc runSingle(filterStr: String, inputJson: String) -> JsonValue
+    {
+        let results = FilterHelper::run(filterStr, inputJson);
+        if results.len() == 0 { return JsonValue::Null; }
+        return results[0];
+    }
+}

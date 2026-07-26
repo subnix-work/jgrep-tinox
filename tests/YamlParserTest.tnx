@@ -1,6 +1,7 @@
-import jgrep.json_value;
-import jgrep.json_parser;
-import jgrep.yaml_parser;
+import jgrep.JsonValue;
+import jgrep.JsonSerializer;
+import jgrep.YamlParser;
+import jgrep.YamlReader;
 
 class YamlParserTest
 {

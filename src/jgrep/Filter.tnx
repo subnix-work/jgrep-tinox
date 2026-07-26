@@ -1,0 +1,67 @@
+module jgrep.filter;
+
+import ObjEntry;
+import StringPart;
+
+enum Filter
+{
+    Identity;
+    RecursiveDescent;
+    Field(String);
+    OptionalField(String);
+    IndexAccess(Int64);
+    SliceAccess(Int64, Int64, Bool, Bool);
+    IterEach;
+    OptionalIterator;
+    Pipe(Filter, Filter);
+    Comma(Filter, Filter);
+    LiteralNull;
+    LiteralBool(Bool);
+    LiteralInt(Int64);
+    LiteralFloat(Float64);
+    LiteralStr(String);
+    LiteralArray(List<Filter>);
+    LiteralObject(List<ObjEntry>);
+    ObjectConstruct(List<ObjEntry>);
+    ArrayConstruct(Filter);
+    Add(Filter, Filter);
+    Subtract(Filter, Filter);
+    Multiply(Filter, Filter);
+    Divide(Filter, Filter);
+    Modulo(Filter, Filter);
+    Equals(Filter, Filter);
+    NotEquals(Filter, Filter);
+    LessThan(Filter, Filter);
+    GreaterThan(Filter, Filter);
+    LessThanOrEqual(Filter, Filter);
+    GreaterThanOrEqual(Filter, Filter);
+    And(Filter, Filter);
+    Or(Filter, Filter);
+    Not;
+    Alternative(Filter, Filter);
+    TryOnly(Filter);
+    TryCatchWith(Filter, Filter);
+    Optional(Filter);
+    IfThenElse(Filter, Filter, Filter);
+    FunctionCall(String, List<Filter>);
+    StringInterp(List<StringPart>);
+    Variable(String);
+    AsPattern(Filter, String, Filter);
+    Reduce(Filter, String, Filter, Filter);
+    Foreach(Filter, String, Filter, Filter, List<Filter>);
+    Recurse(Bool, Filter);
+    Limit(Filter, Filter);
+    Until(Filter, Filter);
+    While(Filter, Filter);
+    Path(Filter);
+    GetPath;
+    SetPath(Filter, Filter);
+    UpdatePath(Filter, Filter);
+    Label(String);
+    LabelBind(String, Filter);
+    Break(String);
+    Env;
+    Format(String, Bool, Filter);
+    Def(String, List<String>, Filter);
+    Deref;
+}

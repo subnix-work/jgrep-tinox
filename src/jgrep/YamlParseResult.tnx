@@ -1,0 +1,10 @@
+module jgrep.yaml_parser;
+
+import JsonValue;
+
+class YamlParseResult
+{
+    var docs: List<JsonValue>;
+    var errorCount: Int64;
+    var errorMsg: String;
+}
