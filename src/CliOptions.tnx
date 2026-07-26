@@ -1,0 +1,51 @@
+class CliOptions
+{
+    var filterExpr: String;
+    var files: List<String>;
+    var recursive: Bool;
+    var filesWithMatches: Bool;
+    var count: Bool;
+    var slurp: Bool;
+    var nullInput: Bool;
+    var fromFile: String;
+    var pretty: Bool;
+    var colorLevel: Bool;
+    var colorLevelField: String;
+    var noColor: Bool;
+    var colorMode: String;
+    var badOption: String;
+    var showHelp: Bool;
+    var showVersion: Bool;
+    var completionShell: String;
+    var yamlFlag: Bool;
+    var jsonFlag: Bool;
+    var yamlInput: Bool;
+    var progName: String;
+
+    fnc defaults() -> CliOptions
+    {
+        return CliOptions {
+            filterExpr: ".",
+            files: [],
+            recursive: false,
+            filesWithMatches: false,
+            count: false,
+            slurp: false,
+            nullInput: false,
+            fromFile: "",
+            pretty: false,
+            colorLevel: false,
+            colorLevelField: "",
+            noColor: false,
+            colorMode: "auto",
+            badOption: "",
+            showHelp: false,
+            showVersion: false,
+            completionShell: "",
+            yamlFlag: false,
+            jsonFlag: false,
+            yamlInput: false,
+            progName: "jgrep"
+        };
+    }
+}

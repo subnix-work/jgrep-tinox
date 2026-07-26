@@ -1,0 +1,53 @@
+module jgrep.json_value;
+
+fn floatDisplay(f: Float64) -> String
+{
+    if mathIsNan(f) != 0 { return "null"; }
+    if mathIsInfinite(f) != 0
+    {
+        if f > 0.0 { return "1.7976931348623157e+308"; }
+        return "-1.7976931348623157e+308";
+    }
+    let s = f.toString();
+    if s.contains(".") { return s; }
+    if s.contains("e") || s.contains("E") { return s; }
+    return s + ".0";
+}
+
+enum JsonValue
+{
+    Null;
+    Bool(Bool);
+    Integer(Int64);
+    Float(Float64);
+    Str(String);
+    Array(List<JsonValue>);
+    Object(Map<String, JsonValue>);
+}
+
+fn sortStringListInsert(sorted: List<String>, s: String) -> List<String>
+{
+    var result: List<String> = [];
+    var inserted = false;
+    for r in sorted
+    {
+        if !inserted && s <= r
+        {
+            result.push(s);
+            inserted = true;
+        }
+        result.push(r);
+    }
+    if !inserted { result.push(s); }
+    return result;
+}
+
+fn sortStringList(strs: List<String>) -> List<String>
+{
+    var result: List<String> = [];
+    for s in strs
+    {
+        result = sortStringListInsert(result, s);
+    }
+    return result;
+}

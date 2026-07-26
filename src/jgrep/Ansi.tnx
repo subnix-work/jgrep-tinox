@@ -1,0 +1,22 @@
+module jgrep.color;
+
+class Ansi
+{
+    fnc reset()     -> String { return "\x1b[0m"; }
+    fnc bold()      -> String { return "\x1b[1m"; }
+    fnc black()     -> String { return "\x1b[30m"; }
+    fnc red()       -> String { return "\x1b[31m"; }
+    fnc green()     -> String { return "\x1b[32m"; }
+    fnc yellow()    -> String { return "\x1b[33m"; }
+    fnc blue()      -> String { return "\x1b[34m"; }
+    fnc magenta()   -> String { return "\x1b[35m"; }
+    fnc cyan()      -> String { return "\x1b[36m"; }
+    fnc white()     -> String { return "\x1b[37m"; }
+    fnc brightRed()    -> String { return "\x1b[91m"; }
+    fnc boldRed()      -> String { return "\x1b[1;31m"; }
+
+    fnc colorize(text: String, colorCode: String) -> String
+    {
+        return colorCode + text + Ansi::reset();
+    }
+}

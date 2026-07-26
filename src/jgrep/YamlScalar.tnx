@@ -1,0 +1,183 @@
+module jgrep.yaml_parser;
+
+import JsonValue;
+import JsonLexer;
+
+class YamlScalar
+{
+    fnc hexVal(ch: Int64) -> Int64
+    {
+        if ch >= 48 && ch <= 57 { return ch - 48; }
+        if ch >= 97 && ch <= 102 { return ch - 97 + 10; }
+        if ch >= 65 && ch <= 70  { return ch - 65 + 10; }
+        return 0;
+    }
+
+    fnc escChar(e: Int64) -> String
+    {
+        if e == 110 { return "\n"; }
+        if e == 116 { return "\t"; }
+        if e == 114 { return "\r"; }
+        if e == 98  { return "\x08"; }
+        if e == 102 { return "\x0c"; }
+        if e == 48  { return ""; }
+        return JsonLexer::codePointToStr(e);
+    }
+
+    fnc unquoteDouble(text: String) -> String
+    {
+        var out = "";
+        var i: Int64 = 1;
+        while i < text.len()
+        {
+            let c = text[i] as Int64;
+            if c == 34 { break; }
+            if c == 92
+            {
+                i = i + 1;
+                if i >= text.len() { break; }
+                let e = text[i] as Int64;
+                if e == 117
+                {
+                    var cp: Int64 = 0;
+                    var k: Int64 = 0;
+                    while k < 4 && i + 1 < text.len()
+                    {
+                        i = i + 1;
+                        cp = cp * 16 + YamlScalar::hexVal(text[i] as Int64);
+                        k = k + 1;
+                    }
+                    out = out + JsonLexer::codePointToStr(cp);
+                }
+                else { out = out + YamlScalar::escChar(e); }
+            }
+            else { out = out + text.charAt(i); }
+            i = i + 1;
+        }
+        return out;
+    }
+
+    fnc unquoteSingle(text: String) -> String
+    {
+        var out = "";
+        var i: Int64 = 1;
+        while i < text.len()
+        {
+            let c = text[i] as Int64;
+            if c == 39
+            {
+                if i + 1 < text.len() && (text[i + 1] as Int64) == 39
+                {
+                    out = out + "'";
+                    i = i + 2;
+                }
+                else { break; }
+            }
+            else
+            {
+                out = out + text.charAt(i);
+                i = i + 1;
+            }
+        }
+        return out;
+    }
+
+    fnc isIntLiteral(text: String) -> Bool
+    {
+        let n = text.len();
+        var i: Int64 = 0;
+        if n == 0 { return false; }
+        if (text[0] as Int64) == 45 { i = 1; }
+        if i >= n { return false; }
+        while i < n
+        {
+            let c = text[i] as Int64;
+            if c < 48 || c > 57 { return false; }
+            i = i + 1;
+        }
+        return true;
+    }
+
+    fnc isFloatLiteral(text: String) -> Bool
+    {
+        let n = text.len();
+        var i: Int64 = 0;
+        if n == 0 { return false; }
+        if (text[0] as Int64) == 45 { i = 1; }
+        var sawDigit = false;
+        while i < n
+        {
+            let c = text[i] as Int64;
+            if c >= 48 && c <= 57 { sawDigit = true; i = i + 1; }
+            else { break; }
+        }
+        var sawDot = false;
+        if i < n && (text[i] as Int64) == 46
+        {
+            sawDot = true;
+            i = i + 1;
+            while i < n
+            {
+                let c = text[i] as Int64;
+                if c >= 48 && c <= 57 { sawDigit = true; i = i + 1; }
+                else { break; }
+            }
+        }
+        var sawExp = false;
+        if i < n
+        {
+            let c = text[i] as Int64;
+            if c == 101 || c == 69
+            {
+                if !sawDigit { return false; }
+                sawExp = true;
+                i = i + 1;
+                if i < n
+                {
+                    let sc = text[i] as Int64;
+                    if sc == 43 || sc == 45 { i = i + 1; }
+                }
+                var expDigits = false;
+                while i < n
+                {
+                    let ec = text[i] as Int64;
+                    if ec >= 48 && ec <= 57 { expDigits = true; i = i + 1; }
+                    else { break; }
+                }
+                if !expDigits { return false; }
+            }
+        }
+        if i != n { return false; }
+        if !sawDigit { return false; }
+        return sawDot || sawExp;
+    }
+
+    fnc plainScalar(text: String) -> JsonValue
+    {
+        if text.len() == 0 { return JsonValue::Null; }
+        if text == "null" || text == "Null" || text == "NULL" || text == "~" { return JsonValue::Null; }
+        if text == "true" || text == "True" || text == "TRUE" { return JsonValue::Bool(true); }
+        if text == "false" || text == "False" || text == "FALSE" { return JsonValue::Bool(false); }
+        if YamlScalar::isIntLiteral(text) { return JsonValue::Integer(text.toInt()); }
+        if YamlScalar::isFloatLiteral(text) { return JsonValue::Float(text.toFloat()); }
+        return JsonValue::Str(text);
+    }
+
+    fnc parseScalarText(text: String) -> JsonValue
+    {
+        if text.len() == 0 { return JsonValue::Null; }
+        let c0 = text[0] as Int64;
+        if c0 == 34 { return JsonValue::Str(YamlScalar::unquoteDouble(text)); }
+        if c0 == 39 { return JsonValue::Str(YamlScalar::unquoteSingle(text)); }
+        return YamlScalar::plainScalar(text);
+    }
+
+    fnc keyText(raw: String) -> String
+    {
+        if raw.len() == 0 { return ""; }
+        let c0 = raw[0] as Int64;
+        if c0 == 34 { return YamlScalar::unquoteDouble(raw); }
+        if c0 == 39 { return YamlScalar::unquoteSingle(raw); }
+        return raw;
+    }
+}

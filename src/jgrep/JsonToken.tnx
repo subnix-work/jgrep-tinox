@@ -1,0 +1,18 @@
+module jgrep.json_parser;
+
+enum JsonToken
+{
+    LBrace;
+    RBrace;
+    LBracket;
+    RBracket;
+    Colon;
+    Comma;
+    TrueToken;
+    FalseToken;
+    NullToken;
+    StringToken(String);
+    IntToken(Int64);
+    FloatToken(Float64);
+    EOF;
+}

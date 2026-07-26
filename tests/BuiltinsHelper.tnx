@@ -1,0 +1,22 @@
+import jgrep.FilterParser;
+import jgrep.JsonParser;
+import jgrep.Evaluator;
+import jgrep.EvalContext;
+import jgrep.JsonSerializer;
+
+class BuiltinsHelper
+{
+    // Alle Ergebnisse kompakt serialisiert, mit "|" verbunden
+    fnc run(filterStr: String, inputJson: String) -> String
+    {
+        let f = FilterParser::compile(filterStr);
+        let input = JsonParser::parse(inputJson);
+        let ev = Evaluator::new();
+        let ctx = EvalContext::new();
+        let r = ev.eval(f, input, ctx);
+        if r.isError() { return "ERROR:" + r.errorMsg; }
+        var parts: List<String> = [];
+        for v in r.values { parts.push(JsonSerializer::stringify(v)); }
+        return parts.join("|");
+    }
+}

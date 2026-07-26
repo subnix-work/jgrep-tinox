@@ -1,0 +1,31 @@
+module jgrep.evaluator;
+
+import JsonValue;
+import Filter;
+
+class EvalContext
+{
+    var vars: Map<String, JsonValue>;
+    var defs: Map<String, Filter>;
+
+    fnc new() -> EvalContext
+    {
+        return EvalContext { vars: @{}, defs: @{} };
+    }
+
+    fn withVar(name: String, value: JsonValue) -> EvalContext
+    {
+        var ctx = EvalContext { vars: @{}, defs: this.defs };
+        for k in this.vars.keys() { ctx.vars[k] = this.vars.get(k); }
+        ctx.vars[name] = value;
+        return ctx;
+    }
+
+    fn withDef(name: String, filter: Filter) -> EvalContext
+    {
+        var ctx = EvalContext { vars: this.vars, defs: @{} };
+        for k in this.defs.keys() { ctx.defs[k] = this.defs.get(k); }
+        ctx.defs[name] = filter;
+        return ctx;
+    }
+}

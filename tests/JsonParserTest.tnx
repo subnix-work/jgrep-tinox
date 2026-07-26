@@ -1,5 +1,7 @@
-import jgrep.json_value;
-import jgrep.json_parser;
+import jgrep.JsonValue;
+import jgrep.JsonValueHelper;
+import jgrep.JsonParser;
+import jgrep.JsonSerializer;
 
 class JsonParserTest
 {

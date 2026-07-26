@@ -1,7 +1,7 @@
 module jgrep.ndjson;
 
-import json_value;
-import json_parser;
+import JsonValue;
+import JsonParser;
 
 class NdjsonReader
 {

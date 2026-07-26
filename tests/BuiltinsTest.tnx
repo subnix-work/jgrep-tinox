@@ -1,28 +1,8 @@
-import jgrep.json_value;
-import jgrep.json_parser;
-import jgrep.filter;
-import jgrep.evaluator;
-import jgrep.ndjson;
+import jgrep.NdjsonReader;
+import BuiltinsHelper;
 
 // Tests für die 2026-07-05 nachgerüsteten Builtins:
 // sub/gsub/splits, label/break, gmtime/mktime, Mathe, Pfad-Maschinerie, Streaming
-
-class BuiltinsHelper
-{
-    // Alle Ergebnisse kompakt serialisiert, mit "|" verbunden
-    fnc run(filterStr: String, inputJson: String) -> String
-    {
-        let f = FilterParser::compile(filterStr);
-        let input = JsonParser::parse(inputJson);
-        let ev = Evaluator::new();
-        let ctx = EvalContext::new();
-        let r = ev.eval(f, input, ctx);
-        if r.isError() { return "ERROR:" + r.errorMsg; }
-        var parts: List<String> = [];
-        for v in r.values { parts.push(JsonSerializer::stringify(v)); }
-        return parts.join("|");
-    }
-}
 
 class BuiltinsTest
 {

@@ -1,0 +1,9 @@
+module jgrep.filter;
+
+import Filter;
+
+enum StringPart
+{
+    Text(String);
+    Expr(Filter);
+}

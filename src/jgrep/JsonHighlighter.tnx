@@ -1,52 +1,9 @@
 module jgrep.color;
 
-import json_value;
-import json_parser;
-
-class Ansi
-{
-    fnc reset()     -> String { return "\x1b[0m"; }
-    fnc bold()      -> String { return "\x1b[1m"; }
-    fnc black()     -> String { return "\x1b[30m"; }
-    fnc red()       -> String { return "\x1b[31m"; }
-    fnc green()     -> String { return "\x1b[32m"; }
-    fnc yellow()    -> String { return "\x1b[33m"; }
-    fnc blue()      -> String { return "\x1b[34m"; }
-    fnc magenta()   -> String { return "\x1b[35m"; }
-    fnc cyan()      -> String { return "\x1b[36m"; }
-    fnc white()     -> String { return "\x1b[37m"; }
-    fnc brightRed()    -> String { return "\x1b[91m"; }
-    fnc boldRed()      -> String { return "\x1b[1;31m"; }
-
-    fnc colorize(text: String, colorCode: String) -> String
-    {
-        return colorCode + text + Ansi::reset();
-    }
-}
-
-class ColorConfig
-{
-    var enabled: Bool;
-    var colorLevel: Bool;
-    var colorLevelField: String;
-
-    fnc new(enabled: Bool, colorLevel: Bool, colorLevelField: String) -> ColorConfig
-    {
-        return ColorConfig { enabled: enabled, colorLevel: colorLevel, colorLevelField: colorLevelField };
-    }
-
-    fnc detectEnabled(mode: String, noColorFlag: Bool) -> Bool
-    {
-        if noColorFlag { return false; }
-        if mode == "never" { return false; }
-        if mode == "always" { return true; }
-        let noColorEnv = envGet("NO_COLOR");
-        if noColorEnv != "" { return false; }
-        let term = envGet("TERM");
-        if term == "dumb" { return false; }
-        return isStdoutTty() == 1;
-    }
-}
+import JsonValue;
+import JsonSerializer;
+import Ansi;
+import ColorConfig;
 
 class JsonHighlighter
 {
@@ -159,71 +116,5 @@ class JsonHighlighter
             }
         }
         return "";
-    }
-}
-
-class ColorResult
-{
-    var found: Bool;
-    var color: String;
-
-    fnc none() -> ColorResult { return ColorResult { found: false, color: "" }; }
-    fnc some(c: String) -> ColorResult { return ColorResult { found: true, color: c }; }
-}
-
-class LevelColorizer
-{
-    fnc getLogLevel(obj: JsonValue, fieldPath: String) -> String
-    {
-        var searchFields: List<String> = ["log.level", "level", "severity", "severity_text", "severityText"];
-        if fieldPath != "" { searchFields = [fieldPath]; }
-
-        for field in searchFields
-        {
-            let parts = field.split(".");
-            var current = obj;
-            var found = true;
-            for part in parts
-            {
-                match current
-                {
-                    Object(o) =>
-                    {
-                        if o.contains(part) { current = o.get(part); }
-                        else { found = false; break; }
-                    }
-                    _ => { found = false; break; }
-                }
-            }
-            if found
-            {
-                match current
-                {
-                    Str(s) => return s;
-                    _ => {}
-                }
-            }
-        }
-        return "";
-    }
-
-    fnc colorForLevel(level: String) -> ColorResult
-    {
-        let upper = level.toUpper();
-        if upper == "TRACE"     { return ColorResult::some(Ansi::magenta()); }
-        if upper == "DEBUG"     { return ColorResult::some(Ansi::blue()); }
-        if upper == "INFO"      { return ColorResult::some(Ansi::cyan()); }
-        if upper == "INFORMATION" { return ColorResult::some(Ansi::cyan()); }
-        if upper == "NOTICE"    { return ColorResult::some(Ansi::cyan()); }
-        if upper == "WARN"      { return ColorResult::some(Ansi::yellow()); }
-        if upper == "WARNING"   { return ColorResult::some(Ansi::yellow()); }
-        if upper == "ERROR"     { return ColorResult::some(Ansi::red()); }
-        if upper == "ERR"       { return ColorResult::some(Ansi::red()); }
-        if upper == "FATAL"     { return ColorResult::some(Ansi::boldRed()); }
-        if upper == "CRITICAL"  { return ColorResult::some(Ansi::boldRed()); }
-        if upper == "CRIT"      { return ColorResult::some(Ansi::boldRed()); }
-        if upper == "ALERT"     { return ColorResult::some(Ansi::boldRed()); }
-        if upper == "EMERGENCY" { return ColorResult::some(Ansi::boldRed()); }
-        return ColorResult::none();
     }
 }

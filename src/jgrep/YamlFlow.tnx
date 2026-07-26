@@ -1,0 +1,174 @@
+module jgrep.yaml_parser;
+
+import JsonValue;
+import JsonLexer;
+import YamlScalar;
+
+class YamlFlow
+{
+    var s: String;
+    var sLen: Int64;
+    var pos: Int64;
+    var hasError: Bool;
+    var errorMsg: String;
+
+    fnc new(text: String) -> YamlFlow
+    {
+        return YamlFlow { s: text, sLen: text.len(), pos: 0, hasError: false, errorMsg: "" };
+    }
+
+    fn peek() -> Int64
+    {
+        if this.pos >= this.sLen { return 0; }
+        return this.s[this.pos] as Int64;
+    }
+
+    fn skipSpaces()
+    {
+        while this.pos < this.sLen
+        {
+            let c = this.s[this.pos] as Int64;
+            if c == 32 || c == 9 { this.pos = this.pos + 1; }
+            else { break; }
+        }
+    }
+
+    fn fail(msg: String)
+    {
+        this.hasError = true;
+        this.errorMsg = msg;
+    }
+
+    fn parseValue() -> JsonValue
+    {
+        this.skipSpaces();
+        let c = this.peek();
+        if c == 0 { this.fail("Unexpected end of flow expression"); return JsonValue::Null; }
+        if c == 91 { return this.parseList(); }
+        if c == 123 { return this.parseMap(); }
+        if c == 34 { return JsonValue::Str(this.readDouble()); }
+        if c == 39 { return JsonValue::Str(this.readSingle()); }
+        let t = this.readPlain(false);
+        return YamlScalar::plainScalar(t);
+    }
+
+    fn parseList() -> JsonValue
+    {
+        this.pos = this.pos + 1;
+        var arr: List<JsonValue> = [];
+        this.skipSpaces();
+        if this.peek() == 93 { this.pos = this.pos + 1; return JsonValue::Array(arr); }
+        loop
+        {
+            let v = this.parseValue();
+            arr.push(v);
+            if this.hasError { break; }
+            this.skipSpaces();
+            let c = this.peek();
+            if c == 44 { this.pos = this.pos + 1; }
+            else if c == 93 { this.pos = this.pos + 1; break; }
+            else { this.fail("Expected ',' or ']' in flow sequence"); break; }
+        }
+        return JsonValue::Array(arr);
+    }
+
+    fn parseMap() -> JsonValue
+    {
+        this.pos = this.pos + 1;
+        var obj: Map<String, JsonValue> = @{};
+        this.skipSpaces();
+        if this.peek() == 125 { this.pos = this.pos + 1; return JsonValue::Object(obj); }
+        loop
+        {
+            this.skipSpaces();
+            var key = "";
+            let kc = this.peek();
+            if kc == 34 { key = this.readDouble(); }
+            else if kc == 39 { key = this.readSingle(); }
+            else { key = this.readPlain(true); }
+            this.skipSpaces();
+            if this.peek() == 58 { this.pos = this.pos + 1; }
+            else { this.fail("Expected ':' in flow mapping"); break; }
+            let v = this.parseValue();
+            obj[key] = v;
+            if this.hasError { break; }
+            this.skipSpaces();
+            let c2 = this.peek();
+            if c2 == 44 { this.pos = this.pos + 1; }
+            else if c2 == 125 { this.pos = this.pos + 1; break; }
+            else { this.fail("Expected ',' or '}' in flow mapping"); break; }
+        }
+        return JsonValue::Object(obj);
+    }
+
+    fn readPlain(stopAtColon: Bool) -> String
+    {
+        var out = "";
+        while this.pos < this.sLen
+        {
+            let c = this.peek();
+            if c == 44 || c == 93 || c == 125 { break; }
+            if stopAtColon && c == 58 { break; }
+            out = out + this.s.charAt(this.pos);
+            this.pos = this.pos + 1;
+        }
+        return out.trim();
+    }
+
+    fn readDouble() -> String
+    {
+        this.pos = this.pos + 1;
+        var out = "";
+        while this.pos < this.sLen
+        {
+            let c = this.s[this.pos] as Int64;
+            this.pos = this.pos + 1;
+            if c == 34 { return out; }
+            if c == 92
+            {
+                if this.pos >= this.sLen { break; }
+                let e = this.s[this.pos] as Int64;
+                this.pos = this.pos + 1;
+                if e == 117
+                {
+                    var cp: Int64 = 0;
+                    var k: Int64 = 0;
+                    while k < 4 && this.pos < this.sLen
+                    {
+                        cp = cp * 16 + YamlScalar::hexVal(this.s[this.pos] as Int64);
+                        this.pos = this.pos + 1;
+                        k = k + 1;
+                    }
+                    out = out + JsonLexer::codePointToStr(cp);
+                }
+                else { out = out + YamlScalar::escChar(e); }
+            }
+            else { out = out + this.s.charAt(this.pos - 1); }
+        }
+        this.fail("Unterminated double-quoted string");
+        return out;
+    }
+
+    fn readSingle() -> String
+    {
+        this.pos = this.pos + 1;
+        var out = "";
+        while this.pos < this.sLen
+        {
+            let c = this.s[this.pos] as Int64;
+            this.pos = this.pos + 1;
+            if c == 39
+            {
+                if this.pos < this.sLen && (this.s[this.pos] as Int64) == 39
+                {
+                    out = out + "'";
+                    this.pos = this.pos + 1;
+                }
+                else { return out; }
+            }
+            else { out = out + this.s.charAt(this.pos - 1); }
+        }
+        this.fail("Unterminated single-quoted string");
+        return out;
+    }
+}

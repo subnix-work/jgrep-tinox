@@ -1,73 +1,14 @@
 module jgrep.evaluator;
 
-import json_value;
-import json_parser;
-import filter;
-
-class EvalContext
-{
-    var vars: Map<String, JsonValue>;
-    var defs: Map<String, Filter>;
-
-    fnc new() -> EvalContext
-    {
-        return EvalContext { vars: @{}, defs: @{} };
-    }
-
-    fn withVar(name: String, value: JsonValue) -> EvalContext
-    {
-        var ctx = EvalContext { vars: @{}, defs: this.defs };
-        for k in this.vars.keys() { ctx.vars[k] = this.vars.get(k); }
-        ctx.vars[name] = value;
-        return ctx;
-    }
-
-    fn withDef(name: String, filter: Filter) -> EvalContext
-    {
-        var ctx = EvalContext { vars: this.vars, defs: @{} };
-        for k in this.defs.keys() { ctx.defs[k] = this.defs.get(k); }
-        ctx.defs[name] = filter;
-        return ctx;
-    }
-}
-
-class EvalResult
-{
-    values: List<JsonValue>;
-    hadError: Bool;
-    errorMsg: String;
-    breakLabel: String;
-
-    fnc ok(vals: List<JsonValue>) -> EvalResult
-    {
-        return EvalResult { values: vals, hadError: false, errorMsg: "", breakLabel: "" };
-    }
-
-    fnc err(msg: String) -> EvalResult
-    {
-        return EvalResult { values: [], hadError: true, errorMsg: msg, breakLabel: "" };
-    }
-
-    fnc empty() -> EvalResult
-    {
-        return EvalResult { values: [], hadError: false, errorMsg: "", breakLabel: "" };
-    }
-
-    fnc single(v: JsonValue) -> EvalResult
-    {
-        return EvalResult { values: [v], hadError: false, errorMsg: "", breakLabel: "" };
-    }
-
-    // break $label unterwegs: values = bis dahin produzierte Outputs
-    fnc brk(label: String, vals: List<JsonValue>) -> EvalResult
-    {
-        return EvalResult { values: vals, hadError: false, errorMsg: "", breakLabel: label };
-    }
-
-    fn isError() -> Bool { return this.hadError; }
-    fn isBreak() -> Bool { return this.breakLabel != ""; }
-    fn isEmpty() -> Bool { return this.values.len() == 0 && !this.hadError; }
-}
+import JsonValue;
+import JsonValueHelper;
+import JsonSerializer;
+import JsonParser;
+import Filter;
+import ObjKey;
+import ObjEntry;
+import EvalContext;
+import EvalResult;
 
 fn getEntryKeySpec(e: ObjEntry) -> ObjKey { return e.keySpec; }
 fn getEntryValFilter(e: ObjEntry) -> Filter { return e.valFilter; }
