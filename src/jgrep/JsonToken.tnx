@@ -15,4 +15,5 @@ enum JsonToken
     IntToken(Int64);
     FloatToken(Float64);
     EOF;
+    Invalid;
 }

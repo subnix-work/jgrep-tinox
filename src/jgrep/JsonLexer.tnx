@@ -152,22 +152,32 @@ class JsonLexer
         if ch == 34 { return JsonToken::StringToken(this.readString()); }
         if ch == 116
         {
-            this.nextChar(); this.nextChar(); this.nextChar();
-            return JsonToken::TrueToken;
+            let c1 = this.nextChar();
+            let c2 = this.nextChar();
+            let c3 = this.nextChar();
+            if c1 == 114 && c2 == 117 && c3 == 101 { return JsonToken::TrueToken; }
+            return JsonToken::Invalid;
         }
         if ch == 102
         {
-            this.nextChar(); this.nextChar(); this.nextChar(); this.nextChar();
-            return JsonToken::FalseToken;
+            let c1 = this.nextChar();
+            let c2 = this.nextChar();
+            let c3 = this.nextChar();
+            let c4 = this.nextChar();
+            if c1 == 97 && c2 == 108 && c3 == 115 && c4 == 101 { return JsonToken::FalseToken; }
+            return JsonToken::Invalid;
         }
         if ch == 110
         {
-            this.nextChar(); this.nextChar(); this.nextChar();
-            return JsonToken::NullToken;
+            let c1 = this.nextChar();
+            let c2 = this.nextChar();
+            let c3 = this.nextChar();
+            if c1 == 117 && c2 == 108 && c3 == 108 { return JsonToken::NullToken; }
+            return JsonToken::Invalid;
         }
         if ch == 45 || (ch >= 48 && ch <= 57) { return this.readNumber(ch); }
 
-        return JsonToken::EOF;
+        return JsonToken::Invalid;
     }
 
     fn tokenize() -> List<JsonToken>
