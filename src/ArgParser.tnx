@@ -47,6 +47,11 @@ class ArgParser
                 opts.nullInput = true;
                 i = i + 1;
             }
+            else if arg == "-u" || arg == "--unbuffered"
+            {
+                opts.unbuffered = true;
+                i = i + 1;
+            }
             else if arg == "--pretty"
             {
                 opts.pretty = true;
@@ -118,6 +123,7 @@ class ArgParser
                     else if fcode == 99 { opts.count = true; }
                     else if fcode == 115 { opts.slurp = true; }
                     else if fcode == 110 { opts.nullInput = true; }
+                    else if fcode == 117 { opts.unbuffered = true; }
                     else if fcode == 104 { opts.showHelp = true; }
                     else if fcode == 86 { opts.showVersion = true; }
                     else { opts.badOption = arg; }

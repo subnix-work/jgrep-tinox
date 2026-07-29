@@ -29,6 +29,7 @@ The input format is chosen per file by extension: `.yaml`/`.yml` is parsed as YA
 | `-c`, `--count` | Print match count instead of results |
 | `-s`, `--slurp` | Collect all results into a single array |
 | `-n`, `--null-input` | Use `null` as input; read files via `input`/`inputs` |
+| `-u`, `--unbuffered` | Stream stdin: process each line (JSON) or document (YAML) as it arrives instead of waiting for EOF |
 | `-f FILE`, `--from-file FILE` | Read filter from file |
 | `--pretty` | Pretty-print JSON output |
 | `--color-level` | Colorize output by log level field |
@@ -89,7 +90,34 @@ echo '[1,2,3,4,5]' | jgrep 'reduce .[] as $x (0; . + $x)'
 # group_by / unique_by (sorted by key)
 echo '[{"k":"b"},{"k":"a"},{"k":"b"}]' | jgrep 'group_by(.k)'
 echo '[{"k":"b"},{"k":"a"},{"k":"b"}]' | jgrep 'unique_by(.k)'
+
+# Live log stream, colorized by level, as lines arrive
+myservice | jgrep -u --color-level '.'
+
+# Live log stream, filtered
+tail -f app.log | jgrep -u 'select(.level == "error")'
 ```
+
+### Streaming stdin (`-u`/`--unbuffered`)
+
+By default jgrep/ygrep read all of stdin before producing any output
+(`fileReadAllText`) — fine for a bounded file, but a producer that never
+closes stdout (a running service, `tail -f`, a live log stream) means
+`EOF` never arrives, so nothing is ever printed. `-u` switches to reading
+stdin one line at a time (`open("/dev/stdin")` + `readLine()`/`eof()`)
+and runs the filter on each line as it arrives, so output appears live.
+
+- **JSON/NDJSON:** requires exactly one JSON value per line. A
+  pretty-printed, multi-line JSON document can't be recognized as
+  complete without reading ahead, which would block forever on a live
+  stream — use the non-streaming mode for those.
+- **YAML:** documents are flushed at each `---` separator (or at EOF),
+  matching the non-streaming parser's document splitting.
+- Only applies to stdin: `-u` is ignored when `FILE` arguments are given
+  (files are read whole either way, so there's nothing to stream).
+- A malformed line prints a parse-error diagnostic to stderr and sets
+  the non-zero exit code, but does not stop the stream — one bad line
+  is skipped and the next one is still processed.
 
 ### ygrep (YAML)
 

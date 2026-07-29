@@ -7,6 +7,7 @@ class CliOptions
     var count: Bool;
     var slurp: Bool;
     var nullInput: Bool;
+    var unbuffered: Bool;
     var fromFile: String;
     var pretty: Bool;
     var colorLevel: Bool;
@@ -32,6 +33,7 @@ class CliOptions
             count: false,
             slurp: false,
             nullInput: false,
+            unbuffered: false,
             fromFile: "",
             pretty: false,
             colorLevel: false,

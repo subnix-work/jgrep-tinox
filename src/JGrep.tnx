@@ -222,6 +222,92 @@ class JGrep
         }
     }
 
+    fn flushYamlBlock(lines: List<String>, count: Int64) -> Int64
+    {
+        if lines.len() == 0 { return count; }
+        var out: YamlParseResult = YamlParseResult { docs: [], errorCount: 0, errorMsg: "" };
+        YamlParser::parseDocLines(lines, out);
+        if out.errorCount > 0
+        {
+            this.hadError = true;
+            printStderr(this.opts.progName + ": <stdin>: YAML parse error: " + out.errorMsg);
+        }
+        var newCount = count;
+        for doc in out.docs
+        {
+            newCount = this.processDocument(doc, "", newCount);
+        }
+        return newCount;
+    }
+
+    // Streaming stdin mode (-u/--unbuffered): reads and processes one line
+    // (JSON) or one document block (YAML, up to the next "---") at a time
+    // instead of buffering all of stdin via fileReadAllText first, so a
+    // producer that never closes stdin (e.g. a live log tailer) still
+    // yields output as each line/document arrives. JSON/NDJSON therefore
+    // requires exactly one JSON value per line — a pretty-printed,
+    // multi-line JSON document can't be recognized as complete without
+    // reading ahead, which would block indefinitely on a live stream.
+    fn runStreaming()
+    {
+        let f = open("/dev/stdin");
+        var count: Int64 = 0;
+
+        if this.isYamlSource("")
+        {
+            var current: List<String> = [];
+            while !f.eof()
+            {
+                let raw = f.readLine();
+                let t = YamlParser::trimRight(raw);
+                if t == "---" || t == "..." || t.startsWith("... ")
+                {
+                    count = this.flushYamlBlock(current, count);
+                    current = [];
+                }
+                else if raw.startsWith("--- ")
+                {
+                    count = this.flushYamlBlock(current, count);
+                    current = [];
+                    current.push(raw.substring(4, raw.len()));
+                }
+                else if raw.startsWith("%") { }
+                else { current.push(raw); }
+
+                if this.opts.filesWithMatches && count > 0 { break; }
+            }
+            count = this.flushYamlBlock(current, count);
+        }
+        else
+        {
+            while !f.eof()
+            {
+                let line = f.readLine();
+                if line.trim().len() == 0 { continue; }
+
+                let reader = NdjsonReader::fromString(line);
+                if !reader.hasNext() { continue; }
+
+                let docList = reader.tryParseNext();
+                if docList.len() == 0
+                {
+                    this.hadError = true;
+                    printStderr(this.opts.progName + ": <stdin>: JSON parse error: " + line);
+                }
+                else
+                {
+                    count = this.processDocument(docList[0], "", count);
+                }
+
+                if this.opts.filesWithMatches && count > 0 { break; }
+            }
+        }
+
+        f.close();
+
+        if this.opts.count { println(count.toString()); }
+    }
+
     fn populateInputQueue()
     {
         var queue: List<JsonValue> = [];
@@ -277,6 +363,10 @@ class JGrep
         if this.opts.nullInput
         {
             this.processNullInput();
+        }
+        else if this.opts.unbuffered && this.opts.files.len() == 0
+        {
+            this.runStreaming();
         }
         else if this.opts.files.len() == 0
         {

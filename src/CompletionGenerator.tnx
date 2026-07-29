@@ -8,7 +8,7 @@ class CompletionGenerator
             println("_" + prog + "_complete() {");
             println("  local cur flags");
             println("  cur=\"" + "$" + "{COMP_WORDS[COMP_CWORD]}\"");
-            println("  flags=\"-r -l -c -s -n -f --recursive --files-with-matches --count --slurp --null-input --from-file --pretty --color --color-level --color-level-field --no-color --yaml --json\"");
+            println("  flags=\"-r -l -c -s -n -u -f --recursive --files-with-matches --count --slurp --null-input --unbuffered --from-file --pretty --color --color-level --color-level-field --no-color --yaml --json\"");
             println("  COMPREPLY=($(" + "compgen -W \"" + "$" + "flags\" -- \"" + "$" + "cur\") $(" + "compgen -f -- \"" + "$" + "cur\"))");
             println("}");
             println("complete -F _" + prog + "_complete " + prog);
@@ -24,6 +24,7 @@ class CompletionGenerator
             println("    '(-c --count)-c[print match count]' \\");
             println("    '(-s --slurp)-s[slurp all results into array]' \\");
             println("    '(-n --null-input)-n[use null as input]' \\");
+            println("    '(-u --unbuffered)-u[stream stdin line-by-line/doc-by-doc]' \\");
             println("    '(-f --from-file)-f[read filter from file]:file:_files' \\");
             println("    '--pretty[pretty-print JSON]' \\");
             println("    '--color[when to use color]:when:(auto always never)' \\");
@@ -45,6 +46,7 @@ class CompletionGenerator
             println("complete -c " + prog + " -s c -l count -d 'Print match count per file'");
             println("complete -c " + prog + " -s s -l slurp -d 'Collect all results into one array'");
             println("complete -c " + prog + " -s n -l null-input -d 'Use null as input'");
+            println("complete -c " + prog + " -s u -l unbuffered -d 'Stream stdin line-by-line/doc-by-doc'");
             println("complete -c " + prog + " -s f -l from-file -d 'Read filter from file' -r");
             println("complete -c " + prog + " -l pretty -d 'Pretty-print JSON output'");
             println("complete -c " + prog + " -l color -d 'When to use color (auto/always/never)' -x -a 'auto always never'");
@@ -59,8 +61,8 @@ class CompletionGenerator
         {
             println("Register-ArgumentCompleter -Native -CommandName " + prog + " -ScriptBlock {");
             println("  param(" + "$" + "wordToComplete, " + "$" + "commandAst, " + "$" + "cursorPosition)");
-            println("  " + "$" + "flags = @('-r','-l','-c','-s','-n','-f','--recursive','--files-with-matches',");
-            println("             '--count','--slurp','--null-input','--from-file','--pretty',");
+            println("  " + "$" + "flags = @('-r','-l','-c','-s','-n','-u','-f','--recursive','--files-with-matches',");
+            println("             '--count','--slurp','--null-input','--unbuffered','--from-file','--pretty',");
             println("             '--color','--color-level','--color-level-field','--no-color','--yaml','--json')");
             println("  " + "$" + "flags | Where-Object { " + "$" + "_ -like \"" + "$" + "wordToComplete*\" } |");
             println("    ForEach-Object { [System.Management.Automation.CompletionResult]::new(" + "$" + "_) }");
