@@ -1,0 +1,137 @@
+import CliOptions;
+import ArgParser;
+import JGrep;
+import CompletionGenerator;
+
+class Main
+{
+    fnc printHelp(prog: String)
+    {
+        var desc = "grep for JSON — powered by Tinox";
+        var dataExt = "json";
+        if prog == "ygrep" { desc = "grep for YAML — powered by Tinox"; dataExt = "yaml"; }
+        println("Usage: " + prog + " [-rclsnuhV] [-f FILE] [--pretty] [--color WHEN] [--color-level] [--color-level-field FIELD] [--no-color] [--yaml|--json] [FILTER] [FILE...]");
+        println("");
+        println(desc);
+        println("");
+        println("Arguments:");
+        println("  FILTER     jq filter expression (default: '.')");
+        println("  FILE...    Files to search; reads stdin if omitted");
+        println("");
+        println("Options:");
+        println("  -r, --recursive              Recurse into directories");
+        println("  -l, --files-with-matches     Only print filenames with matches");
+        println("  -c, --count                  Print match count per file");
+        println("  -s, --slurp                  Collect all results into a single array");
+        println("  -n, --null-input             Use null as input (don't read files)");
+        println("  -u, --unbuffered             Stream stdin line-by-line (JSON) or");
+        println("                                document-by-document (YAML) instead of");
+        println("                                waiting for EOF; for live/unbounded input");
+        println("  -f, --from-file FILE         Read filter from file");
+        println("      --pretty                 Pretty-print JSON output");
+        println("      --color WHEN             When to use color: auto, always, never (default: auto)");
+        println("      --color-level            Colorize output by log level field");
+        println("      --color-level-field F    Override log level field (dot-notation)");
+        println("      --no-color               Disable ANSI color output (same as --color never)");
+        println("      --yaml                   Treat stdin/unknown files as YAML");
+        println("      --json                   Treat stdin/unknown files as JSON");
+        println("  -h, --help                   Show this help");
+        println("  -V, --version                Show version");
+        println("");
+        println("  completion SHELL             Generate shell completion (bash/zsh/fish/powershell)");
+        println("");
+        println("File extensions decide the input format: .yaml/.yml is parsed as YAML,");
+        println(".json/.ndjson/.jsonl as JSON. For stdin the program name or --yaml/--json decides.");
+        println("");
+        println("Examples:");
+        println("  " + prog + " '.name' data." + dataExt);
+        println("  " + prog + " 'select(.level == \"ERROR\")' logs." + dataExt);
+        println("  " + prog + " '.[] | select(.active) | .name' items." + dataExt);
+        println("  " + prog + " -r '.id' ./data/");
+        println("  " + prog + " -c '.' *." + dataExt);
+        println("  " + prog + " --color-level '.' logs." + dataExt);
+        println("  tail -f app." + dataExt + " | " + prog + " -u --color-level '.'");
+        if prog == "ygrep" { println("  echo 'x: 1' | ygrep '.x'"); }
+        else { println("  echo '{\"x\":1}' | jgrep '.x'"); }
+    }
+
+    fnc baseName(path: String) -> String
+    {
+        var idx: Int64 = -1;
+        var i: Int64 = 0;
+        while i < path.len()
+        {
+            if (path[i] as Int64) == 47 { idx = i; }
+            i = i + 1;
+        }
+        return path.substring(idx + 1, path.len());
+    }
+
+    fnc main() -> Int32
+    {
+        let allArgs = processArgs();
+
+        var progName = "jgrep";
+        if allArgs.len() > 0
+        {
+            let invoked = baseName(allArgs[0]);
+            if invoked.endsWith("ygrep") { progName = "ygrep"; }
+        }
+
+        var args: List<String> = [];
+        var i = 1;
+        while i < allArgs.len() { args.push(allArgs[i]); i = i + 1; }
+
+        if args.len() == 0
+        {
+            printHelp(progName);
+            return 2;
+        }
+
+        let firstArg = args[0];
+        if firstArg == "completion" && args.len() > 1
+        {
+            return CompletionGenerator::generate(args[1], progName);
+        }
+
+        var opts = ArgParser::parse(args);
+        opts.progName = progName;
+        opts.yamlInput = progName == "ygrep";
+        if opts.yamlFlag { opts.yamlInput = true; }
+        if opts.jsonFlag { opts.yamlInput = false; }
+
+        if opts.showHelp
+        {
+            printHelp(progName);
+            return 0;
+        }
+
+        if opts.showVersion
+        {
+            println(progName + " 1.0.4 (Tinox)");
+            return 0;
+        }
+
+        if opts.badOption != ""
+        {
+            println(progName + ": unknown option: " + opts.badOption);
+            println("Try '" + progName + " --help' for more information.");
+            return 2;
+        }
+
+        if opts.colorMode != "auto" && opts.colorMode != "always" && opts.colorMode != "never"
+        {
+            println(progName + ": invalid --color mode: " + opts.colorMode + " (expected auto, always or never)");
+            return 2;
+        }
+
+        if opts.count && opts.filesWithMatches
+        {
+            println(progName + ": --count and --files-with-matches are mutually exclusive");
+            return 2;
+        }
+
+        var jgrep = JGrep::new(opts);
+        return jgrep.run();
+    }
+}

@@ -1,5 +1,6 @@
 module jgrep.json_value;
 
+import JsonUtil;
 import JsonValue;
 
 class JsonValueHelper
@@ -212,7 +213,7 @@ class JsonValueHelper
                     Object(bo) =>
                     {
                         if ao.len() != bo.len() { return false; }
-                        let aoKeys = sortStringList(ao.keys());
+                        let aoKeys = JsonUtil::sortStringList(ao.keys());
                         for key in aoKeys
                         {
                             if !bo.contains(key) { return false; }
@@ -375,9 +376,9 @@ class JsonValueHelper
                     Object(bo) =>
                     {
                         var result: Map<String, JsonValue> = @{};
-                        let aoKs = sortStringList(ao.keys());
+                        let aoKs = JsonUtil::sortStringList(ao.keys());
                         for key in aoKs { result[key] = ao.get(key); }
-                        let boKs = sortStringList(bo.keys());
+                        let boKs = JsonUtil::sortStringList(bo.keys());
                         for key in boKs { result[key] = bo.get(key); }
                         return JsonValue::Object(result);
                     }
@@ -491,9 +492,9 @@ class JsonValueHelper
                     Object(bo) =>
                     {
                         var result: Map<String, JsonValue> = @{};
-                        let aoKs = sortStringList(ao.keys());
+                        let aoKs = JsonUtil::sortStringList(ao.keys());
                         for key in aoKs { result[key] = ao.get(key); }
-                        let boKs = sortStringList(bo.keys());
+                        let boKs = JsonUtil::sortStringList(bo.keys());
                         for key in boKs
                         {
                             if result.contains(key)

@@ -1,5 +1,6 @@
 module jgrep.json_parser;
 
+import JsonUtil;
 import JsonValue;
 
 class JsonSerializer
@@ -23,7 +24,7 @@ class JsonSerializer
             Null       => return "null";
             Bool(b)    => { if b { return "true"; } return "false"; }
             Integer(n) => return n.toString();
-            Float(s)   => return floatDisplay(s);
+            Float(s)   => return JsonUtil::floatDisplay(s);
             Str(s)     => return "\"" + JsonSerializer::escapeString(s) + "\"";
             Array(a)   =>
             {
@@ -45,7 +46,7 @@ class JsonSerializer
                 if oLen == 0 { return "{}"; }
                 var result = "{";
                 var i = 0;
-                let oKs = sortStringList(o.keys());
+                let oKs = JsonUtil::sortStringList(o.keys());
                 for key in oKs
                 {
                     if i > 0 { result = result + ","; }
@@ -73,7 +74,7 @@ class JsonSerializer
             Null       => return "null";
             Bool(b)    => { if b { return "true"; } return "false"; }
             Integer(n) => return n.toString();
-            Float(s)   => return floatDisplay(s);
+            Float(s)   => return JsonUtil::floatDisplay(s);
             Str(s)     => return "\"" + JsonSerializer::escapeString(s) + "\"";
             Array(a)   =>
             {
@@ -95,7 +96,7 @@ class JsonSerializer
                 if poLen == 0 { return "{}"; }
                 var result = "{\n";
                 var i = 0;
-                let poKs = sortStringList(o.keys());
+                let poKs = JsonUtil::sortStringList(o.keys());
                 for key in poKs
                 {
                     if i > 0 { result = result + ",\n"; }

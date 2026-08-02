@@ -1,5 +1,6 @@
 module jgrep.color;
 
+import JsonUtil;
 import JsonValue;
 import JsonSerializer;
 import Ansi;
@@ -30,7 +31,7 @@ class JsonHighlighter
                 return Ansi::colorize("false", Ansi::magenta());
             }
             Integer(n) => return Ansi::colorize(n.toString(), Ansi::yellow());
-            Float(s)   => return Ansi::colorize(floatDisplay(s), Ansi::yellow());
+            Float(s)   => return Ansi::colorize(JsonUtil::floatDisplay(s), Ansi::yellow());
             Str(s) => return Ansi::colorize("\"" + JsonSerializer::escapeString(s) + "\"", Ansi::green());
             Array(a) =>
             {
@@ -52,7 +53,7 @@ class JsonHighlighter
                 if hoLen == 0 { return "{}"; }
                 var result = "{";
                 var i = 0;
-                let hoKs = sortStringList(o.keys());
+                let hoKs = JsonUtil::sortStringList(o.keys());
                 for key in hoKs
                 {
                     if i > 0 { result = result + ","; }
@@ -81,7 +82,7 @@ class JsonHighlighter
                 return Ansi::colorize("false", Ansi::magenta());
             }
             Integer(n) => return Ansi::colorize(n.toString(), Ansi::yellow());
-            Float(s)   => return Ansi::colorize(floatDisplay(s), Ansi::yellow());
+            Float(s)   => return Ansi::colorize(JsonUtil::floatDisplay(s), Ansi::yellow());
             Str(s) => return Ansi::colorize("\"" + JsonSerializer::escapeString(s) + "\"", Ansi::green());
             Array(a) =>
             {
@@ -103,7 +104,7 @@ class JsonHighlighter
                 if hpoLen == 0 { return "{}"; }
                 var result = "{\n";
                 var i = 0;
-                let hpoKs = sortStringList(o.keys());
+                let hpoKs = JsonUtil::sortStringList(o.keys());
                 for key in hpoKs
                 {
                     if i > 0 { result = result + ",\n"; }

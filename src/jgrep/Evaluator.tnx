@@ -1,5 +1,6 @@
 module jgrep.evaluator;
 
+import JsonUtil;
 import JsonValue;
 import JsonValueHelper;
 import JsonSerializer;
@@ -10,497 +11,522 @@ import ObjEntry;
 import EvalContext;
 import EvalResult;
 
-fn getEntryKeySpec(e: ObjEntry) -> ObjKey { return e.keySpec; }
-fn getEntryValFilter(e: ObjEntry) -> Filter { return e.valFilter; }
-fn filterFieldName(f: Filter) -> List<String>
-{
-    match f { Filter::Field(s) => return [s]; _ => return []; }
-}
-fn filterIndexAccess(f: Filter) -> List<Int64>
-{
-    match f { Filter::IndexAccess(n) => return [n]; _ => return []; }
-}
-fn filterIsPipe(f: Filter) -> Bool
-{
-    match f { Filter::Pipe(l, r) => return true; _ => return false; }
-}
-fn filterPipeLeft(f: Filter) -> Filter
-{
-    match f { Filter::Pipe(l, r) => return l; _ => return Filter::Identity; }
-}
-fn filterPipeRight(f: Filter) -> Filter
-{
-    match f { Filter::Pipe(l, r) => return r; _ => return Filter::Identity; }
-}
-fn filterIsIdentity(f: Filter) -> Bool
-{
-    match f { Filter::Identity => return true; _ => return false; }
-}
-fn filterIsIterEach(f: Filter) -> Bool
-{
-    match f { Filter::IterEach => return true; _ => return false; }
-}
-fn filterTypeName(f: Filter) -> String
-{
-    match f
-    {
-        Filter::Identity => return "Identity";
-        Filter::LiteralNull => return "LiteralNull";
-        Filter::LiteralBool(b) => return "LiteralBool";
-        Filter::LiteralInt(n) => return "LiteralInt(" + n.toString() + ")";
-        Filter::LiteralFloat(s) => return "LiteralFloat";
-        Filter::LiteralStr(s) => return "LiteralStr(" + s + ")";
-        Filter::Field(n) => return "Field(" + n + ")";
-        Filter::Variable(n) => return "Variable(" + n + ")";
-        Filter::Pipe(l, r) => return "Pipe";
-        Filter::Comma(l, r) => return "Comma";
-        Filter::FunctionCall(n, a) => return "FunctionCall(" + n + ")";
-        Filter::IterEach => return "IterEach";
-        Filter::TryOnly(b) => return "TryOnly";
-        Filter::TryCatchWith(b, h) => return "TryCatchWith";
-        _ => return "Other";
-    }
-    return "Unknown";
-}
-
-fn filterGetDefName(f: Filter) -> List<String>
-{ match f { Filter::Def(name, args, body) => return [name]; _ => return []; } }
-fn filterGetDefBody(f: Filter) -> List<Filter>
-{ match f { Filter::Def(name, args, body) => return [body]; _ => return []; } }
-
-// ---- Regex-Schicht (sub/gsub/splits/match/capture/scan/test) ----
-//
-// Übersetzt jq/Oniguruma-Syntax nach POSIX ERE: (?<name>...) und (?:...)
-// werden zu zählenden Gruppen, \d/\w/\s & Co. zu Zeichenklassen.
-// Rückgabe: [posixPattern, gruppe1Name, gruppe2Name, ...] ("" = unbenannt).
-
-fn rxStrAt(xs: List<String>, i: Int64) -> String { return xs[i]; }
-fn rxStrCount(xs: List<String>) -> Int64 { return xs.len(); }
-
-fn regexTranslate(pattern: String) -> List<String>
-{
-    var names: List<String> = [];
-    var out = "";
-    var i: Int64 = 0;
-    let n = pattern.len();
-    var inClass = false;
-    while i < n
-    {
-        let c = pattern.substring(i, i + 1);
-        if c == "\\" && i + 1 < n
-        {
-            let d = pattern.substring(i + 1, i + 2);
-            if inClass
-            {
-                if d == "d" { out = out + "0-9"; i += 2; continue; }
-                if d == "w" { out = out + "A-Za-z0-9_"; i += 2; continue; }
-                if d == "s" { out = out + " \t\r\n"; i += 2; continue; }
-            }
-            else
-            {
-                if d == "d" { out = out + "[0-9]"; i += 2; continue; }
-                if d == "D" { out = out + "[^0-9]"; i += 2; continue; }
-                if d == "w" { out = out + "[A-Za-z0-9_]"; i += 2; continue; }
-                if d == "W" { out = out + "[^A-Za-z0-9_]"; i += 2; continue; }
-                if d == "s" { out = out + "[ \t\r\n]"; i += 2; continue; }
-                if d == "S" { out = out + "[^ \t\r\n]"; i += 2; continue; }
-            }
-            out = out + c + d;
-            i += 2;
-            continue;
-        }
-        if inClass
-        {
-            if c == "]" { inClass = false; }
-            out = out + c;
-            i += 1;
-            continue;
-        }
-        if c == "[" { inClass = true; out = out + c; i += 1; continue; }
-        if c == "("
-        {
-            if i + 2 < n && pattern.substring(i + 1, i + 2) == "?"
-            {
-                let t = pattern.substring(i + 2, i + 3);
-                if t == "<"
-                {
-                    var j = i + 3;
-                    var nm = "";
-                    while j < n && pattern.substring(j, j + 1) != ">"
-                    {
-                        nm = nm + pattern.substring(j, j + 1);
-                        j += 1;
-                    }
-                    out = out + "(";
-                    names.push(nm);
-                    i = j + 1;
-                    continue;
-                }
-                if t == ":"
-                {
-                    // non-capturing kennt POSIX nicht — wird zur zählenden Gruppe
-                    out = out + "(";
-                    names.push("");
-                    i += 3;
-                    continue;
-                }
-            }
-            out = out + "(";
-            names.push("");
-            i += 1;
-            continue;
-        }
-        out = out + c;
-        i += 1;
-    }
-    var result: List<String> = [out];
-    for nm in names { result.push(nm); }
-    return result;
-}
-
-// jq-Match-Objekt: {offset, length, string, captures: [{offset, length, string, name}]}
-// Offsets sind Byte-Offsets (jq zählt Codepoints — Abweichung bei Nicht-ASCII).
-fn buildMatchObject(s: String, groups: List<Int64>, tr: List<String>) -> JsonValue
-{
-    var obj: Map<String, JsonValue> = @{};
-    let ms = groups[0];
-    let me = groups[1];
-    obj["offset"] = JsonValue::Integer(ms);
-    obj["length"] = JsonValue::Integer(me - ms);
-    obj["string"] = JsonValue::Str(s.substring(ms, me));
-    var caps: List<JsonValue> = [];
-    var gi: Int64 = 2;
-    var ni: Int64 = 1;
-    while gi + 1 < groups.len()
-    {
-        var cap: Map<String, JsonValue> = @{};
-        let gs = groups[gi];
-        let ge = groups[gi + 1];
-        if gs < 0
-        {
-            cap["offset"] = JsonValue::Integer(-1);
-            cap["length"] = JsonValue::Integer(0);
-            cap["string"] = JsonValue::Null;
-        }
-        else
-        {
-            cap["offset"] = JsonValue::Integer(gs);
-            cap["length"] = JsonValue::Integer(ge - gs);
-            cap["string"] = JsonValue::Str(s.substring(gs, ge));
-        }
-        var nm = "";
-        if ni < rxStrCount(tr) { nm = rxStrAt(tr, ni); }
-        if nm == "" { cap["name"] = JsonValue::Null; }
-        else { cap["name"] = JsonValue::Str(nm); }
-        caps.push(JsonValue::Object(cap));
-        gi += 2;
-        ni += 1;
-    }
-    obj["captures"] = JsonValue::Array(caps);
-    return JsonValue::Object(obj);
-}
-
-// Regex-Split: Teile zwischen den Matches (für splits und split/2)
-fn regexSplitString(s: String, pattern: String, flags: String) -> List<JsonValue>
-{
-    let tr = regexTranslate(pattern);
-    let posix = rxStrAt(tr, 0);
-    var icase: Int64 = 0;
-    if flags.contains("i") { icase = 1; }
-    var parts: List<JsonValue> = [];
-    var partStart: Int64 = 0;
-    var searchPos: Int64 = 0;
-    while searchPos <= s.len()
-    {
-        let g = regexMatchGroups(posix, s, searchPos, icase);
-        if g.len() == 0 { break; }
-        let ms = g[0];
-        let me = g[1];
-        if me == ms
-        {
-            // leere Matches überspringen (kein leerer Separator)
-            searchPos = ms + 1;
-            continue;
-        }
-        parts.push(JsonValue::Str(s.substring(partStart, ms)));
-        partStart = me;
-        searchPos = me;
-    }
-    parts.push(JsonValue::Str(s.substring(partStart, s.len())));
-    return parts;
-}
-
-// ---- Datum-Helfer (gmtime/mktime) ----
-// Civil-Calendar-Arithmetik nach Howard Hinnant (proleptischer Gregorianischer Kalender)
-
-fn daysFromCivil(y: Int64, m: Int64, d: Int64) -> Int64
-{
-    var yy = y;
-    if m <= 2 { yy -= 1; }
-    var era: Int64 = 0;
-    if yy >= 0 { era = yy / 400; } else { era = (yy - 399) / 400; }
-    let yoe = yy - era * 400;
-    var mp = m + 9;
-    if mp >= 12 { mp -= 12; }
-    let doy = (153 * mp + 2) / 5 + d - 1;
-    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
-    return era * 146097 + doe - 719468;
-}
-
-// [Jahr, Monat (1-basiert), Tag] aus Tagen seit Epoch
-fn civilFromDays(z: Int64) -> List<Int64>
-{
-    let zz = z + 719468;
-    var era: Int64 = 0;
-    if zz >= 0 { era = zz / 146097; } else { era = (zz - 146096) / 146097; }
-    let doe = zz - era * 146097;
-    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
-    let y = yoe + era * 400;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let d = doy - (153 * mp + 2) / 5 + 1;
-    var m = mp + 3;
-    if mp >= 10 { m = mp - 9; }
-    var yr = y;
-    if m <= 2 { yr += 1; }
-    return [yr, m, d];
-}
-
-// jq-"broken down time": [Jahr, Monat 0-basiert, Tag, Stunde, Minute, Sekunde, Wochentag, Jahrestag]
-fn gmtimeArray(secs: Int64) -> List<JsonValue>
-{
-    var days = secs / 86400;
-    var rem = secs % 86400;
-    if rem < 0 { rem += 86400; days -= 1; }
-    let ymd = civilFromDays(days);
-    let y = ymd[0];
-    let m = ymd[1];
-    let d = ymd[2];
-    var wday = (days + 4) % 7;
-    if wday < 0 { wday += 7; }
-    let yday = days - daysFromCivil(y, 1, 1);
-    var result: List<JsonValue> = [];
-    result.push(JsonValue::Integer(y));
-    result.push(JsonValue::Integer(m - 1));
-    result.push(JsonValue::Integer(d));
-    result.push(JsonValue::Integer(rem / 3600));
-    result.push(JsonValue::Integer((rem % 3600) / 60));
-    result.push(JsonValue::Integer(rem % 60));
-    result.push(JsonValue::Integer(wday));
-    result.push(JsonValue::Integer(yday));
-    return result;
-}
-
-// parst bis zu maxDigits Ziffern ab pos; Rückgabe [wert, neuePos], wert = -1 wenn keine Ziffer
-fn strptimeNum(s: String, pos: Int64, maxDigits: Int64) -> List<Int64>
-{
-    var i = pos;
-    let n = s.len();
-    var v: Int64 = 0;
-    var count: Int64 = 0;
-    while i < n && count < maxDigits
-    {
-        let c = s[i] as Int64;
-        if c < 48 || c > 57 { break; }
-        v = v * 10 + (c - 48);
-        i = i + 1;
-        count = count + 1;
-    }
-    if count == 0 { return [-1, pos]; }
-    return [v, i];
-}
-
-// Format-gesteuertes strptime (Subset: %Y %m %d %e %H %M %S %T %Z %z %%).
-// Rückgabe: [ok, Jahr, Monat 1-basiert, Tag, Stunde, Minute, Sekunde, UTC-Offset in Sekunden]
-fn strptimeParse(s: String, fmt: String) -> List<Int64>
-{
-    var y: Int64 = 1970;
-    var mon: Int64 = 1;
-    var d: Int64 = 1;
-    var h: Int64 = 0;
-    var mi: Int64 = 0;
-    var se: Int64 = 0;
-    var offset: Int64 = 0;
-    var i: Int64 = 0;
-    var f: Int64 = 0;
-    let sn = s.len();
-    let fl = fmt.len();
-    let fail: List<Int64> = [0, 0, 0, 0, 0, 0, 0, 0];
-
-    while f < fl
-    {
-        let fc = fmt[f] as Int64;
-        if fc != 37
-        {
-            if i >= sn { return fail; }
-            if (s[i] as Int64) != fc { return fail; }
-            i = i + 1;
-            f = f + 1;
-            continue;
-        }
-        f = f + 1;
-        if f >= fl { return fail; }
-        let dir = fmt[f] as Int64;
-        f = f + 1;
-
-        if dir == 37
-        {
-            if i >= sn { return fail; }
-            if (s[i] as Int64) != 37 { return fail; }
-            i = i + 1;
-        }
-        else if dir == 89
-        {
-            var neg = false;
-            if i < sn && (s[i] as Int64) == 45 { neg = true; i = i + 1; }
-            let r = strptimeNum(s, i, 4);
-            if r[0] < 0 { return fail; }
-            y = r[0];
-            if neg { y = 0 - y; }
-            i = r[1];
-        }
-        else if dir == 109
-        {
-            let r = strptimeNum(s, i, 2);
-            if r[0] < 1 || r[0] > 12 { return fail; }
-            mon = r[0];
-            i = r[1];
-        }
-        else if dir == 100 || dir == 101
-        {
-            if dir == 101 && i < sn && (s[i] as Int64) == 32 { i = i + 1; }
-            let r = strptimeNum(s, i, 2);
-            if r[0] < 1 || r[0] > 31 { return fail; }
-            d = r[0];
-            i = r[1];
-        }
-        else if dir == 72
-        {
-            let r = strptimeNum(s, i, 2);
-            if r[0] < 0 || r[0] > 23 { return fail; }
-            h = r[0];
-            i = r[1];
-        }
-        else if dir == 77
-        {
-            let r = strptimeNum(s, i, 2);
-            if r[0] < 0 || r[0] > 59 { return fail; }
-            mi = r[0];
-            i = r[1];
-        }
-        else if dir == 83
-        {
-            let r = strptimeNum(s, i, 2);
-            if r[0] < 0 || r[0] > 60 { return fail; }
-            se = r[0];
-            i = r[1];
-        }
-        else if dir == 84
-        {
-            let rh = strptimeNum(s, i, 2);
-            if rh[0] < 0 || rh[0] > 23 { return fail; }
-            i = rh[1];
-            if i >= sn || (s[i] as Int64) != 58 { return fail; }
-            i = i + 1;
-            let rm = strptimeNum(s, i, 2);
-            if rm[0] < 0 || rm[0] > 59 { return fail; }
-            i = rm[1];
-            if i >= sn || (s[i] as Int64) != 58 { return fail; }
-            i = i + 1;
-            let rs = strptimeNum(s, i, 2);
-            if rs[0] < 0 || rs[0] > 60 { return fail; }
-            i = rs[1];
-            h = rh[0];
-            mi = rm[0];
-            se = rs[0];
-        }
-        else if dir == 90
-        {
-            // %Z: Zonenname (Buchstaben) überspringen — keine TZ-Datenbank
-            while i < sn
-            {
-                let c = s[i] as Int64;
-                if (c >= 65 && c <= 90) || (c >= 97 && c <= 122) { i = i + 1; }
-                else { break; }
-            }
-        }
-        else if dir == 122
-        {
-            // %z: [+-]HHMM oder [+-]HH:MM oder "Z"
-            if i < sn && ((s[i] as Int64) == 90 || (s[i] as Int64) == 122)
-            {
-                i = i + 1;
-            }
-            else
-            {
-                if i >= sn { return fail; }
-                let sc = s[i] as Int64;
-                var sign: Int64 = 1;
-                if sc == 45 { sign = -1; }
-                else if sc != 43 { return fail; }
-                i = i + 1;
-                let rh = strptimeNum(s, i, 2);
-                if rh[0] < 0 { return fail; }
-                i = rh[1];
-                if i < sn && (s[i] as Int64) == 58 { i = i + 1; }
-                var mm: Int64 = 0;
-                let rm = strptimeNum(s, i, 2);
-                if rm[0] >= 0 { mm = rm[0]; i = rm[1]; }
-                offset = sign * (rh[0] * 3600 + mm * 60);
-            }
-        }
-        else { return fail; }
-    }
-
-    return [1, y, mon, d, h, mi, se, offset];
-}
-
-fn jsonToInt(v: JsonValue) -> Int64
-{
-    match v
-    {
-        Integer(n) => return n;
-        Float(f) => return f as Int64;
-        _ => return 0;
-    }
-    return 0;
-}
-
-// Einheit für dateadd/datesub → Sekunden (0 = unbekannt)
-fn dateUnitSecs(unit: String) -> Int64
-{
-    if unit == "seconds" || unit == "second" { return 1; }
-    if unit == "minutes" || unit == "minute" { return 60; }
-    if unit == "hours" || unit == "hour" { return 3600; }
-    if unit == "days" || unit == "day" { return 86400; }
-    return 0;
-}
-
-// Capture-Objekt für sub/gsub/capture: nur benannte Gruppen, name → String|Null
-fn buildCaptureObject(s: String, groups: List<Int64>, tr: List<String>) -> JsonValue
-{
-    var obj: Map<String, JsonValue> = @{};
-    var gi: Int64 = 2;
-    var ni: Int64 = 1;
-    while gi + 1 < groups.len()
-    {
-        if ni < rxStrCount(tr)
-        {
-            let nm = rxStrAt(tr, ni);
-            if nm != ""
-            {
-                if groups[gi] < 0 { obj[nm] = JsonValue::Null; }
-                else { obj[nm] = JsonValue::Str(s.substring(groups[gi], groups[gi + 1])); }
-            }
-        }
-        gi += 2;
-        ni += 1;
-    }
-    return JsonValue::Object(obj);
-}
-
 class Evaluator
 {
+
+    fnc getEntryKeySpec(e: ObjEntry) -> ObjKey { return e.keySpec; }
+
+    fnc getEntryValFilter(e: ObjEntry) -> Filter { return e.valFilter; }
+
+    fnc filterFieldName(f: Filter) -> List<String>
+    {
+        match f { Filter::Field(s) => return [s]; _ => return []; }
+    }
+
+    fnc filterIndexAccess(f: Filter) -> List<Int64>
+    {
+        match f { Filter::IndexAccess(n) => return [n]; _ => return []; }
+    }
+
+    fnc filterIsPipe(f: Filter) -> Bool
+    {
+        match f { Filter::Pipe(l, r) => return true; _ => return false; }
+    }
+
+    fnc filterPipeLeft(f: Filter) -> Filter
+    {
+        match f { Filter::Pipe(l, r) => return l; _ => return Filter::Identity; }
+    }
+
+    fnc filterPipeRight(f: Filter) -> Filter
+    {
+        match f { Filter::Pipe(l, r) => return r; _ => return Filter::Identity; }
+    }
+
+    fnc filterIsIdentity(f: Filter) -> Bool
+    {
+        match f { Filter::Identity => return true; _ => return false; }
+    }
+
+    fnc filterIsIterEach(f: Filter) -> Bool
+    {
+        match f { Filter::IterEach => return true; _ => return false; }
+    }
+
+    fnc filterTypeName(f: Filter) -> String
+    {
+        match f
+        {
+            Filter::Identity => return "Identity";
+            Filter::LiteralNull => return "LiteralNull";
+            Filter::LiteralBool(b) => return "LiteralBool";
+            Filter::LiteralInt(n) => return "LiteralInt(" + n.toString() + ")";
+            Filter::LiteralFloat(s) => return "LiteralFloat";
+            Filter::LiteralStr(s) => return "LiteralStr(" + s + ")";
+            Filter::Field(n) => return "Field(" + n + ")";
+            Filter::Variable(n) => return "Variable(" + n + ")";
+            Filter::Pipe(l, r) => return "Pipe";
+            Filter::Comma(l, r) => return "Comma";
+            Filter::FunctionCall(n, a) => return "FunctionCall(" + n + ")";
+            Filter::IterEach => return "IterEach";
+            Filter::TryOnly(b) => return "TryOnly";
+            Filter::TryCatchWith(b, h) => return "TryCatchWith";
+            _ => return "Other";
+        }
+        return "Unknown";
+    }
+
+
+    fnc filterGetDefName(f: Filter) -> List<String>
+    { match f { Filter::Def(name, args, body) => return [name]; _ => return []; } }
+
+    fnc filterGetDefBody(f: Filter) -> List<Filter>
+    { match f { Filter::Def(name, args, body) => return [body]; _ => return []; } }
+
+
+    // ---- Regex-Schicht (sub/gsub/splits/match/capture/scan/test) ----
+    //
+    // Übersetzt jq/Oniguruma-Syntax nach POSIX ERE: (?<name>...) und (?:...)
+    // werden zu zählenden Gruppen, \d/\w/\s & Co. zu Zeichenklassen.
+    // Rückgabe: [posixPattern, gruppe1Name, gruppe2Name, ...] ("" = unbenannt).
+
+    fnc rxStrAt(xs: List<String>, i: Int64) -> String { return xs[i]; }
+
+    fnc rxStrCount(xs: List<String>) -> Int64 { return xs.len(); }
+
+
+    fnc regexTranslate(pattern: String) -> List<String>
+    {
+        var names: List<String> = [];
+        var out = "";
+        var i: Int64 = 0;
+        let n = pattern.len();
+        var inClass = false;
+        while i < n
+        {
+            let c = pattern.substring(i, i + 1);
+            if c == "\\" && i + 1 < n
+            {
+                let d = pattern.substring(i + 1, i + 2);
+                if inClass
+                {
+                    if d == "d" { out = out + "0-9"; i += 2; continue; }
+                    if d == "w" { out = out + "A-Za-z0-9_"; i += 2; continue; }
+                    if d == "s" { out = out + " \t\r\n"; i += 2; continue; }
+                }
+                else
+                {
+                    if d == "d" { out = out + "[0-9]"; i += 2; continue; }
+                    if d == "D" { out = out + "[^0-9]"; i += 2; continue; }
+                    if d == "w" { out = out + "[A-Za-z0-9_]"; i += 2; continue; }
+                    if d == "W" { out = out + "[^A-Za-z0-9_]"; i += 2; continue; }
+                    if d == "s" { out = out + "[ \t\r\n]"; i += 2; continue; }
+                    if d == "S" { out = out + "[^ \t\r\n]"; i += 2; continue; }
+                }
+                out = out + c + d;
+                i += 2;
+                continue;
+            }
+            if inClass
+            {
+                if c == "]" { inClass = false; }
+                out = out + c;
+                i += 1;
+                continue;
+            }
+            if c == "[" { inClass = true; out = out + c; i += 1; continue; }
+            if c == "("
+            {
+                if i + 2 < n && pattern.substring(i + 1, i + 2) == "?"
+                {
+                    let t = pattern.substring(i + 2, i + 3);
+                    if t == "<"
+                    {
+                        var j = i + 3;
+                        var nm = "";
+                        while j < n && pattern.substring(j, j + 1) != ">"
+                        {
+                            nm = nm + pattern.substring(j, j + 1);
+                            j += 1;
+                        }
+                        out = out + "(";
+                        names.push(nm);
+                        i = j + 1;
+                        continue;
+                    }
+                    if t == ":"
+                    {
+                        // non-capturing kennt POSIX nicht — wird zur zählenden Gruppe
+                        out = out + "(";
+                        names.push("");
+                        i += 3;
+                        continue;
+                    }
+                }
+                out = out + "(";
+                names.push("");
+                i += 1;
+                continue;
+            }
+            out = out + c;
+            i += 1;
+        }
+        var result: List<String> = [out];
+        for nm in names { result.push(nm); }
+        return result;
+    }
+
+
+    // jq-Match-Objekt: {offset, length, string, captures: [{offset, length, string, name}]}
+    // Offsets sind Byte-Offsets (jq zählt Codepoints — Abweichung bei Nicht-ASCII).
+    fnc buildMatchObject(s: String, groups: List<Int64>, tr: List<String>) -> JsonValue
+    {
+        var obj: Map<String, JsonValue> = @{};
+        let ms = groups[0];
+        let me = groups[1];
+        obj["offset"] = JsonValue::Integer(ms);
+        obj["length"] = JsonValue::Integer(me - ms);
+        obj["string"] = JsonValue::Str(s.substring(ms, me));
+        var caps: List<JsonValue> = [];
+        var gi: Int64 = 2;
+        var ni: Int64 = 1;
+        while gi + 1 < groups.len()
+        {
+            var cap: Map<String, JsonValue> = @{};
+            let gs = groups[gi];
+            let ge = groups[gi + 1];
+            if gs < 0
+            {
+                cap["offset"] = JsonValue::Integer(-1);
+                cap["length"] = JsonValue::Integer(0);
+                cap["string"] = JsonValue::Null;
+            }
+            else
+            {
+                cap["offset"] = JsonValue::Integer(gs);
+                cap["length"] = JsonValue::Integer(ge - gs);
+                cap["string"] = JsonValue::Str(s.substring(gs, ge));
+            }
+            var nm = "";
+            if ni < rxStrCount(tr) { nm = rxStrAt(tr, ni); }
+            if nm == "" { cap["name"] = JsonValue::Null; }
+            else { cap["name"] = JsonValue::Str(nm); }
+            caps.push(JsonValue::Object(cap));
+            gi += 2;
+            ni += 1;
+        }
+        obj["captures"] = JsonValue::Array(caps);
+        return JsonValue::Object(obj);
+    }
+
+
+    // Regex-Split: Teile zwischen den Matches (für splits und split/2)
+    fnc regexSplitString(s: String, pattern: String, flags: String) -> List<JsonValue>
+    {
+        let tr = regexTranslate(pattern);
+        let posix = rxStrAt(tr, 0);
+        var icase: Int64 = 0;
+        if flags.contains("i") { icase = 1; }
+        var parts: List<JsonValue> = [];
+        var partStart: Int64 = 0;
+        var searchPos: Int64 = 0;
+        while searchPos <= s.len()
+        {
+            let g = regexMatchGroups(posix, s, searchPos, icase);
+            if g.len() == 0 { break; }
+            let ms = g[0];
+            let me = g[1];
+            if me == ms
+            {
+                // leere Matches überspringen (kein leerer Separator)
+                searchPos = ms + 1;
+                continue;
+            }
+            parts.push(JsonValue::Str(s.substring(partStart, ms)));
+            partStart = me;
+            searchPos = me;
+        }
+        parts.push(JsonValue::Str(s.substring(partStart, s.len())));
+        return parts;
+    }
+
+
+    // ---- Datum-Helfer (gmtime/mktime) ----
+    // Civil-Calendar-Arithmetik nach Howard Hinnant (proleptischer Gregorianischer Kalender)
+
+    fnc daysFromCivil(y: Int64, m: Int64, d: Int64) -> Int64
+    {
+        var yy = y;
+        if m <= 2 { yy -= 1; }
+        var era: Int64 = 0;
+        if yy >= 0 { era = yy / 400; } else { era = (yy - 399) / 400; }
+        let yoe = yy - era * 400;
+        var mp = m + 9;
+        if mp >= 12 { mp -= 12; }
+        let doy = (153 * mp + 2) / 5 + d - 1;
+        let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+        return era * 146097 + doe - 719468;
+    }
+
+
+    // [Jahr, Monat (1-basiert), Tag] aus Tagen seit Epoch
+    fnc civilFromDays(z: Int64) -> List<Int64>
+    {
+        let zz = z + 719468;
+        var era: Int64 = 0;
+        if zz >= 0 { era = zz / 146097; } else { era = (zz - 146096) / 146097; }
+        let doe = zz - era * 146097;
+        let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+        let y = yoe + era * 400;
+        let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+        let mp = (5 * doy + 2) / 153;
+        let d = doy - (153 * mp + 2) / 5 + 1;
+        var m = mp + 3;
+        if mp >= 10 { m = mp - 9; }
+        var yr = y;
+        if m <= 2 { yr += 1; }
+        return [yr, m, d];
+    }
+
+
+    // jq-"broken down time": [Jahr, Monat 0-basiert, Tag, Stunde, Minute, Sekunde, Wochentag, Jahrestag]
+    fnc gmtimeArray(secs: Int64) -> List<JsonValue>
+    {
+        var days = secs / 86400;
+        var rem = secs % 86400;
+        if rem < 0 { rem += 86400; days -= 1; }
+        let ymd = civilFromDays(days);
+        let y = ymd[0];
+        let m = ymd[1];
+        let d = ymd[2];
+        var wday = (days + 4) % 7;
+        if wday < 0 { wday += 7; }
+        let yday = days - daysFromCivil(y, 1, 1);
+        var result: List<JsonValue> = [];
+        result.push(JsonValue::Integer(y));
+        result.push(JsonValue::Integer(m - 1));
+        result.push(JsonValue::Integer(d));
+        result.push(JsonValue::Integer(rem / 3600));
+        result.push(JsonValue::Integer((rem % 3600) / 60));
+        result.push(JsonValue::Integer(rem % 60));
+        result.push(JsonValue::Integer(wday));
+        result.push(JsonValue::Integer(yday));
+        return result;
+    }
+
+
+    // parst bis zu maxDigits Ziffern ab pos; Rückgabe [wert, neuePos], wert = -1 wenn keine Ziffer
+    fnc strptimeNum(s: String, pos: Int64, maxDigits: Int64) -> List<Int64>
+    {
+        var i = pos;
+        let n = s.len();
+        var v: Int64 = 0;
+        var count: Int64 = 0;
+        while i < n && count < maxDigits
+        {
+            let c = s[i] as Int64;
+            if c < 48 || c > 57 { break; }
+            v = v * 10 + (c - 48);
+            i = i + 1;
+            count = count + 1;
+        }
+        if count == 0 { return [-1, pos]; }
+        return [v, i];
+    }
+
+
+    // Format-gesteuertes strptime (Subset: %Y %m %d %e %H %M %S %T %Z %z %%).
+    // Rückgabe: [ok, Jahr, Monat 1-basiert, Tag, Stunde, Minute, Sekunde, UTC-Offset in Sekunden]
+    fnc strptimeParse(s: String, fmt: String) -> List<Int64>
+    {
+        var y: Int64 = 1970;
+        var mon: Int64 = 1;
+        var d: Int64 = 1;
+        var h: Int64 = 0;
+        var mi: Int64 = 0;
+        var se: Int64 = 0;
+        var offset: Int64 = 0;
+        var i: Int64 = 0;
+        var f: Int64 = 0;
+        let sn = s.len();
+        let fl = fmt.len();
+        let fail: List<Int64> = [0, 0, 0, 0, 0, 0, 0, 0];
+
+        while f < fl
+        {
+            let fc = fmt[f] as Int64;
+            if fc != 37
+            {
+                if i >= sn { return fail; }
+                if (s[i] as Int64) != fc { return fail; }
+                i = i + 1;
+                f = f + 1;
+                continue;
+            }
+            f = f + 1;
+            if f >= fl { return fail; }
+            let dir = fmt[f] as Int64;
+            f = f + 1;
+
+            if dir == 37
+            {
+                if i >= sn { return fail; }
+                if (s[i] as Int64) != 37 { return fail; }
+                i = i + 1;
+            }
+            else if dir == 89
+            {
+                var neg = false;
+                if i < sn && (s[i] as Int64) == 45 { neg = true; i = i + 1; }
+                let r = strptimeNum(s, i, 4);
+                if r[0] < 0 { return fail; }
+                y = r[0];
+                if neg { y = 0 - y; }
+                i = r[1];
+            }
+            else if dir == 109
+            {
+                let r = strptimeNum(s, i, 2);
+                if r[0] < 1 || r[0] > 12 { return fail; }
+                mon = r[0];
+                i = r[1];
+            }
+            else if dir == 100 || dir == 101
+            {
+                if dir == 101 && i < sn && (s[i] as Int64) == 32 { i = i + 1; }
+                let r = strptimeNum(s, i, 2);
+                if r[0] < 1 || r[0] > 31 { return fail; }
+                d = r[0];
+                i = r[1];
+            }
+            else if dir == 72
+            {
+                let r = strptimeNum(s, i, 2);
+                if r[0] < 0 || r[0] > 23 { return fail; }
+                h = r[0];
+                i = r[1];
+            }
+            else if dir == 77
+            {
+                let r = strptimeNum(s, i, 2);
+                if r[0] < 0 || r[0] > 59 { return fail; }
+                mi = r[0];
+                i = r[1];
+            }
+            else if dir == 83
+            {
+                let r = strptimeNum(s, i, 2);
+                if r[0] < 0 || r[0] > 60 { return fail; }
+                se = r[0];
+                i = r[1];
+            }
+            else if dir == 84
+            {
+                let rh = strptimeNum(s, i, 2);
+                if rh[0] < 0 || rh[0] > 23 { return fail; }
+                i = rh[1];
+                if i >= sn || (s[i] as Int64) != 58 { return fail; }
+                i = i + 1;
+                let rm = strptimeNum(s, i, 2);
+                if rm[0] < 0 || rm[0] > 59 { return fail; }
+                i = rm[1];
+                if i >= sn || (s[i] as Int64) != 58 { return fail; }
+                i = i + 1;
+                let rs = strptimeNum(s, i, 2);
+                if rs[0] < 0 || rs[0] > 60 { return fail; }
+                i = rs[1];
+                h = rh[0];
+                mi = rm[0];
+                se = rs[0];
+            }
+            else if dir == 90
+            {
+                // %Z: Zonenname (Buchstaben) überspringen — keine TZ-Datenbank
+                while i < sn
+                {
+                    let c = s[i] as Int64;
+                    if (c >= 65 && c <= 90) || (c >= 97 && c <= 122) { i = i + 1; }
+                    else { break; }
+                }
+            }
+            else if dir == 122
+            {
+                // %z: [+-]HHMM oder [+-]HH:MM oder "Z"
+                if i < sn && ((s[i] as Int64) == 90 || (s[i] as Int64) == 122)
+                {
+                    i = i + 1;
+                }
+                else
+                {
+                    if i >= sn { return fail; }
+                    let sc = s[i] as Int64;
+                    var sign: Int64 = 1;
+                    if sc == 45 { sign = -1; }
+                    else if sc != 43 { return fail; }
+                    i = i + 1;
+                    let rh = strptimeNum(s, i, 2);
+                    if rh[0] < 0 { return fail; }
+                    i = rh[1];
+                    if i < sn && (s[i] as Int64) == 58 { i = i + 1; }
+                    var mm: Int64 = 0;
+                    let rm = strptimeNum(s, i, 2);
+                    if rm[0] >= 0 { mm = rm[0]; i = rm[1]; }
+                    offset = sign * (rh[0] * 3600 + mm * 60);
+                }
+            }
+            else { return fail; }
+        }
+
+        return [1, y, mon, d, h, mi, se, offset];
+    }
+
+
+    fnc jsonToInt(v: JsonValue) -> Int64
+    {
+        match v
+        {
+            Integer(n) => return n;
+            Float(f) => return f as Int64;
+            _ => return 0;
+        }
+        return 0;
+    }
+
+
+    // Einheit für dateadd/datesub → Sekunden (0 = unbekannt)
+    fnc dateUnitSecs(unit: String) -> Int64
+    {
+        if unit == "seconds" || unit == "second" { return 1; }
+        if unit == "minutes" || unit == "minute" { return 60; }
+        if unit == "hours" || unit == "hour" { return 3600; }
+        if unit == "days" || unit == "day" { return 86400; }
+        return 0;
+    }
+
+
+    // Capture-Objekt für sub/gsub/capture: nur benannte Gruppen, name → String|Null
+    fnc buildCaptureObject(s: String, groups: List<Int64>, tr: List<String>) -> JsonValue
+    {
+        var obj: Map<String, JsonValue> = @{};
+        var gi: Int64 = 2;
+        var ni: Int64 = 1;
+        while gi + 1 < groups.len()
+        {
+            if ni < rxStrCount(tr)
+            {
+                let nm = rxStrAt(tr, ni);
+                if nm != ""
+                {
+                    if groups[gi] < 0 { obj[nm] = JsonValue::Null; }
+                    else { obj[nm] = JsonValue::Str(s.substring(groups[gi], groups[gi + 1])); }
+                }
+            }
+            gi += 2;
+            ni += 1;
+        }
+        return JsonValue::Object(obj);
+    }
+
     var hadError: Bool;
     var inputQueue: List<JsonValue>;
     var inputQueuePos: Int64;
@@ -620,7 +646,7 @@ class Evaluator
                     Object(o) =>
                     {
                         var results: List<JsonValue> = [];
-                        let oKeys = sortStringList(o.keys());
+                        let oKeys = JsonUtil::sortStringList(o.keys());
                         for key in oKeys { results.push(o.get(key)); }
                         return EvalResult::ok(results);
                     }
@@ -642,7 +668,7 @@ class Evaluator
                     Object(o) =>
                     {
                         var results: List<JsonValue> = [];
-                        let oKeys = sortStringList(o.keys());
+                        let oKeys = JsonUtil::sortStringList(o.keys());
                         for key in oKeys { results.push(o.get(key)); }
                         return EvalResult::ok(results);
                     }
@@ -1239,7 +1265,7 @@ class Evaluator
             }
             Object(o) =>
             {
-                let oKeys = sortStringList(o.keys());
+                let oKeys = JsonUtil::sortStringList(o.keys());
                 var ki: Int64 = 0;
                 while ki < oKeys.len()
                 {
@@ -1265,7 +1291,7 @@ class Evaluator
                 Object(o) =>
                 {
                     var newObj: Map<String, JsonValue> = @{};
-                    let ks = sortStringList(o.keys());
+                    let ks = JsonUtil::sortStringList(o.keys());
                     var ki: Int64 = 0;
                     while ki < ks.len()
                     {
@@ -1338,7 +1364,7 @@ class Evaluator
                 Object(o) =>
                 {
                     var newObj: Map<String, JsonValue> = @{};
-                    let ks = sortStringList(o.keys());
+                    let ks = JsonUtil::sortStringList(o.keys());
                     var ki: Int64 = 0;
                     while ki < ks.len()
                     {
@@ -1436,7 +1462,7 @@ class Evaluator
                     }
                     Object(o) =>
                     {
-                        let keys = sortStringList(o.keys());
+                        let keys = JsonUtil::sortStringList(o.keys());
                         var ki: Int64 = 0;
                         while ki < keys.len()
                         {
@@ -1467,7 +1493,7 @@ class Evaluator
                     }
                     Object(o) =>
                     {
-                        let keys = sortStringList(o.keys());
+                        let keys = JsonUtil::sortStringList(o.keys());
                         var ki: Int64 = 0;
                         while ki < keys.len()
                         {
@@ -1780,7 +1806,7 @@ class Evaluator
                     {
                         Str(s)     => { parts.push("\"" + s.replace("\"", "\"\"") + "\""); }
                         Integer(n) => { parts.push(n.toString()); }
-                        Float(f)   => { parts.push(floatDisplay(f)); }
+                        Float(f)   => { parts.push(JsonUtil::floatDisplay(f)); }
                         Bool(b)    => { if b { parts.push("true"); } else { parts.push("false"); } }
                         Null       => { parts.push(""); }
                         _ => { parts.push(JsonSerializer::stringify(item)); }
@@ -1807,7 +1833,7 @@ class Evaluator
                     {
                         Str(s) => { parts.push(s.replace("\t", "\\t").replace("\n", "\\n")); }
                         Integer(n) => { parts.push(n.toString()); }
-                        Float(f)   => { parts.push(floatDisplay(f)); }
+                        Float(f)   => { parts.push(JsonUtil::floatDisplay(f)); }
                         Bool(b)    => { if b { parts.push("true"); } else { parts.push("false"); } }
                         Null => { parts.push(""); }
                         _ => { parts.push(JsonSerializer::stringify(item)); }
@@ -1870,7 +1896,7 @@ class Evaluator
                 {
                     Object(o) =>
                     {
-                        let ks = sortStringList(o.keys());
+                        let ks = JsonUtil::sortStringList(o.keys());
                         var ki: Int64 = 0;
                         while ki < ks.len()
                         {
@@ -1919,7 +1945,7 @@ class Evaluator
                     Object(o) =>
                     {
                         var obj: Map<String, JsonValue> = @{};
-                        let ks = sortStringList(o.keys());
+                        let ks = JsonUtil::sortStringList(o.keys());
                         var ki: Int64 = 0;
                         while ki < ks.len()
                         {
@@ -1990,7 +2016,7 @@ class Evaluator
             }
             Object(o) =>
             {
-                let ks = sortStringList(o.keys());
+                let ks = JsonUtil::sortStringList(o.keys());
                 var ki: Int64 = 0;
                 while ki < ks.len()
                 {
@@ -2053,7 +2079,7 @@ class Evaluator
             }
             Object(o) =>
             {
-                let ks = sortStringList(o.keys());
+                let ks = JsonUtil::sortStringList(o.keys());
                 var ki: Int64 = 0;
                 while ki < ks.len()
                 {
@@ -2221,7 +2247,7 @@ class Evaluator
                 Object(o) =>
                 {
                     var keys: List<JsonValue> = [];
-                    var ks = sortStringList(o.keys());
+                    var ks = JsonUtil::sortStringList(o.keys());
                     ks = this.sortStrings(ks);
                     for k in ks { keys.push(JsonValue::Str(k)); }
                     return EvalResult::single(JsonValue::Array(keys));
@@ -2245,7 +2271,7 @@ class Evaluator
                 Object(o) =>
                 {
                     var keys: List<JsonValue> = [];
-                    let oKs = sortStringList(o.keys());
+                    let oKs = JsonUtil::sortStringList(o.keys());
                     for k in oKs { keys.push(JsonValue::Str(k)); }
                     return EvalResult::single(JsonValue::Array(keys));
                 }
@@ -2268,7 +2294,7 @@ class Evaluator
                 Object(o) =>
                 {
                     var vals: List<JsonValue> = [];
-                    let oKs = sortStringList(o.keys());
+                    let oKs = JsonUtil::sortStringList(o.keys());
                     for k in oKs { vals.push(o.get(k)); }
                     return EvalResult::single(JsonValue::Array(vals));
                 }
@@ -2400,7 +2426,7 @@ class Evaluator
                 Object(o) =>
                 {
                     var obj2: Map<String, JsonValue> = @{};
-                    let oKs = sortStringList(o.keys());
+                    let oKs = JsonUtil::sortStringList(o.keys());
                     for key in oKs
                     {
                         let r = this.evalSingle(args[0], o.get(key), ctx);
@@ -2872,7 +2898,7 @@ class Evaluator
                 Object(o) =>
                 {
                     var result: List<JsonValue> = [];
-                    let oKs = this.sortStrings(sortStringList(o.keys()));
+                    let oKs = this.sortStrings(JsonUtil::sortStringList(o.keys()));
                     for key in oKs
                     {
                         var entry: Map<String, JsonValue> = @{};
@@ -3049,7 +3075,7 @@ class Evaluator
                             Null   => { parts.push(""); }
                             Bool(b) => { if b { parts.push("true"); } else { parts.push("false"); } }
                             Integer(n) => { parts.push(n.toString()); }
-                            Float(f)   => { parts.push(floatDisplay(f)); }
+                            Float(f)   => { parts.push(JsonUtil::floatDisplay(f)); }
                             _ => { parts.push(JsonSerializer::stringify(item)); }
                         }
                     }
@@ -4220,7 +4246,7 @@ class Evaluator
                 {
                     Object(ao) =>
                     {
-                        let boKeys = sortStringList(bo.keys());
+                        let boKeys = JsonUtil::sortStringList(bo.keys());
                         for key in boKeys
                         {
                             if !ao.contains(key) { return false; }
@@ -4357,7 +4383,7 @@ class Evaluator
             }
             Object(o) =>
             {
-                let oKeys = sortStringList(o.keys());
+                let oKeys = JsonUtil::sortStringList(o.keys());
                 var obj: Map<String, JsonValue> = @{};
                 for key in oKeys
                 {
