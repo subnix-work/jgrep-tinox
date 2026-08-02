@@ -1,6 +1,6 @@
 [package]
 name = "jgrep"
-version = "1.0.4"
+version = "1.0.5"
 description = "grep for JSON — reimplemented in Tinox"
 author = "tuvbunn2@googlemail.com"
 entry = "src/Main.tnx"
