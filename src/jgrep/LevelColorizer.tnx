@@ -9,7 +9,7 @@ class LevelColorizer
     fnc getLogLevel(obj: JsonValue, fieldPath: String) -> String
     {
         var searchFields: List<String> = ["log.level", "level", "severity", "severity_text", "severityText"];
-        if fieldPath != "" { searchFields = [fieldPath]; }
+        if (fieldPath != "" ){ searchFields = [fieldPath]; }
 
         for field in searchFields
         {
@@ -22,14 +22,14 @@ class LevelColorizer
                 {
                     Object(o) =>
                     {
-                        if o.contains(part) { current = o.get(part); }
+                        if (o.contains(part) ){ current = o.get(part); }
                         else { found = false; break; }
                     }
                     _ => { found = false; break; }
                 }
             }
-            if found
-            {
+            if (found
+            ){
                 match current
                 {
                     Str(s) => return s;
@@ -43,20 +43,20 @@ class LevelColorizer
     fnc colorForLevel(level: String) -> ColorResult
     {
         let upper = level.toUpper();
-        if upper == "TRACE"     { return ColorResult::some(Ansi::magenta()); }
-        if upper == "DEBUG"     { return ColorResult::some(Ansi::blue()); }
-        if upper == "INFO"      { return ColorResult::some(Ansi::cyan()); }
-        if upper == "INFORMATION" { return ColorResult::some(Ansi::cyan()); }
-        if upper == "NOTICE"    { return ColorResult::some(Ansi::cyan()); }
-        if upper == "WARN"      { return ColorResult::some(Ansi::yellow()); }
-        if upper == "WARNING"   { return ColorResult::some(Ansi::yellow()); }
-        if upper == "ERROR"     { return ColorResult::some(Ansi::red()); }
-        if upper == "ERR"       { return ColorResult::some(Ansi::red()); }
-        if upper == "FATAL"     { return ColorResult::some(Ansi::boldRed()); }
-        if upper == "CRITICAL"  { return ColorResult::some(Ansi::boldRed()); }
-        if upper == "CRIT"      { return ColorResult::some(Ansi::boldRed()); }
-        if upper == "ALERT"     { return ColorResult::some(Ansi::boldRed()); }
-        if upper == "EMERGENCY" { return ColorResult::some(Ansi::boldRed()); }
+        if (upper == "TRACE"     ){ return ColorResult::some(Ansi::magenta()); }
+        if (upper == "DEBUG"     ){ return ColorResult::some(Ansi::blue()); }
+        if (upper == "INFO"      ){ return ColorResult::some(Ansi::cyan()); }
+        if (upper == "INFORMATION" ){ return ColorResult::some(Ansi::cyan()); }
+        if (upper == "NOTICE"    ){ return ColorResult::some(Ansi::cyan()); }
+        if (upper == "WARN"      ){ return ColorResult::some(Ansi::yellow()); }
+        if (upper == "WARNING"   ){ return ColorResult::some(Ansi::yellow()); }
+        if (upper == "ERROR"     ){ return ColorResult::some(Ansi::red()); }
+        if (upper == "ERR"       ){ return ColorResult::some(Ansi::red()); }
+        if (upper == "FATAL"     ){ return ColorResult::some(Ansi::boldRed()); }
+        if (upper == "CRITICAL"  ){ return ColorResult::some(Ansi::boldRed()); }
+        if (upper == "CRIT"      ){ return ColorResult::some(Ansi::boldRed()); }
+        if (upper == "ALERT"     ){ return ColorResult::some(Ansi::boldRed()); }
+        if (upper == "EMERGENCY" ){ return ColorResult::some(Ansi::boldRed()); }
         return ColorResult::none();
     }
 }

@@ -105,43 +105,43 @@ class Evaluator
         while i < n
         {
             let c = pattern.substring(i, i + 1);
-            if c == "\\" && i + 1 < n
-            {
+            if (c == "\\" && i + 1 < n
+            ){
                 let d = pattern.substring(i + 1, i + 2);
-                if inClass
-                {
-                    if d == "d" { out = out + "0-9"; i += 2; continue; }
-                    if d == "w" { out = out + "A-Za-z0-9_"; i += 2; continue; }
-                    if d == "s" { out = out + " \t\r\n"; i += 2; continue; }
+                if (inClass
+                ){
+                    if (d == "d" ){ out = out + "0-9"; i += 2; continue; }
+                    if (d == "w" ){ out = out + "A-Za-z0-9_"; i += 2; continue; }
+                    if (d == "s" ){ out = out + " \t\r\n"; i += 2; continue; }
                 }
                 else
                 {
-                    if d == "d" { out = out + "[0-9]"; i += 2; continue; }
-                    if d == "D" { out = out + "[^0-9]"; i += 2; continue; }
-                    if d == "w" { out = out + "[A-Za-z0-9_]"; i += 2; continue; }
-                    if d == "W" { out = out + "[^A-Za-z0-9_]"; i += 2; continue; }
-                    if d == "s" { out = out + "[ \t\r\n]"; i += 2; continue; }
-                    if d == "S" { out = out + "[^ \t\r\n]"; i += 2; continue; }
+                    if (d == "d" ){ out = out + "[0-9]"; i += 2; continue; }
+                    if (d == "D" ){ out = out + "[^0-9]"; i += 2; continue; }
+                    if (d == "w" ){ out = out + "[A-Za-z0-9_]"; i += 2; continue; }
+                    if (d == "W" ){ out = out + "[^A-Za-z0-9_]"; i += 2; continue; }
+                    if (d == "s" ){ out = out + "[ \t\r\n]"; i += 2; continue; }
+                    if (d == "S" ){ out = out + "[^ \t\r\n]"; i += 2; continue; }
                 }
                 out = out + c + d;
                 i += 2;
                 continue;
             }
-            if inClass
-            {
-                if c == "]" { inClass = false; }
+            if (inClass
+            ){
+                if (c == "]" ){ inClass = false; }
                 out = out + c;
                 i += 1;
                 continue;
             }
-            if c == "[" { inClass = true; out = out + c; i += 1; continue; }
-            if c == "("
-            {
-                if i + 2 < n && pattern.substring(i + 1, i + 2) == "?"
-                {
+            if (c == "[" ){ inClass = true; out = out + c; i += 1; continue; }
+            if (c == "("
+            ){
+                if (i + 2 < n && pattern.substring(i + 1, i + 2) == "?"
+                ){
                     let t = pattern.substring(i + 2, i + 3);
-                    if t == "<"
-                    {
+                    if (t == "<"
+                    ){
                         var j = i + 3;
                         var nm = "";
                         while j < n && pattern.substring(j, j + 1) != ">"
@@ -154,8 +154,8 @@ class Evaluator
                         i = j + 1;
                         continue;
                     }
-                    if t == ":"
-                    {
+                    if (t == ":"
+                    ){
                         // non-capturing kennt POSIX nicht — wird zur zählenden Gruppe
                         out = out + "(";
                         names.push("");
@@ -195,8 +195,8 @@ class Evaluator
             var cap: Map<String, JsonValue> = @{};
             let gs = groups[gi];
             let ge = groups[gi + 1];
-            if gs < 0
-            {
+            if (gs < 0
+            ){
                 cap["offset"] = JsonValue::Integer(-1);
                 cap["length"] = JsonValue::Integer(0);
                 cap["string"] = JsonValue::Null;
@@ -208,8 +208,8 @@ class Evaluator
                 cap["string"] = JsonValue::Str(s.substring(gs, ge));
             }
             var nm = "";
-            if ni < rxStrCount(tr) { nm = rxStrAt(tr, ni); }
-            if nm == "" { cap["name"] = JsonValue::Null; }
+            if (ni < rxStrCount(tr) ){ nm = rxStrAt(tr, ni); }
+            if (nm == "" ){ cap["name"] = JsonValue::Null; }
             else { cap["name"] = JsonValue::Str(nm); }
             caps.push(JsonValue::Object(cap));
             gi += 2;
@@ -226,18 +226,18 @@ class Evaluator
         let tr = regexTranslate(pattern);
         let posix = rxStrAt(tr, 0);
         var icase: Int64 = 0;
-        if flags.contains("i") { icase = 1; }
+        if (flags.contains("i") ){ icase = 1; }
         var parts: List<JsonValue> = [];
         var partStart: Int64 = 0;
         var searchPos: Int64 = 0;
         while searchPos <= s.len()
         {
             let g = regexMatchGroups(posix, s, searchPos, icase);
-            if g.len() == 0 { break; }
+            if (g.len() == 0 ){ break; }
             let ms = g[0];
             let me = g[1];
-            if me == ms
-            {
+            if (me == ms
+            ){
                 // leere Matches überspringen (kein leerer Separator)
                 searchPos = ms + 1;
                 continue;
@@ -257,12 +257,12 @@ class Evaluator
     fnc daysFromCivil(y: Int64, m: Int64, d: Int64) -> Int64
     {
         var yy = y;
-        if m <= 2 { yy -= 1; }
+        if (m <= 2 ){ yy -= 1; }
         var era: Int64 = 0;
-        if yy >= 0 { era = yy / 400; } else { era = (yy - 399) / 400; }
+        if (yy >= 0 ){ era = yy / 400; } else { era = (yy - 399) / 400; }
         let yoe = yy - era * 400;
         var mp = m + 9;
-        if mp >= 12 { mp -= 12; }
+        if (mp >= 12 ){ mp -= 12; }
         let doy = (153 * mp + 2) / 5 + d - 1;
         let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
         return era * 146097 + doe - 719468;
@@ -274,7 +274,7 @@ class Evaluator
     {
         let zz = z + 719468;
         var era: Int64 = 0;
-        if zz >= 0 { era = zz / 146097; } else { era = (zz - 146096) / 146097; }
+        if (zz >= 0 ){ era = zz / 146097; } else { era = (zz - 146096) / 146097; }
         let doe = zz - era * 146097;
         let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
         let y = yoe + era * 400;
@@ -282,9 +282,9 @@ class Evaluator
         let mp = (5 * doy + 2) / 153;
         let d = doy - (153 * mp + 2) / 5 + 1;
         var m = mp + 3;
-        if mp >= 10 { m = mp - 9; }
+        if (mp >= 10 ){ m = mp - 9; }
         var yr = y;
-        if m <= 2 { yr += 1; }
+        if (m <= 2 ){ yr += 1; }
         return [yr, m, d];
     }
 
@@ -294,13 +294,13 @@ class Evaluator
     {
         var days = secs / 86400;
         var rem = secs % 86400;
-        if rem < 0 { rem += 86400; days -= 1; }
+        if (rem < 0 ){ rem += 86400; days -= 1; }
         let ymd = civilFromDays(days);
         let y = ymd[0];
         let m = ymd[1];
         let d = ymd[2];
         var wday = (days + 4) % 7;
-        if wday < 0 { wday += 7; }
+        if (wday < 0 ){ wday += 7; }
         let yday = days - daysFromCivil(y, 1, 1);
         var result: List<JsonValue> = [];
         result.push(JsonValue::Integer(y));
@@ -325,12 +325,12 @@ class Evaluator
         while i < n && count < maxDigits
         {
             let c = s[i] as Int64;
-            if c < 48 || c > 57 { break; }
+            if (c < 48 || c > 57 ){ break; }
             v = v * 10 + (c - 48);
             i = i + 1;
             count = count + 1;
         }
-        if count == 0 { return [-1, pos]; }
+        if (count == 0 ){ return [-1, pos]; }
         return [v, i];
     }
 
@@ -355,122 +355,122 @@ class Evaluator
         while f < fl
         {
             let fc = fmt[f] as Int64;
-            if fc != 37
-            {
-                if i >= sn { return fail; }
-                if (s[i] as Int64) != fc { return fail; }
+            if (fc != 37
+            ){
+                if (i >= sn ){ return fail; }
+                if ((s[i] as Int64) != fc ){ return fail; }
                 i = i + 1;
                 f = f + 1;
                 continue;
             }
             f = f + 1;
-            if f >= fl { return fail; }
+            if (f >= fl ){ return fail; }
             let dir = fmt[f] as Int64;
             f = f + 1;
 
-            if dir == 37
-            {
-                if i >= sn { return fail; }
-                if (s[i] as Int64) != 37 { return fail; }
+            if (dir == 37
+            ){
+                if (i >= sn ){ return fail; }
+                if ((s[i] as Int64) != 37 ){ return fail; }
                 i = i + 1;
             }
-            else if dir == 89
-            {
+            else if (dir == 89
+            ){
                 var neg = false;
-                if i < sn && (s[i] as Int64) == 45 { neg = true; i = i + 1; }
+                if (i < sn && (s[i] as Int64) == 45 ){ neg = true; i = i + 1; }
                 let r = strptimeNum(s, i, 4);
-                if r[0] < 0 { return fail; }
+                if (r[0] < 0 ){ return fail; }
                 y = r[0];
-                if neg { y = 0 - y; }
+                if (neg ){ y = 0 - y; }
                 i = r[1];
             }
-            else if dir == 109
-            {
+            else if (dir == 109
+            ){
                 let r = strptimeNum(s, i, 2);
-                if r[0] < 1 || r[0] > 12 { return fail; }
+                if (r[0] < 1 || r[0] > 12 ){ return fail; }
                 mon = r[0];
                 i = r[1];
             }
-            else if dir == 100 || dir == 101
-            {
-                if dir == 101 && i < sn && (s[i] as Int64) == 32 { i = i + 1; }
+            else if (dir == 100 || dir == 101
+            ){
+                if (dir == 101 && i < sn && (s[i] as Int64) == 32 ){ i = i + 1; }
                 let r = strptimeNum(s, i, 2);
-                if r[0] < 1 || r[0] > 31 { return fail; }
+                if (r[0] < 1 || r[0] > 31 ){ return fail; }
                 d = r[0];
                 i = r[1];
             }
-            else if dir == 72
-            {
+            else if (dir == 72
+            ){
                 let r = strptimeNum(s, i, 2);
-                if r[0] < 0 || r[0] > 23 { return fail; }
+                if (r[0] < 0 || r[0] > 23 ){ return fail; }
                 h = r[0];
                 i = r[1];
             }
-            else if dir == 77
-            {
+            else if (dir == 77
+            ){
                 let r = strptimeNum(s, i, 2);
-                if r[0] < 0 || r[0] > 59 { return fail; }
+                if (r[0] < 0 || r[0] > 59 ){ return fail; }
                 mi = r[0];
                 i = r[1];
             }
-            else if dir == 83
-            {
+            else if (dir == 83
+            ){
                 let r = strptimeNum(s, i, 2);
-                if r[0] < 0 || r[0] > 60 { return fail; }
+                if (r[0] < 0 || r[0] > 60 ){ return fail; }
                 se = r[0];
                 i = r[1];
             }
-            else if dir == 84
-            {
+            else if (dir == 84
+            ){
                 let rh = strptimeNum(s, i, 2);
-                if rh[0] < 0 || rh[0] > 23 { return fail; }
+                if (rh[0] < 0 || rh[0] > 23 ){ return fail; }
                 i = rh[1];
-                if i >= sn || (s[i] as Int64) != 58 { return fail; }
+                if (i >= sn || (s[i] as Int64) != 58 ){ return fail; }
                 i = i + 1;
                 let rm = strptimeNum(s, i, 2);
-                if rm[0] < 0 || rm[0] > 59 { return fail; }
+                if (rm[0] < 0 || rm[0] > 59 ){ return fail; }
                 i = rm[1];
-                if i >= sn || (s[i] as Int64) != 58 { return fail; }
+                if (i >= sn || (s[i] as Int64) != 58 ){ return fail; }
                 i = i + 1;
                 let rs = strptimeNum(s, i, 2);
-                if rs[0] < 0 || rs[0] > 60 { return fail; }
+                if (rs[0] < 0 || rs[0] > 60 ){ return fail; }
                 i = rs[1];
                 h = rh[0];
                 mi = rm[0];
                 se = rs[0];
             }
-            else if dir == 90
-            {
+            else if (dir == 90
+            ){
                 // %Z: Zonenname (Buchstaben) überspringen — keine TZ-Datenbank
                 while i < sn
                 {
                     let c = s[i] as Int64;
-                    if (c >= 65 && c <= 90) || (c >= 97 && c <= 122) { i = i + 1; }
+                    if ((c >= 65 && c <= 90) || (c >= 97 && c <= 122) ){ i = i + 1; }
                     else { break; }
                 }
             }
-            else if dir == 122
-            {
+            else if (dir == 122
+            ){
                 // %z: [+-]HHMM oder [+-]HH:MM oder "Z"
-                if i < sn && ((s[i] as Int64) == 90 || (s[i] as Int64) == 122)
-                {
+                if (i < sn && ((s[i] as Int64) == 90 || (s[i] as Int64) == 122)
+                ){
                     i = i + 1;
                 }
                 else
                 {
-                    if i >= sn { return fail; }
+                    if (i >= sn ){ return fail; }
                     let sc = s[i] as Int64;
                     var sign: Int64 = 1;
-                    if sc == 45 { sign = -1; }
-                    else if sc != 43 { return fail; }
+                    if (sc == 45 ){ sign = -1; }
+                    else if (sc != 43 ){ return fail; }
                     i = i + 1;
                     let rh = strptimeNum(s, i, 2);
-                    if rh[0] < 0 { return fail; }
+                    if (rh[0] < 0 ){ return fail; }
                     i = rh[1];
-                    if i < sn && (s[i] as Int64) == 58 { i = i + 1; }
+                    if (i < sn && (s[i] as Int64) == 58 ){ i = i + 1; }
                     var mm: Int64 = 0;
                     let rm = strptimeNum(s, i, 2);
-                    if rm[0] >= 0 { mm = rm[0]; i = rm[1]; }
+                    if (rm[0] >= 0 ){ mm = rm[0]; i = rm[1]; }
                     offset = sign * (rh[0] * 3600 + mm * 60);
                 }
             }
@@ -496,10 +496,10 @@ class Evaluator
     // Einheit für dateadd/datesub → Sekunden (0 = unbekannt)
     fnc dateUnitSecs(unit: String) -> Int64
     {
-        if unit == "seconds" || unit == "second" { return 1; }
-        if unit == "minutes" || unit == "minute" { return 60; }
-        if unit == "hours" || unit == "hour" { return 3600; }
-        if unit == "days" || unit == "day" { return 86400; }
+        if (unit == "seconds" || unit == "second" ){ return 1; }
+        if (unit == "minutes" || unit == "minute" ){ return 60; }
+        if (unit == "hours" || unit == "hour" ){ return 3600; }
+        if (unit == "days" || unit == "day" ){ return 86400; }
         return 0;
     }
 
@@ -512,12 +512,12 @@ class Evaluator
         var ni: Int64 = 1;
         while gi + 1 < groups.len()
         {
-            if ni < rxStrCount(tr)
-            {
+            if (ni < rxStrCount(tr)
+            ){
                 let nm = rxStrAt(tr, ni);
-                if nm != ""
-                {
-                    if groups[gi] < 0 { obj[nm] = JsonValue::Null; }
+                if (nm != ""
+                ){
+                    if (groups[gi] < 0 ){ obj[nm] = JsonValue::Null; }
                     else { obj[nm] = JsonValue::Str(s.substring(groups[gi], groups[gi + 1])); }
                 }
             }
@@ -555,7 +555,7 @@ class Evaluator
                 {
                     Object(o) =>
                     {
-                        if o.contains(name) { return EvalResult::single(o.get(name)); }
+                        if (o.contains(name) ){ return EvalResult::single(o.get(name)); }
                         return EvalResult::single(JsonValue::Null);
                     }
                     Null => return EvalResult::single(JsonValue::Null);
@@ -569,7 +569,7 @@ class Evaluator
                 {
                     Object(o) =>
                     {
-                        if o.contains(name) { return EvalResult::single(o.get(name)); }
+                        if (o.contains(name) ){ return EvalResult::single(o.get(name)); }
                         return EvalResult::single(JsonValue::Null);
                     }
                     _ => return EvalResult::empty();
@@ -584,14 +584,14 @@ class Evaluator
                     {
                         let arr = a;
                         var i = idx;
-                        if i < 0 { i = arr.len() + i; }
-                        if i < 0 || i >= arr.len() { return EvalResult::single(JsonValue::Null); }
+                        if (i < 0 ){ i = arr.len() + i; }
+                        if (i < 0 || i >= arr.len() ){ return EvalResult::single(JsonValue::Null); }
                         return EvalResult::single(arr[i]);
                     }
                     Object(o) =>
                     {
                         let key = idx.toString();
-                        if o.contains(key) { return EvalResult::single(o.get(key)); }
+                        if (o.contains(key) ){ return EvalResult::single(o.get(key)); }
                         return EvalResult::single(JsonValue::Null);
                     }
                     _ => return EvalResult::single(JsonValue::Null);
@@ -606,12 +606,12 @@ class Evaluator
                     {
                         let arr = a;
                         let len = arr.len();
-                        var s: Int64 = 0; if hasStart { s = start; }
-                        var e = len; if hasEnd { e = end; }
-                        if s < 0 { s = len + s; }
-                        if e < 0 { e = len + e; }
-                        if s < 0 { s = 0; }
-                        if e > len { e = len; }
+                        var s: Int64 = 0; if (hasStart ){ s = start; }
+                        var e = len; if (hasEnd ){ e = end; }
+                        if (s < 0 ){ s = len + s; }
+                        if (e < 0 ){ e = len + e; }
+                        if (s < 0 ){ s = 0; }
+                        if (e > len ){ e = len; }
                         var result: List<JsonValue> = [];
                         var i = s;
                         while i < e { result.push(arr[i]); i = i + 1; }
@@ -620,12 +620,12 @@ class Evaluator
                     Str(s) =>
                     {
                         let len = s.len();
-                        var st: Int64 = 0; if hasStart { st = start; }
-                        var en = len; if hasEnd { en = end; }
-                        if st < 0 { st = len + st; }
-                        if en < 0 { en = len + en; }
-                        if st < 0 { st = 0; }
-                        if en > len { en = len; }
+                        var st: Int64 = 0; if (hasStart ){ st = start; }
+                        var en = len; if (hasEnd ){ en = end; }
+                        if (st < 0 ){ st = len + st; }
+                        if (en < 0 ){ en = len + en; }
+                        if (st < 0 ){ st = 0; }
+                        if (en > len ){ en = len; }
                         return EvalResult::single(JsonValue::Str(s.substring(st, en)));
                     }
                     _ => return EvalResult::err("Cannot slice non-array/string");
@@ -679,25 +679,25 @@ class Evaluator
             Pipe(left, right) =>
             {
                 let defName = filterGetDefName(left);
-                if defName.len() > 0
-                {
+                if (defName.len() > 0
+                ){
                     let defBodies = filterGetDefBody(left);
-                    if defBodies.len() > 0
-                    {
+                    if (defBodies.len() > 0
+                    ){
                         let newCtx = ctx.withDef(defName[0], defBodies[0]);
                         return this.eval(right, input, newCtx);
                     }
                 }
                 let leftResult = this.eval(left, input, ctx);
-                if leftResult.isError() { return leftResult; }
-                if leftResult.isBreak() { return leftResult; }
+                if (leftResult.isError() ){ return leftResult; }
+                if (leftResult.isBreak() ){ return leftResult; }
                 var allResults: List<JsonValue> = [];
                 for v in leftResult.values
                 {
                     let r = this.eval(right, v, ctx);
-                    if r.isError() { return r; }
-                    if r.isBreak()
-                    {
+                    if (r.isError() ){ return r; }
+                    if (r.isBreak()
+                    ){
                         for rv in r.values { allResults.push(rv); }
                         return EvalResult::brk(r.breakLabel, allResults);
                     }
@@ -709,12 +709,12 @@ class Evaluator
             Comma(left, right) =>
             {
                 let leftResult = this.eval(left, input, ctx);
-                if leftResult.isBreak() { return leftResult; }
+                if (leftResult.isBreak() ){ return leftResult; }
                 let rightResult = this.eval(right, input, ctx);
                 var allResults: List<JsonValue> = [];
                 for v in leftResult.values  { allResults.push(v); }
                 for v in rightResult.values { allResults.push(v); }
-                if rightResult.isBreak() { return EvalResult::brk(rightResult.breakLabel, allResults); }
+                if (rightResult.isBreak() ){ return EvalResult::brk(rightResult.breakLabel, allResults); }
                 return EvalResult::ok(allResults);
             }
 
@@ -726,9 +726,9 @@ class Evaluator
                     _ =>
                     {
                         let r = this.eval(inner, input, ctx);
-                        if r.isError() { return EvalResult::single(JsonValue::Array([])); }
+                        if (r.isError() ){ return EvalResult::single(JsonValue::Array([])); }
                         // break über die Array-Grenze hinweg verwirft das halbe Array (wie jq)
-                        if r.isBreak() { return EvalResult::brk(r.breakLabel, []); }
+                        if (r.isBreak() ){ return EvalResult::brk(r.breakLabel, []); }
                         var arr: List<JsonValue> = [];
                         for v in r.values { arr.push(v); }
                         return EvalResult::single(JsonValue::Array(arr));
@@ -754,8 +754,8 @@ class Evaluator
                         ObjKey::Computed(kf) =>
                         {
                             let kr = this.eval(kf, input, ctx);
-                            if !kr.isError() && kr.values.len() > 0
-                            {
+                            if (!kr.isError() && kr.values.len() > 0
+                            ){
                                 match kr.values[0]
                                 {
                                     JsonValue::Str(s)  => { key = s; }
@@ -766,7 +766,7 @@ class Evaluator
                         }
                     }
                     let vr = this.evalSingle(valFilter, input, ctx);
-                    if !vr.isError() { obj[key] = vr.values[0]; }
+                    if (!vr.isError() ){ obj[key] = vr.values[0]; }
                     else { obj[key] = JsonValue::Null; }
                 }
                 return EvalResult::single(JsonValue::Object(obj));
@@ -776,8 +776,8 @@ class Evaluator
             {
                 let lr = this.evalSingle(left, input, ctx);
                 let rr = this.evalSingle(right, input, ctx);
-                if lr.isError() { return lr; }
-                if rr.isError() { return rr; }
+                if (lr.isError() ){ return lr; }
+                if (rr.isError() ){ return rr; }
                 return EvalResult::single(JsonValueHelper::addValues(lr.values[0], rr.values[0]));
             }
 
@@ -785,8 +785,8 @@ class Evaluator
             {
                 let lr = this.evalSingle(left, input, ctx);
                 let rr = this.evalSingle(right, input, ctx);
-                if lr.isError() { return lr; }
-                if rr.isError() { return rr; }
+                if (lr.isError() ){ return lr; }
+                if (rr.isError() ){ return rr; }
                 return EvalResult::single(JsonValueHelper::subtractValues(lr.values[0], rr.values[0]));
             }
 
@@ -794,8 +794,8 @@ class Evaluator
             {
                 let lr = this.evalSingle(left, input, ctx);
                 let rr = this.evalSingle(right, input, ctx);
-                if lr.isError() { return lr; }
-                if rr.isError() { return rr; }
+                if (lr.isError() ){ return lr; }
+                if (rr.isError() ){ return rr; }
                 return EvalResult::single(JsonValueHelper::multiplyValues(lr.values[0], rr.values[0]));
             }
 
@@ -803,8 +803,8 @@ class Evaluator
             {
                 let lr = this.evalSingle(left, input, ctx);
                 let rr = this.evalSingle(right, input, ctx);
-                if lr.isError() { return lr; }
-                if rr.isError() { return rr; }
+                if (lr.isError() ){ return lr; }
+                if (rr.isError() ){ return rr; }
                 return EvalResult::single(JsonValueHelper::divideValues(lr.values[0], rr.values[0]));
             }
 
@@ -812,8 +812,8 @@ class Evaluator
             {
                 let lr = this.evalSingle(left, input, ctx);
                 let rr = this.evalSingle(right, input, ctx);
-                if lr.isError() { return lr; }
-                if rr.isError() { return rr; }
+                if (lr.isError() ){ return lr; }
+                if (rr.isError() ){ return rr; }
                 return EvalResult::single(JsonValueHelper::moduloValues(lr.values[0], rr.values[0]));
             }
 
@@ -821,8 +821,8 @@ class Evaluator
             {
                 let lr = this.evalSingle(left, input, ctx);
                 let rr = this.evalSingle(right, input, ctx);
-                if lr.isError() { return lr; }
-                if rr.isError() { return rr; }
+                if (lr.isError() ){ return lr; }
+                if (rr.isError() ){ return rr; }
                 let eq = JsonValueHelper::equals(lr.values[0], rr.values[0]);
                 return EvalResult::single(JsonValue::Bool(eq));
             }
@@ -831,8 +831,8 @@ class Evaluator
             {
                 let lr = this.evalSingle(left, input, ctx);
                 let rr = this.evalSingle(right, input, ctx);
-                if lr.isError() { return lr; }
-                if rr.isError() { return rr; }
+                if (lr.isError() ){ return lr; }
+                if (rr.isError() ){ return rr; }
                 let eq = JsonValueHelper::equals(lr.values[0], rr.values[0]);
                 return EvalResult::single(JsonValue::Bool(!eq));
             }
@@ -841,8 +841,8 @@ class Evaluator
             {
                 let lr = this.evalSingle(left, input, ctx);
                 let rr = this.evalSingle(right, input, ctx);
-                if lr.isError() { return lr; }
-                if rr.isError() { return rr; }
+                if (lr.isError() ){ return lr; }
+                if (rr.isError() ){ return rr; }
                 return EvalResult::single(JsonValue::Bool(JsonValueHelper::compare(lr.values[0], rr.values[0]) < 0));
             }
 
@@ -850,8 +850,8 @@ class Evaluator
             {
                 let lr = this.evalSingle(left, input, ctx);
                 let rr = this.evalSingle(right, input, ctx);
-                if lr.isError() { return lr; }
-                if rr.isError() { return rr; }
+                if (lr.isError() ){ return lr; }
+                if (rr.isError() ){ return rr; }
                 return EvalResult::single(JsonValue::Bool(JsonValueHelper::compare(lr.values[0], rr.values[0]) > 0));
             }
 
@@ -859,8 +859,8 @@ class Evaluator
             {
                 let lr = this.evalSingle(left, input, ctx);
                 let rr = this.evalSingle(right, input, ctx);
-                if lr.isError() { return lr; }
-                if rr.isError() { return rr; }
+                if (lr.isError() ){ return lr; }
+                if (rr.isError() ){ return rr; }
                 return EvalResult::single(JsonValue::Bool(JsonValueHelper::compare(lr.values[0], rr.values[0]) <= 0));
             }
 
@@ -868,28 +868,28 @@ class Evaluator
             {
                 let lr = this.evalSingle(left, input, ctx);
                 let rr = this.evalSingle(right, input, ctx);
-                if lr.isError() { return lr; }
-                if rr.isError() { return rr; }
+                if (lr.isError() ){ return lr; }
+                if (rr.isError() ){ return rr; }
                 return EvalResult::single(JsonValue::Bool(JsonValueHelper::compare(lr.values[0], rr.values[0]) >= 0));
             }
 
             And(left, right) =>
             {
                 let lr = this.evalSingle(left, input, ctx);
-                if lr.isError() { return lr; }
-                if !JsonValueHelper::isTruthy(lr.values[0]) { return EvalResult::single(JsonValue::Bool(false)); }
+                if (lr.isError() ){ return lr; }
+                if (!JsonValueHelper::isTruthy(lr.values[0]) ){ return EvalResult::single(JsonValue::Bool(false)); }
                 let rr = this.evalSingle(right, input, ctx);
-                if rr.isError() { return rr; }
+                if (rr.isError() ){ return rr; }
                 return EvalResult::single(JsonValue::Bool(JsonValueHelper::isTruthy(rr.values[0])));
             }
 
             Or(left, right) =>
             {
                 let lr = this.evalSingle(left, input, ctx);
-                if lr.isError() { return lr; }
-                if JsonValueHelper::isTruthy(lr.values[0]) { return EvalResult::single(JsonValue::Bool(true)); }
+                if (lr.isError() ){ return lr; }
+                if (JsonValueHelper::isTruthy(lr.values[0]) ){ return EvalResult::single(JsonValue::Bool(true)); }
                 let rr = this.evalSingle(right, input, ctx);
-                if rr.isError() { return rr; }
+                if (rr.isError() ){ return rr; }
                 return EvalResult::single(JsonValue::Bool(JsonValueHelper::isTruthy(rr.values[0])));
             }
 
@@ -901,14 +901,14 @@ class Evaluator
             Alternative(left, right) =>
             {
                 let lr = this.eval(left, input, ctx);
-                if !lr.isError() && lr.values.len() > 0
-                {
+                if (!lr.isError() && lr.values.len() > 0
+                ){
                     var allTruthy = false;
                     for v in lr.values
                     {
-                        if JsonValueHelper::isTruthy(v) { allTruthy = true; break; }
+                        if (JsonValueHelper::isTruthy(v) ){ allTruthy = true; break; }
                     }
-                    if allTruthy { return lr; }
+                    if (allTruthy ){ return lr; }
                 }
                 return this.eval(right, input, ctx);
             }
@@ -917,7 +917,7 @@ class Evaluator
             {
                 let tcBodyF = tcbody;
                 let r = this.eval(tcBodyF, input, ctx);
-                if r.isError() { return EvalResult::empty(); }
+                if (r.isError() ){ return EvalResult::empty(); }
                 return r;
             }
 
@@ -926,8 +926,8 @@ class Evaluator
                 let tcBodyF = tcbody;
                 let tcHandlerF = tchandler;
                 let r = this.eval(tcBodyF, input, ctx);
-                if r.isError()
-                {
+                if (r.isError()
+                ){
                     let errVal = JsonValue::Str(r.errorMsg);
                     return this.eval(tcHandlerF, errVal, ctx);
                 }
@@ -937,16 +937,16 @@ class Evaluator
             Optional(inner) =>
             {
                 let r = this.eval(inner, input, ctx);
-                if r.isError() { return EvalResult::empty(); }
+                if (r.isError() ){ return EvalResult::empty(); }
                 return r;
             }
 
             IfThenElse(cond, thenBranch, elseBranch) =>
             {
                 let condResult = this.evalSingle(cond, input, ctx);
-                if condResult.isError() { return condResult; }
-                if JsonValueHelper::isTruthy(condResult.values[0])
-                {
+                if (condResult.isError() ){ return condResult; }
+                if (JsonValueHelper::isTruthy(condResult.values[0])
+                ){
                     return this.eval(thenBranch, input, ctx);
                 }
                 return this.eval(elseBranch, input, ctx);
@@ -954,9 +954,9 @@ class Evaluator
 
             Variable(name) =>
             {
-                if ctx.vars.contains(name) { return EvalResult::single(ctx.vars.get(name)); }
-                if name == "__loc__"
-                {
+                if (ctx.vars.contains(name) ){ return EvalResult::single(ctx.vars.get(name)); }
+                if (name == "__loc__"
+                ){
                     // CLI-Filter sind einzeilig — wie jq bei --arg-losen Programmen
                     var loc: Map<String, JsonValue> = @{};
                     loc["file"] = JsonValue::Str("<stdin>");
@@ -969,13 +969,13 @@ class Evaluator
             AsPattern(gen, varName, body) =>
             {
                 let genResult = this.eval(gen, input, ctx);
-                if genResult.isError() { return genResult; }
+                if (genResult.isError() ){ return genResult; }
                 var allResults: List<JsonValue> = [];
                 for v in genResult.values
                 {
                     let newCtx = ctx.withVar(varName, v);
                     let r = this.eval(body, input, newCtx);
-                    if r.isError() { return r; }
+                    if (r.isError() ){ return r; }
                     for rv in r.values { allResults.push(rv); }
                 }
                 return EvalResult::ok(allResults);
@@ -984,10 +984,10 @@ class Evaluator
             Reduce(gen, varName, init, body) =>
             {
                 let initResult = this.evalSingle(init, input, ctx);
-                if initResult.isError() { return initResult; }
+                if (initResult.isError() ){ return initResult; }
                 var acc = initResult.values[0];
                 let genResult = this.eval(gen, input, ctx);
-                if genResult.isError() { return genResult; }
+                if (genResult.isError() ){ return genResult; }
                 var gvals = genResult.values;
                 var gi: Int64 = 0;
                 while gi < gvals.len()
@@ -995,7 +995,7 @@ class Evaluator
                     let v = gvals[gi]; gi = gi + 1;
                     let newCtx = ctx.withVar(varName, v);
                     let r = this.evalSingle(body, acc, newCtx);
-                    if r.isError() { return r; }
+                    if (r.isError() ){ return r; }
                     acc = r.values[0];
                 }
                 return EvalResult::single(acc);
@@ -1004,10 +1004,10 @@ class Evaluator
             Foreach(gen, varName, init, body, extracts) =>
             {
                 let initResult = this.evalSingle(init, input, ctx);
-                if initResult.isError() { return initResult; }
+                if (initResult.isError() ){ return initResult; }
                 var acc = initResult.values[0];
                 let genResult = this.eval(gen, input, ctx);
-                if genResult.isError() { return genResult; }
+                if (genResult.isError() ){ return genResult; }
                 var results: List<JsonValue> = [];
                 var fvals = genResult.values;
                 var fi: Int64 = 0;
@@ -1016,12 +1016,12 @@ class Evaluator
                     let v = fvals[fi]; fi = fi + 1;
                     let newCtx = ctx.withVar(varName, v);
                     let r = this.evalSingle(body, acc, newCtx);
-                    if r.isError() { return r; }
+                    if (r.isError() ){ return r; }
                     acc = r.values[0];
-                    if extracts.len() > 0
-                    {
+                    if (extracts.len() > 0
+                    ){
                         let er = this.evalSingle(extracts[0], acc, newCtx);
-                        if !er.isError() && er.values.len() > 0 { results.push(er.values[0]); }
+                        if (!er.isError() && er.values.len() > 0 ){ results.push(er.values[0]); }
                     }
                     else
                     {
@@ -1039,8 +1039,8 @@ class Evaluator
 
             Recurse(hasFilter, recurseFilter) =>
             {
-                if !hasFilter
-                {
+                if (!hasFilter
+                ){
                     let results = this.recurseAll(input);
                     return EvalResult::ok(results);
                 }
@@ -1054,7 +1054,7 @@ class Evaluator
                         queue.removeAt(0);
                         results.push(current);
                         let r = this.eval(recurseFilter, current, ctx);
-                        if !r.isError() { for v in r.values { queue.push(v); } }
+                        if (!r.isError() ){ for v in r.values { queue.push(v); } }
                     }
                     return EvalResult::ok(results);
                 }
@@ -1074,7 +1074,7 @@ class Evaluator
                         StringPart::Expr(f) =>
                         {
                             let r = this.evalSingle(f, input, ctx);
-                            if r.isError() { return r; }
+                            if (r.isError() ){ return r; }
                             match r.values[0]
                             {
                                 JsonValue::Str(s) => { result = result + s; }
@@ -1100,10 +1100,10 @@ class Evaluator
             Format(fmt, hasInner, innerFilter) =>
             {
                 var fmtVal = input;
-                if hasInner
-                {
+                if (hasInner
+                ){
                     let r = this.evalSingle(innerFilter, input, ctx);
-                    if r.isError() { return r; }
+                    if (r.isError() ){ return r; }
                     fmtVal = r.values[0];
                 }
                 let formatted = this.applyFormat(fmt, fmtVal);
@@ -1116,7 +1116,7 @@ class Evaluator
             {
                 let innerF = inner;
                 let paths = this.extractPaths(innerF, input, ctx);
-                if paths.len() == 1 { return EvalResult::single(paths[0]); }
+                if (paths.len() == 1 ){ return EvalResult::single(paths[0]); }
                 return EvalResult::ok(paths);
             }
 
@@ -1135,16 +1135,16 @@ class Evaluator
             SetPath(pathFilter, valFilter) =>
             {
                 let vr = this.evalSingle(valFilter, input, ctx);
-                if vr.isError() { return vr; }
+                if (vr.isError() ){ return vr; }
                 return EvalResult::single(this.applySetAt(input, pathFilter, vr.values[0], ctx));
             }
 
             UpdatePath(pathFilter, updateFilter) =>
             {
                 let lr = this.evalSingle(pathFilter, input, ctx);
-                if lr.isError() { return lr; }
+                if (lr.isError() ){ return lr; }
                 let ur = this.evalSingle(updateFilter, lr.values[0], ctx);
-                if ur.isError() { return ur; }
+                if (ur.isError() ){ return ur; }
                 return EvalResult::single(this.applySetAt(input, pathFilter, ur.values[0], ctx));
             }
 
@@ -1152,7 +1152,7 @@ class Evaluator
             LabelBind(name, body) =>
             {
                 let r = this.eval(body, input, ctx);
-                if r.isBreak() && r.breakLabel == name { return EvalResult::ok(r.values); }
+                if (r.isBreak() && r.breakLabel == name ){ return EvalResult::ok(r.values); }
                 return r;
             }
             Break(name)  => return EvalResult::brk(name, []);
@@ -1164,10 +1164,10 @@ class Evaluator
                 while iters < 10000
                 {
                     let cr = this.evalSingle(cond, current, ctx);
-                    if cr.isError() { return cr; }
-                    if JsonValueHelper::isTruthy(cr.values[0]) { return EvalResult::single(current); }
+                    if (cr.isError() ){ return cr; }
+                    if (JsonValueHelper::isTruthy(cr.values[0]) ){ return EvalResult::single(current); }
                     let br = this.evalSingle(body, current, ctx);
-                    if br.isError() { return br; }
+                    if (br.isError() ){ return br; }
                     current = br.values[0];
                     iters = iters + 1;
                 }
@@ -1181,11 +1181,11 @@ class Evaluator
                 while iters < 10000
                 {
                     let cr = this.evalSingle(cond, current, ctx);
-                    if cr.isError() { break; }
-                    if !JsonValueHelper::isTruthy(cr.values[0]) { break; }
+                    if (cr.isError() ){ break; }
+                    if (!JsonValueHelper::isTruthy(cr.values[0]) ){ break; }
                     results.push(current);
                     let br = this.evalSingle(body, current, ctx);
-                    if br.isError() { break; }
+                    if (br.isError() ){ break; }
                     current = br.values[0];
                     iters = iters + 1;
                 }
@@ -1224,7 +1224,7 @@ class Evaluator
                     {
                         ObjKey::Literal(s) =>
                         {
-                            if !r.isError() && r.values.len() > 0 { obj[s] = r.values[0]; }
+                            if (!r.isError() && r.values.len() > 0 ){ obj[s] = r.values[0]; }
                             else { obj[s] = JsonValue::Null; }
                         }
                         ObjKey::Computed(_) => {}
@@ -1239,10 +1239,10 @@ class Evaluator
     fn evalSingle(filter: Filter, input: JsonValue, ctx: EvalContext) -> EvalResult
     {
         let r = this.eval(filter, input, ctx);
-        if r.isError() { return r; }
+        if (r.isError() ){ return r; }
         // break ohne umschließendes label ist ein Fehler (wie jq)
-        if r.isBreak() { return EvalResult::err("break"); }
-        if r.values.len() == 0 { return EvalResult::single(JsonValue::Null); }
+        if (r.isBreak() ){ return EvalResult::err("break"); }
+        if (r.values.len() == 0 ){ return EvalResult::single(JsonValue::Null); }
         return EvalResult::single(r.values[0]);
     }
 
@@ -1283,8 +1283,8 @@ class Evaluator
     fn applyDel(input: JsonValue, pathFilter: Filter, ctx: EvalContext) -> JsonValue
     {
         let fieldNames = filterFieldName(pathFilter);
-        if fieldNames.len() > 0
-        {
+        if (fieldNames.len() > 0
+        ){
             let key = fieldNames[0];
             match input
             {
@@ -1296,7 +1296,7 @@ class Evaluator
                     while ki < ks.len()
                     {
                         let k = ks[ki]; ki = ki + 1;
-                        if !(k == key) { newObj[k] = o.get(k); }
+                        if (!(k == key) ){ newObj[k] = o.get(k); }
                     }
                     return JsonValue::Object(newObj);
                 }
@@ -1305,8 +1305,8 @@ class Evaluator
         }
 
         let idxList = filterIndexAccess(pathFilter);
-        if idxList.len() > 0
-        {
+        if (idxList.len() > 0
+        ){
             let idx = idxList[0];
             match input
             {
@@ -1316,10 +1316,10 @@ class Evaluator
                     var result: List<JsonValue> = [];
                     var i: Int64 = 0;
                     var target = idx;
-                    if target < 0 { target = arr.len() + target; }
+                    if (target < 0 ){ target = arr.len() + target; }
                     while i < arr.len()
                     {
-                        if i != target { result.push(arr[i]); }
+                        if (i != target ){ result.push(arr[i]); }
                         i = i + 1;
                     }
                     return JsonValue::Array(result);
@@ -1328,8 +1328,8 @@ class Evaluator
             }
         }
 
-        if filterIsIterEach(pathFilter)
-        {
+        if (filterIsIterEach(pathFilter)
+        ){
             match input
             {
                 Array(_) => return JsonValue::Array([]);
@@ -1338,13 +1338,13 @@ class Evaluator
             }
         }
 
-        if filterIsPipe(pathFilter)
-        {
+        if (filterIsPipe(pathFilter)
+        ){
             let left = filterPipeLeft(pathFilter);
             let right = filterPipeRight(pathFilter);
-            if filterIsIdentity(left) { return this.applyDel(input, right, ctx); }
+            if (filterIsIdentity(left) ){ return this.applyDel(input, right, ctx); }
             let lr = this.evalSingle(left, input, ctx);
-            if lr.isError() { return input; }
+            if (lr.isError() ){ return input; }
             let subVal = lr.values[0];
             let newSub = this.applyDel(subVal, right, ctx);
             return this.applySetAt(input, left, newSub, ctx);
@@ -1356,8 +1356,8 @@ class Evaluator
     fn applySetAt(input: JsonValue, pathFilter: Filter, newValue: JsonValue, ctx: EvalContext) -> JsonValue
     {
         let fieldNames = filterFieldName(pathFilter);
-        if fieldNames.len() > 0
-        {
+        if (fieldNames.len() > 0
+        ){
             let key = fieldNames[0];
             match input
             {
@@ -1372,7 +1372,7 @@ class Evaluator
                         if (k == key) { newObj[k] = newValue; }
                         else { newObj[k] = o.get(k); }
                     }
-                    if !newObj.contains(key) { newObj[key] = newValue; }
+                    if (!newObj.contains(key) ){ newObj[key] = newValue; }
                     return JsonValue::Object(newObj);
                 }
                 _ => return input;
@@ -1380,8 +1380,8 @@ class Evaluator
         }
 
         let idxList = filterIndexAccess(pathFilter);
-        if idxList.len() > 0
-        {
+        if (idxList.len() > 0
+        ){
             let idx = idxList[0];
             match input
             {
@@ -1391,10 +1391,10 @@ class Evaluator
                     var result: List<JsonValue> = [];
                     var i: Int64 = 0;
                     var target = idx;
-                    if target < 0 { target = arr.len() + target; }
+                    if (target < 0 ){ target = arr.len() + target; }
                     while i < arr.len()
                     {
-                        if i == target { result.push(newValue); }
+                        if (i == target ){ result.push(newValue); }
                         else { result.push(arr[i]); }
                         i = i + 1;
                     }
@@ -1404,15 +1404,15 @@ class Evaluator
             }
         }
 
-        if filterIsIdentity(pathFilter) { return newValue; }
+        if (filterIsIdentity(pathFilter) ){ return newValue; }
 
-        if filterIsPipe(pathFilter)
-        {
+        if (filterIsPipe(pathFilter)
+        ){
             let left = filterPipeLeft(pathFilter);
             let right = filterPipeRight(pathFilter);
-            if filterIsIdentity(left) { return this.applySetAt(input, right, newValue, ctx); }
+            if (filterIsIdentity(left) ){ return this.applySetAt(input, right, newValue, ctx); }
             let lr = this.evalSingle(left, input, ctx);
-            if lr.isError() { return input; }
+            if (lr.isError() ){ return input; }
             let newSub = this.applySetAt(lr.values[0], right, newValue, ctx);
             return this.applySetAt(input, left, newSub, ctx);
         }
@@ -1516,7 +1516,7 @@ class Evaluator
                 let rightF = right;
                 let leftPaths = this.extractPaths(leftF, input, ctx);
                 let leftVals = this.eval(leftF, input, ctx);
-                if leftVals.isError() { return []; }
+                if (leftVals.isError() ){ return []; }
                 var result: List<JsonValue> = [];
                 var li: Int64 = 0;
                 while li < leftPaths.len() && li < leftVals.values.len()
@@ -1571,7 +1571,7 @@ class Evaluator
         let n = s.len();
         while i < n
         {
-            if s.substring(i, i + 1) == "=" { return i; }
+            if (s.substring(i, i + 1) == "=" ){ return i; }
             i = i + 1;
         }
         return -1;
@@ -1587,11 +1587,11 @@ class Evaluator
         for part in parts
         {
             let plen = part.len();
-            if plen > 0
-            {
+            if (plen > 0
+            ){
                 let eqIdx = this.findEqIdx(part);
-                if eqIdx > 0
-                {
+                if (eqIdx > 0
+                ){
                     let k = part.substring(0, eqIdx);
                     let v = part.substring(eqIdx + 1, plen);
                     envObj[k] = JsonValue::Str(v);
@@ -1612,17 +1612,17 @@ class Evaluator
             let b0 = s[i] as Int64;
             var b1: Int64 = 0;
             var b2: Int64 = 0;
-            if i + 1 < n { b1 = s[i + 1] as Int64; }
-            if i + 2 < n { b2 = s[i + 2] as Int64; }
+            if (i + 1 < n ){ b1 = s[i + 1] as Int64; }
+            if (i + 2 < n ){ b2 = s[i + 2] as Int64; }
             let c0 = (b0 / 4) % 64;
             let c1 = (b0 % 4) * 16 + (b1 / 16) % 16;
             let c2 = (b1 % 16) * 4 + (b2 / 64) % 4;
             let c3 = b2 % 64;
             result = result + alpha.substring(c0, c0 + 1);
             result = result + alpha.substring(c1, c1 + 1);
-            if i + 1 < n { result = result + alpha.substring(c2, c2 + 1); }
+            if (i + 1 < n ){ result = result + alpha.substring(c2, c2 + 1); }
             else { result = result + "="; }
-            if i + 2 < n { result = result + alpha.substring(c3, c3 + 1); }
+            if (i + 2 < n ){ result = result + alpha.substring(c3, c3 + 1); }
             else { result = result + "="; }
             i = i + 3;
         }
@@ -1631,11 +1631,11 @@ class Evaluator
 
     fn base64CharVal(c: Int64) -> Int64
     {
-        if c >= 65 && c <= 90 { return c - 65; }
-        if c >= 97 && c <= 122 { return c - 71; }
-        if c >= 48 && c <= 57 { return c + 4; }
-        if c == 43 { return 62; }
-        if c == 47 { return 63; }
+        if (c >= 65 && c <= 90 ){ return c - 65; }
+        if (c >= 97 && c <= 122 ){ return c - 71; }
+        if (c >= 48 && c <= 57 ){ return c + 4; }
+        if (c == 43 ){ return 62; }
+        if (c == 47 ){ return 63; }
         return 0;
     }
 
@@ -1647,9 +1647,9 @@ class Evaluator
         while i + 3 < n + 1
         {
             let c0 = s[i] as Int64;
-            var c1: Int64 = 65; if i + 1 < n { c1 = s[i + 1] as Int64; }
-            var c2: Int64 = 61; if i + 2 < n { c2 = s[i + 2] as Int64; }
-            var c3: Int64 = 61; if i + 3 < n { c3 = s[i + 3] as Int64; }
+            var c1: Int64 = 65; if (i + 1 < n ){ c1 = s[i + 1] as Int64; }
+            var c2: Int64 = 61; if (i + 2 < n ){ c2 = s[i + 2] as Int64; }
+            var c3: Int64 = 61; if (i + 3 < n ){ c3 = s[i + 3] as Int64; }
             let d0 = this.base64CharVal(c0);
             let d1 = this.base64CharVal(c1);
             let d2 = this.base64CharVal(c2);
@@ -1658,8 +1658,8 @@ class Evaluator
             let b1 = (d1 % 16) * 16 + d2 / 4;
             let b2 = (d2 % 4) * 64 + d3;
             result = result + JsonSerializer::codePointToStr(b0);
-            if c2 != 61 { result = result + JsonSerializer::codePointToStr(b1); }
-            if c3 != 61 { result = result + JsonSerializer::codePointToStr(b2); }
+            if (c2 != 61 ){ result = result + JsonSerializer::codePointToStr(b1); }
+            if (c3 != 61 ){ result = result + JsonSerializer::codePointToStr(b2); }
             i = i + 4;
         }
         return result;
@@ -1678,10 +1678,10 @@ class Evaluator
             var b2: Int64 = 0;
             var b3: Int64 = 0;
             var b4: Int64 = 0;
-            if i + 1 < n { b1 = s[i + 1] as Int64; }
-            if i + 2 < n { b2 = s[i + 2] as Int64; }
-            if i + 3 < n { b3 = s[i + 3] as Int64; }
-            if i + 4 < n { b4 = s[i + 4] as Int64; }
+            if (i + 1 < n ){ b1 = s[i + 1] as Int64; }
+            if (i + 2 < n ){ b2 = s[i + 2] as Int64; }
+            if (i + 3 < n ){ b3 = s[i + 3] as Int64; }
+            if (i + 4 < n ){ b4 = s[i + 4] as Int64; }
             let c0 = (b0 / 8) % 32;
             let c1 = (b0 % 8) * 4 + b1 / 64;
             let c2 = (b1 / 2) % 32;
@@ -1692,13 +1692,13 @@ class Evaluator
             let c7 = b4 % 32;
             result = result + alpha.substring(c0, c0 + 1);
             result = result + alpha.substring(c1, c1 + 1);
-            if i + 1 < n { result = result + alpha.substring(c2, c2 + 1) + alpha.substring(c3, c3 + 1); }
+            if (i + 1 < n ){ result = result + alpha.substring(c2, c2 + 1) + alpha.substring(c3, c3 + 1); }
             else { result = result + "=="; }
-            if i + 2 < n { result = result + alpha.substring(c4, c4 + 1); }
+            if (i + 2 < n ){ result = result + alpha.substring(c4, c4 + 1); }
             else { result = result + "="; }
-            if i + 3 < n { result = result + alpha.substring(c5, c5 + 1) + alpha.substring(c6, c6 + 1); }
+            if (i + 3 < n ){ result = result + alpha.substring(c5, c5 + 1) + alpha.substring(c6, c6 + 1); }
             else { result = result + "=="; }
-            if i + 4 < n { result = result + alpha.substring(c7, c7 + 1); }
+            if (i + 4 < n ){ result = result + alpha.substring(c7, c7 + 1); }
             else { result = result + "="; }
             i = i + 5;
         }
@@ -1707,8 +1707,8 @@ class Evaluator
 
     fn base32CharVal(c: Int64) -> Int64
     {
-        if c >= 65 && c <= 90 { return c - 65; }
-        if c >= 50 && c <= 55 { return c - 24; }
+        if (c >= 65 && c <= 90 ){ return c - 65; }
+        if (c >= 50 && c <= 55 ){ return c - 24; }
         return 0;
     }
 
@@ -1737,10 +1737,10 @@ class Evaluator
             let b3 = (d4 % 2) * 128 + d5 * 4 + d6 / 8;
             let b4 = (d6 % 8) * 32 + d7;
             result = result + JsonSerializer::codePointToStr(b0);
-            if c2 != 61 { result = result + JsonSerializer::codePointToStr(b1); }
-            if c4 != 61 { result = result + JsonSerializer::codePointToStr(b2); }
-            if c5 != 61 { result = result + JsonSerializer::codePointToStr(b3); }
-            if c7 != 61 { result = result + JsonSerializer::codePointToStr(b4); }
+            if (c2 != 61 ){ result = result + JsonSerializer::codePointToStr(b1); }
+            if (c4 != 61 ){ result = result + JsonSerializer::codePointToStr(b2); }
+            if (c5 != 61 ){ result = result + JsonSerializer::codePointToStr(b3); }
+            if (c7 != 61 ){ result = result + JsonSerializer::codePointToStr(b4); }
             i = i + 8;
         }
         return result;
@@ -1749,17 +1749,17 @@ class Evaluator
     fn applyFormat(fmt: String, value: JsonValue) -> String
     {
         let s = match value { Str(s) => s; _ => JsonSerializer::stringify(value); };
-        if fmt == "json"   { return JsonSerializer::stringify(value); }
-        if fmt == "text"   { return s; }
-        if fmt == "html"   { return s.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;").replace("\"","&quot;"); }
-        if fmt == "uri"    { return this.uriEncode(s); }
-        if fmt == "csv"    { return this.toCsv(value); }
-        if fmt == "tsv"    { return this.toTsv(value); }
-        if fmt == "sh"     { return "'" + s.replace("'", "'\\''") + "'"; }
-        if fmt == "base64" { return this.base64Encode(s); }
-        if fmt == "base64d" { return this.base64Decode(s); }
-        if fmt == "base32" { return this.base32Encode(s); }
-        if fmt == "base32d" { return this.base32Decode(s); }
+        if (fmt == "json"   ){ return JsonSerializer::stringify(value); }
+        if (fmt == "text"   ){ return s; }
+        if (fmt == "html"   ){ return s.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;").replace("\"","&quot;"); }
+        if (fmt == "uri"    ){ return this.uriEncode(s); }
+        if (fmt == "csv"    ){ return this.toCsv(value); }
+        if (fmt == "tsv"    ){ return this.toTsv(value); }
+        if (fmt == "sh"     ){ return "'" + s.replace("'", "'\\''") + "'"; }
+        if (fmt == "base64" ){ return this.base64Encode(s); }
+        if (fmt == "base64d" ){ return this.base64Decode(s); }
+        if (fmt == "base32" ){ return this.base32Encode(s); }
+        if (fmt == "base32d" ){ return this.base32Decode(s); }
         return s;
     }
 
@@ -1770,9 +1770,9 @@ class Evaluator
         while i < s.len()
         {
             let c = s[i] as Int64;
-            if (c >= 65 && c <= 90) || (c >= 97 && c <= 122) || (c >= 48 && c <= 57) ||
+            if ((c >= 65 && c <= 90) || (c >= 97 && c <= 122) || (c >= 48 && c <= 57) ||
                c == 45 || c == 95 || c == 46 || c == 126
-            {
+            ){
                 result = result + s.substring(i, i + 1);
             }
             else
@@ -1807,7 +1807,7 @@ class Evaluator
                         Str(s)     => { parts.push("\"" + s.replace("\"", "\"\"") + "\""); }
                         Integer(n) => { parts.push(n.toString()); }
                         Float(f)   => { parts.push(JsonUtil::floatDisplay(f)); }
-                        Bool(b)    => { if b { parts.push("true"); } else { parts.push("false"); } }
+                        Bool(b)    => { if (b ){ parts.push("true"); } else { parts.push("false"); } }
                         Null       => { parts.push(""); }
                         _ => { parts.push(JsonSerializer::stringify(item)); }
                     }
@@ -1834,7 +1834,7 @@ class Evaluator
                         Str(s) => { parts.push(s.replace("\t", "\\t").replace("\n", "\\n")); }
                         Integer(n) => { parts.push(n.toString()); }
                         Float(f)   => { parts.push(JsonUtil::floatDisplay(f)); }
-                        Bool(b)    => { if b { parts.push("true"); } else { parts.push("false"); } }
+                        Bool(b)    => { if (b ){ parts.push("true"); } else { parts.push("false"); } }
                         Null => { parts.push(""); }
                         _ => { parts.push(JsonSerializer::stringify(item)); }
                     }
@@ -1850,7 +1850,7 @@ class Evaluator
 
     fn getPathValue(v: JsonValue, path: List<JsonValue>, idx: Int64) -> JsonValue
     {
-        if idx >= path.len() { return v; }
+        if (idx >= path.len() ){ return v; }
         let step = path[idx];
         match step
         {
@@ -1870,8 +1870,8 @@ class Evaluator
                     {
                         let aa = a;
                         var ix = i;
-                        if ix < 0 { ix += aa.len(); }
-                        if ix >= 0 && ix < aa.len() { return this.getPathValue(aa[ix], path, idx + 1); }
+                        if (ix < 0 ){ ix += aa.len(); }
+                        if (ix >= 0 && ix < aa.len() ){ return this.getPathValue(aa[ix], path, idx + 1); }
                         return JsonValue::Null;
                     }
                     _ => return JsonValue::Null;
@@ -1884,7 +1884,7 @@ class Evaluator
 
     fn setPathValue(v: JsonValue, path: List<JsonValue>, idx: Int64, newVal: JsonValue) -> JsonValue
     {
-        if idx >= path.len() { return newVal; }
+        if (idx >= path.len() ){ return newVal; }
         let step = path[idx];
         match step
         {
@@ -1902,7 +1902,7 @@ class Evaluator
                         {
                             let kk = ks[ki]; ki += 1;
                             obj[kk] = o.get(kk);
-                            if kk == k { child = o.get(kk); }
+                            if (kk == k ){ child = o.get(kk); }
                         }
                     }
                     _ => { }
@@ -1919,8 +1919,8 @@ class Evaluator
                     _ => { }
                 }
                 var ix = i;
-                if ix < 0 { ix += arr.len(); }
-                if ix < 0 { ix = 0; }
+                if (ix < 0 ){ ix += arr.len(); }
+                if (ix < 0 ){ ix = 0; }
                 while arr.len() <= ix { arr.push(JsonValue::Null); }
                 let child = arr[ix];
                 arr[ix] = this.setPathValue(child, path, idx + 1, newVal);
@@ -1933,7 +1933,7 @@ class Evaluator
 
     fn delPathValue(v: JsonValue, path: List<JsonValue>, idx: Int64) -> JsonValue
     {
-        if idx >= path.len() { return JsonValue::Null; }
+        if (idx >= path.len() ){ return JsonValue::Null; }
         let step = path[idx];
         let last = idx == path.len() - 1;
         match step
@@ -1950,9 +1950,9 @@ class Evaluator
                         while ki < ks.len()
                         {
                             let kk = ks[ki]; ki += 1;
-                            if kk == k
-                            {
-                                if !last { obj[kk] = this.delPathValue(o.get(kk), path, idx + 1); }
+                            if (kk == k
+                            ){
+                                if (!last ){ obj[kk] = this.delPathValue(o.get(kk), path, idx + 1); }
                             }
                             else { obj[kk] = o.get(kk); }
                         }
@@ -1969,14 +1969,14 @@ class Evaluator
                     {
                         let aa = a;
                         var ix = i;
-                        if ix < 0 { ix += aa.len(); }
+                        if (ix < 0 ){ ix += aa.len(); }
                         var arr: List<JsonValue> = [];
                         var j: Int64 = 0;
                         while j < aa.len()
                         {
-                            if j == ix
-                            {
-                                if !last { arr.push(this.delPathValue(aa[j], path, idx + 1)); }
+                            if (j == ix
+                            ){
+                                if (!last ){ arr.push(this.delPathValue(aa[j], path, idx + 1)); }
                             }
                             else { arr.push(aa[j]); }
                             j += 1;
@@ -2008,7 +2008,7 @@ class Evaluator
                     p.push(JsonValue::Integer(i));
                     var isLeaf = true;
                     match aa[i] { Array(_) => { isLeaf = false; } Object(_) => { isLeaf = false; } _ => { } }
-                    if !leafOnly || isLeaf { results.push(JsonValue::Array(p)); }
+                    if (!leafOnly || isLeaf ){ results.push(JsonValue::Array(p)); }
                     let sub = this.allPathsRec(aa[i], p, leafOnly);
                     for s in sub { results.push(s); }
                     i += 1;
@@ -2027,7 +2027,7 @@ class Evaluator
                     let child = o.get(k);
                     var isLeaf = true;
                     match child { Array(_) => { isLeaf = false; } Object(_) => { isLeaf = false; } _ => { } }
-                    if !leafOnly || isLeaf { results.push(JsonValue::Array(p)); }
+                    if (!leafOnly || isLeaf ){ results.push(JsonValue::Array(p)); }
                     let sub = this.allPathsRec(child, p, leafOnly);
                     for s in sub { results.push(s); }
                 }
@@ -2048,8 +2048,8 @@ class Evaluator
             Object(o) => { childCount = o.len(); }
             _ => { childCount = -1; }
         }
-        if childCount <= 0
-        {
+        if (childCount <= 0
+        ){
             // Skalar oder leerer Container: [pfad, wert]
             var evt: List<JsonValue> = [];
             var pcopy: List<JsonValue> = [];
@@ -2106,45 +2106,45 @@ class Evaluator
 
     fn evalBuiltin(name: String, args: List<Filter>, input: JsonValue, ctx: EvalContext) -> EvalResult
     {
-        if name == "empty"  { return EvalResult::empty(); }
-        if name == "null"   { return EvalResult::single(JsonValue::Null); }
-        if name == "true"   { return EvalResult::single(JsonValue::Bool(true)); }
-        if name == "false"  { return EvalResult::single(JsonValue::Bool(false)); }
+        if (name == "empty"  ){ return EvalResult::empty(); }
+        if (name == "null"   ){ return EvalResult::single(JsonValue::Null); }
+        if (name == "true"   ){ return EvalResult::single(JsonValue::Bool(true)); }
+        if (name == "false"  ){ return EvalResult::single(JsonValue::Bool(false)); }
 
-        if name == "not"
-        {
+        if (name == "not"
+        ){
             return EvalResult::single(JsonValue::Bool(!JsonValueHelper::isTruthy(input)));
         }
 
-        if name == "type"
-        {
+        if (name == "type"
+        ){
             return EvalResult::single(JsonValue::Str(JsonValueHelper::typeName(input)));
         }
 
-        if name == "numbers"   { match input { Integer(_) => {} Float(_) => {} _ => return EvalResult::empty(); } return EvalResult::single(input); }
-        if name == "strings"   { match input { Str(_)     => {} _ => return EvalResult::empty(); } return EvalResult::single(input); }
-        if name == "booleans"  { match input { Bool(_)    => {} _ => return EvalResult::empty(); } return EvalResult::single(input); }
-        if name == "nulls"     { match input { Null       => {} _ => return EvalResult::empty(); } return EvalResult::single(input); }
-        if name == "arrays"    { match input { Array(_)   => {} _ => return EvalResult::empty(); } return EvalResult::single(input); }
-        if name == "objects"   { match input { Object(_)  => {} _ => return EvalResult::empty(); } return EvalResult::single(input); }
-        if name == "iterables" { match input { Array(_) => {} Object(_) => {} _ => return EvalResult::empty(); } return EvalResult::single(input); }
-        if name == "scalars"   { match input { Array(_) => return EvalResult::empty(); Object(_) => return EvalResult::empty(); _ => {} } return EvalResult::single(input); }
-        if name == "values"    { match input { Null => return EvalResult::empty(); _ => {} } return EvalResult::single(input); }
+        if (name == "numbers"   ){ match input { Integer(_) => {} Float(_) => {} _ => return EvalResult::empty(); } return EvalResult::single(input); }
+        if (name == "strings"   ){ match input { Str(_)     => {} _ => return EvalResult::empty(); } return EvalResult::single(input); }
+        if (name == "booleans"  ){ match input { Bool(_)    => {} _ => return EvalResult::empty(); } return EvalResult::single(input); }
+        if (name == "nulls"     ){ match input { Null       => {} _ => return EvalResult::empty(); } return EvalResult::single(input); }
+        if (name == "arrays"    ){ match input { Array(_)   => {} _ => return EvalResult::empty(); } return EvalResult::single(input); }
+        if (name == "objects"   ){ match input { Object(_)  => {} _ => return EvalResult::empty(); } return EvalResult::single(input); }
+        if (name == "iterables" ){ match input { Array(_) => {} Object(_) => {} _ => return EvalResult::empty(); } return EvalResult::single(input); }
+        if (name == "scalars"   ){ match input { Array(_) => return EvalResult::empty(); Object(_) => return EvalResult::empty(); _ => {} } return EvalResult::single(input); }
+        if (name == "values"    ){ match input { Null => return EvalResult::empty(); _ => {} } return EvalResult::single(input); }
 
-        if name == "path"
-        {
-            if args.len() == 0 { return EvalResult::err("path requires an argument"); }
+        if (name == "path"
+        ){
+            if (args.len() == 0 ){ return EvalResult::err("path requires an argument"); }
             let argList = args;
             let pathFilter = argList[0];
             let paths = this.extractPaths(pathFilter, input, ctx);
             return EvalResult::ok(paths);
         }
 
-        if name == "getpath"
-        {
-            if args.len() == 0 { return EvalResult::err("getpath requires a path argument"); }
+        if (name == "getpath"
+        ){
+            if (args.len() == 0 ){ return EvalResult::err("getpath requires a path argument"); }
             let pr = this.evalSingle(args[0], input, ctx);
-            if pr.isError() { return pr; }
+            if (pr.isError() ){ return pr; }
             match pr.values[0]
             {
                 Array(pathArr) =>
@@ -2155,22 +2155,22 @@ class Evaluator
             }
         }
 
-        if name == "length"
-        {
+        if (name == "length"
+        ){
             match input
             {
                 Null       => return EvalResult::single(JsonValue::Integer(0));
                 Str(s)     => return EvalResult::single(JsonValue::Integer(s.len()));
                 Array(a)   => { let arr = a; return EvalResult::single(JsonValue::Integer(arr.len())); }
                 Object(o)  => return EvalResult::single(JsonValue::Integer(o.len()));
-                Integer(n) => { var absN = n; if n < 0 { absN = -n; } return EvalResult::single(JsonValue::Integer(absN)); }
-                Float(fv)  => { var absF = fv; if fv < 0.0 { absF = -fv; } return EvalResult::single(JsonValue::Float(absF)); }
+                Integer(n) => { var absN = n; if (n < 0 ){ absN = -n; } return EvalResult::single(JsonValue::Integer(absN)); }
+                Float(fv)  => { var absF = fv; if (fv < 0.0 ){ absF = -fv; } return EvalResult::single(JsonValue::Float(absF)); }
                 Bool(_)    => return EvalResult::err("boolean has no length");
             }
         }
 
-        if name == "utf8bytelength"
-        {
+        if (name == "utf8bytelength"
+        ){
             match input
             {
                 Str(s) => return EvalResult::single(JsonValue::Integer(s.len()));
@@ -2178,18 +2178,18 @@ class Evaluator
             }
         }
 
-        if name == "abs"
-        {
+        if (name == "abs"
+        ){
             match input
             {
-                Integer(n) => { var absN = n; if n < 0 { absN = -n; } return EvalResult::single(JsonValue::Integer(absN)); }
-                Float(fv)  => { var absF = fv; if fv < 0.0 { absF = -fv; } return EvalResult::single(JsonValue::Float(absF)); }
+                Integer(n) => { var absN = n; if (n < 0 ){ absN = -n; } return EvalResult::single(JsonValue::Integer(absN)); }
+                Float(fv)  => { var absF = fv; if (fv < 0.0 ){ absF = -fv; } return EvalResult::single(JsonValue::Float(absF)); }
                 _ => return EvalResult::err("abs requires number");
             }
         }
 
-        if name == "tostring"
-        {
+        if (name == "tostring"
+        ){
             match input
             {
                 Str(s) => return EvalResult::single(JsonValue::Str(s));
@@ -2197,8 +2197,8 @@ class Evaluator
             }
         }
 
-        if name == "tonumber"
-        {
+        if (name == "tonumber"
+        ){
             match input
             {
                 Integer(n) => return EvalResult::single(JsonValue::Integer(n));
@@ -2206,7 +2206,7 @@ class Evaluator
                 Str(s)     =>
                 {
                     let parsed = JsonParser::tryParse(s);
-                    if parsed.len() == 0 { return EvalResult::err("Invalid number: " + s); }
+                    if (parsed.len() == 0 ){ return EvalResult::err("Invalid number: " + s); }
                     else
                     {
                         match parsed[0]
@@ -2221,27 +2221,27 @@ class Evaluator
             }
         }
 
-        if name == "tojson"
-        {
+        if (name == "tojson"
+        ){
             return EvalResult::single(JsonValue::Str(JsonSerializer::stringify(input)));
         }
 
-        if name == "fromjson"
-        {
+        if (name == "fromjson"
+        ){
             match input
             {
                 Str(s) =>
                 {
                     let parsed = JsonParser::tryParse(s);
-                    if parsed.len() == 0 { return EvalResult::err("Invalid JSON: " + s); }
+                    if (parsed.len() == 0 ){ return EvalResult::err("Invalid JSON: " + s); }
                     else { return EvalResult::single(parsed[0]); }
                 }
                 _ => return EvalResult::err("fromjson requires string");
             }
         }
 
-        if name == "keys"
-        {
+        if (name == "keys"
+        ){
             match input
             {
                 Object(o) =>
@@ -2264,8 +2264,8 @@ class Evaluator
             }
         }
 
-        if name == "keys_unsorted"
-        {
+        if (name == "keys_unsorted"
+        ){
             match input
             {
                 Object(o) =>
@@ -2287,8 +2287,8 @@ class Evaluator
             }
         }
 
-        if name == "values"
-        {
+        if (name == "values"
+        ){
             match input
             {
                 Object(o) =>
@@ -2303,11 +2303,11 @@ class Evaluator
             }
         }
 
-        if name == "has"
-        {
-            if args.len() == 0 { return EvalResult::err("has requires an argument"); }
+        if (name == "has"
+        ){
+            if (args.len() == 0 ){ return EvalResult::err("has requires an argument"); }
             let ar = this.evalSingle(args[0], input, ctx);
-            if ar.isError() { return ar; }
+            if (ar.isError() ){ return ar; }
             match input
             {
                 Object(o) =>
@@ -2331,11 +2331,11 @@ class Evaluator
             }
         }
 
-        if name == "in"
-        {
-            if args.len() == 0 { return EvalResult::err("in requires an argument"); }
+        if (name == "in"
+        ){
+            if (args.len() == 0 ){ return EvalResult::err("in requires an argument"); }
             let ar = this.evalSingle(args[0], input, ctx);
-            if ar.isError() { return ar; }
+            if (ar.isError() ){ return ar; }
             match ar.values[0]
             {
                 Object(o) =>
@@ -2359,35 +2359,35 @@ class Evaluator
             }
         }
 
-        if name == "contains"
-        {
-            if args.len() == 0 { return EvalResult::err("contains requires argument"); }
+        if (name == "contains"
+        ){
+            if (args.len() == 0 ){ return EvalResult::err("contains requires argument"); }
             let ar = this.evalSingle(args[0], input, ctx);
-            if ar.isError() { return ar; }
+            if (ar.isError() ){ return ar; }
             return EvalResult::single(JsonValue::Bool(this.contains(input, ar.values[0])));
         }
 
-        if name == "inside"
-        {
-            if args.len() == 0 { return EvalResult::err("inside requires argument"); }
+        if (name == "inside"
+        ){
+            if (args.len() == 0 ){ return EvalResult::err("inside requires argument"); }
             let ar = this.evalSingle(args[0], input, ctx);
-            if ar.isError() { return ar; }
+            if (ar.isError() ){ return ar; }
             return EvalResult::single(JsonValue::Bool(this.contains(ar.values[0], input)));
         }
 
-        if name == "select"
-        {
-            if args.len() == 0 { return EvalResult::err("select requires argument"); }
+        if (name == "select"
+        ){
+            if (args.len() == 0 ){ return EvalResult::err("select requires argument"); }
             let ar = this.eval(args[0], input, ctx);
-            if ar.isError() { return EvalResult::empty(); }
-            if ar.values.len() == 0 { return EvalResult::empty(); }
-            if JsonValueHelper::isTruthy(ar.values[0]) { return EvalResult::single(input); }
+            if (ar.isError() ){ return EvalResult::empty(); }
+            if (ar.values.len() == 0 ){ return EvalResult::empty(); }
+            if (JsonValueHelper::isTruthy(ar.values[0]) ){ return EvalResult::single(input); }
             return EvalResult::empty();
         }
 
-        if name == "map"
-        {
-            if args.len() == 0 { return EvalResult::err("map requires argument"); }
+        if (name == "map"
+        ){
+            if (args.len() == 0 ){ return EvalResult::err("map requires argument"); }
             match input
             {
                 Array(a) =>
@@ -2397,7 +2397,7 @@ class Evaluator
                     for item in arr
                     {
                         let r = this.eval(args[0], item, ctx);
-                        if r.isError() { return r; }
+                        if (r.isError() ){ return r; }
                         for v in r.values { results.push(v); }
                     }
                     return EvalResult::single(JsonValue::Array(results));
@@ -2406,9 +2406,9 @@ class Evaluator
             }
         }
 
-        if name == "map_values"
-        {
-            if args.len() == 0 { return EvalResult::err("map_values requires argument"); }
+        if (name == "map_values"
+        ){
+            if (args.len() == 0 ){ return EvalResult::err("map_values requires argument"); }
             match input
             {
                 Array(a) =>
@@ -2418,7 +2418,7 @@ class Evaluator
                     for item in arr
                     {
                         let r = this.evalSingle(args[0], item, ctx);
-                        if r.isError() { return r; }
+                        if (r.isError() ){ return r; }
                         results.push(r.values[0]);
                     }
                     return EvalResult::single(JsonValue::Array(results));
@@ -2430,7 +2430,7 @@ class Evaluator
                     for key in oKs
                     {
                         let r = this.evalSingle(args[0], o.get(key), ctx);
-                        if r.isError() { return r; }
+                        if (r.isError() ){ return r; }
                         obj2[key] = r.values[0];
                     }
                     return EvalResult::single(JsonValue::Object(obj2));
@@ -2439,14 +2439,14 @@ class Evaluator
             }
         }
 
-        if name == "add"
-        {
+        if (name == "add"
+        ){
             match input
             {
                 Array(a) =>
                 {
                     let arr = a;
-                    if arr.len() == 0 { return EvalResult::single(JsonValue::Null); }
+                    if (arr.len() == 0 ){ return EvalResult::single(JsonValue::Null); }
                     var acc = arr[0];
                     var i = 1;
                     while i < arr.len() { acc = JsonValueHelper::addValues(acc, arr[i]); i = i + 1; }
@@ -2456,23 +2456,23 @@ class Evaluator
             }
         }
 
-        if name == "any"
-        {
-            if args.len() == 0
-            {
+        if (name == "any"
+        ){
+            if (args.len() == 0
+            ){
                 match input
                 {
                     Array(a) =>
                     {
                         let arr = a;
-                        for item in arr { if JsonValueHelper::isTruthy(item) { return EvalResult::single(JsonValue::Bool(true)); } }
+                        for item in arr { if (JsonValueHelper::isTruthy(item) ){ return EvalResult::single(JsonValue::Bool(true)); } }
                         return EvalResult::single(JsonValue::Bool(false));
                     }
                     _ => return EvalResult::err("any requires array");
                 }
             }
-            if args.len() == 1
-            {
+            if (args.len() == 1
+            ){
                 match input
                 {
                     Array(a) =>
@@ -2481,8 +2481,8 @@ class Evaluator
                         for item in arr
                         {
                             let r = this.evalSingle(args[0], item, ctx);
-                            if !r.isError() && JsonValueHelper::isTruthy(r.values[0])
-                            {
+                            if (!r.isError() && JsonValueHelper::isTruthy(r.values[0])
+                            ){
                                 return EvalResult::single(JsonValue::Bool(true));
                             }
                         }
@@ -2494,23 +2494,23 @@ class Evaluator
             return EvalResult::single(JsonValue::Bool(false));
         }
 
-        if name == "all"
-        {
-            if args.len() == 0
-            {
+        if (name == "all"
+        ){
+            if (args.len() == 0
+            ){
                 match input
                 {
                     Array(a) =>
                     {
                         let arr = a;
-                        for item in arr { if !JsonValueHelper::isTruthy(item) { return EvalResult::single(JsonValue::Bool(false)); } }
+                        for item in arr { if (!JsonValueHelper::isTruthy(item) ){ return EvalResult::single(JsonValue::Bool(false)); } }
                         return EvalResult::single(JsonValue::Bool(true));
                     }
                     _ => return EvalResult::err("all requires array");
                 }
             }
-            if args.len() == 1
-            {
+            if (args.len() == 1
+            ){
                 match input
                 {
                     Array(a) =>
@@ -2519,8 +2519,8 @@ class Evaluator
                         for item in arr
                         {
                             let r = this.evalSingle(args[0], item, ctx);
-                            if r.isError() || !JsonValueHelper::isTruthy(r.values[0])
-                            {
+                            if (r.isError() || !JsonValueHelper::isTruthy(r.values[0])
+                            ){
                                 return EvalResult::single(JsonValue::Bool(false));
                             }
                         }
@@ -2532,11 +2532,11 @@ class Evaluator
             return EvalResult::single(JsonValue::Bool(true));
         }
 
-        if name == "flatten"
-        {
+        if (name == "flatten"
+        ){
             var depth: Int64 = 9999;
-            if args.len() > 0
-            {
+            if (args.len() > 0
+            ){
                 let r = this.evalSingle(args[0], input, ctx);
                 match r.values[0] { Integer(n) => { depth = n; } _ => {} }
             }
@@ -2553,12 +2553,12 @@ class Evaluator
             }
         }
 
-        if name == "range"
-        {
-            if args.len() == 1
-            {
+        if (name == "range"
+        ){
+            if (args.len() == 1
+            ){
                 let nr = this.evalSingle(args[0], input, ctx);
-                if nr.isError() { return nr; }
+                if (nr.isError() ){ return nr; }
                 match nr.values[0]
                 {
                     Integer(n) =>
@@ -2571,17 +2571,17 @@ class Evaluator
                     _ => return EvalResult::err("range requires integer");
                 }
             }
-            if args.len() >= 2
-            {
+            if (args.len() >= 2
+            ){
                 let sr = this.evalSingle(args[0], input, ctx);
                 let er = this.evalSingle(args[1], input, ctx);
-                if sr.isError() { return sr; }
-                if er.isError() { return er; }
+                if (sr.isError() ){ return sr; }
+                if (er.isError() ){ return er; }
                 var step: Int64 = 1;
-                if args.len() >= 3
-                {
+                if (args.len() >= 3
+                ){
                     let stepr = this.evalSingle(args[2], input, ctx);
-                    if !stepr.isError() { match stepr.values[0] { Integer(n) => { step = n; } _ => {} } }
+                    if (!stepr.isError() ){ match stepr.values[0] { Integer(n) => { step = n; } _ => {} } }
                 }
                 match sr.values[0]
                 {
@@ -2605,8 +2605,8 @@ class Evaluator
             return EvalResult::err("range requires 1-3 arguments");
         }
 
-        if name == "sort"
-        {
+        if (name == "sort"
+        ){
             match input
             {
                 Array(a) =>
@@ -2619,9 +2619,9 @@ class Evaluator
             }
         }
 
-        if name == "sort_by"
-        {
-            if args.len() == 0 { return EvalResult::err("sort_by requires argument"); }
+        if (name == "sort_by"
+        ){
+            if (args.len() == 0 ){ return EvalResult::err("sort_by requires argument"); }
             match input
             {
                 Array(a) =>
@@ -2634,8 +2634,8 @@ class Evaluator
             }
         }
 
-        if name == "reverse"
-        {
+        if (name == "reverse"
+        ){
             match input
             {
                 Array(a) =>
@@ -2657,8 +2657,8 @@ class Evaluator
             }
         }
 
-        if name == "unique"
-        {
+        if (name == "unique"
+        ){
             match input
             {
                 Array(a) =>
@@ -2669,8 +2669,8 @@ class Evaluator
                     for item in arr
                     {
                         var found = false;
-                        for s in seen { if JsonValueHelper::equals(item, s) { found = true; break; } }
-                        if !found { result.push(item); seen.push(item); }
+                        for s in seen { if (JsonValueHelper::equals(item, s) ){ found = true; break; } }
+                        if (!found ){ result.push(item); seen.push(item); }
                     }
                     return EvalResult::single(JsonValue::Array(result));
                 }
@@ -2678,9 +2678,9 @@ class Evaluator
             }
         }
 
-        if name == "unique_by"
-        {
-            if args.len() == 0 { return EvalResult::err("unique_by requires argument"); }
+        if (name == "unique_by"
+        ){
+            if (args.len() == 0 ){ return EvalResult::err("unique_by requires argument"); }
             match input
             {
                 Array(a) =>
@@ -2692,10 +2692,10 @@ class Evaluator
                     for item in sorted
                     {
                         let kr = this.evalSingle(args[0], item, ctx);
-                        var key = JsonValue::Null; if !kr.isError() { key = kr.values[0]; }
+                        var key = JsonValue::Null; if (!kr.isError() ){ key = kr.values[0]; }
                         var found = false;
-                        for sk in seenKeys { if JsonValueHelper::equals(key, sk) { found = true; break; } }
-                        if !found { result.push(item); seenKeys.push(key); }
+                        for sk in seenKeys { if (JsonValueHelper::equals(key, sk) ){ found = true; break; } }
+                        if (!found ){ result.push(item); seenKeys.push(key); }
                     }
                     return EvalResult::single(JsonValue::Array(result));
                 }
@@ -2703,9 +2703,9 @@ class Evaluator
             }
         }
 
-        if name == "group_by"
-        {
-            if args.len() == 0 { return EvalResult::err("group_by requires argument"); }
+        if (name == "group_by"
+        ){
+            if (args.len() == 0 ){ return EvalResult::err("group_by requires argument"); }
             match input
             {
                 Array(a) =>
@@ -2716,8 +2716,8 @@ class Evaluator
                     for item in arr
                     {
                         let kr = this.evalSingle(args[0], item, ctx);
-                        var key = "null"; if !kr.isError() { key = JsonSerializer::stringify(kr.values[0]); }
-                        if !groups.contains(key) { var emptyGrp: List<JsonValue> = []; groups[key] = emptyGrp; order.push(key); }
+                        var key = "null"; if (!kr.isError() ){ key = JsonSerializer::stringify(kr.values[0]); }
+                        if (!groups.contains(key) ){ var emptyGrp: List<JsonValue> = []; groups[key] = emptyGrp; order.push(key); }
                         var existing = groups.get(key);
                         existing.push(item);
                         groups[key] = existing;
@@ -2738,55 +2738,55 @@ class Evaluator
             }
         }
 
-        if name == "min"
-        {
+        if (name == "min"
+        ){
             match input
             {
                 Array(a) =>
                 {
                     let arr = a;
-                    if arr.len() == 0 { return EvalResult::single(JsonValue::Null); }
+                    if (arr.len() == 0 ){ return EvalResult::single(JsonValue::Null); }
                     var minVal = arr[0];
-                    for item in arr { if JsonValueHelper::compare(item, minVal) < 0 { minVal = item; } }
+                    for item in arr { if (JsonValueHelper::compare(item, minVal) < 0 ){ minVal = item; } }
                     return EvalResult::single(minVal);
                 }
                 _ => return EvalResult::err("min requires array");
             }
         }
 
-        if name == "max"
-        {
+        if (name == "max"
+        ){
             match input
             {
                 Array(a) =>
                 {
                     let arr = a;
-                    if arr.len() == 0 { return EvalResult::single(JsonValue::Null); }
+                    if (arr.len() == 0 ){ return EvalResult::single(JsonValue::Null); }
                     var maxVal = arr[0];
-                    for item in arr { if JsonValueHelper::compare(item, maxVal) > 0 { maxVal = item; } }
+                    for item in arr { if (JsonValueHelper::compare(item, maxVal) > 0 ){ maxVal = item; } }
                     return EvalResult::single(maxVal);
                 }
                 _ => return EvalResult::err("max requires array");
             }
         }
 
-        if name == "min_by"
-        {
-            if args.len() == 0 { return EvalResult::err("min_by requires argument"); }
+        if (name == "min_by"
+        ){
+            if (args.len() == 0 ){ return EvalResult::err("min_by requires argument"); }
             match input
             {
                 Array(a) =>
                 {
                     let arr = a;
-                    if arr.len() == 0 { return EvalResult::single(JsonValue::Null); }
+                    if (arr.len() == 0 ){ return EvalResult::single(JsonValue::Null); }
                     var minItem = arr[0];
                     let mkr = this.evalSingle(args[0], minItem, ctx);
-                    var minKey = JsonValue::Null; if !mkr.isError() { minKey = mkr.values[0]; }
+                    var minKey = JsonValue::Null; if (!mkr.isError() ){ minKey = mkr.values[0]; }
                     for item in arr
                     {
                         let kr = this.evalSingle(args[0], item, ctx);
-                        var key = JsonValue::Null; if !kr.isError() { key = kr.values[0]; }
-                        if JsonValueHelper::compare(key, minKey) < 0 { minItem = item; minKey = key; }
+                        var key = JsonValue::Null; if (!kr.isError() ){ key = kr.values[0]; }
+                        if (JsonValueHelper::compare(key, minKey) < 0 ){ minItem = item; minKey = key; }
                     }
                     return EvalResult::single(minItem);
                 }
@@ -2794,23 +2794,23 @@ class Evaluator
             }
         }
 
-        if name == "max_by"
-        {
-            if args.len() == 0 { return EvalResult::err("max_by requires argument"); }
+        if (name == "max_by"
+        ){
+            if (args.len() == 0 ){ return EvalResult::err("max_by requires argument"); }
             match input
             {
                 Array(a) =>
                 {
                     let arr = a;
-                    if arr.len() == 0 { return EvalResult::single(JsonValue::Null); }
+                    if (arr.len() == 0 ){ return EvalResult::single(JsonValue::Null); }
                     var maxItem = arr[0];
                     let mkr = this.evalSingle(args[0], maxItem, ctx);
-                    var maxKey = JsonValue::Null; if !mkr.isError() { maxKey = mkr.values[0]; }
+                    var maxKey = JsonValue::Null; if (!mkr.isError() ){ maxKey = mkr.values[0]; }
                     for item in arr
                     {
                         let kr = this.evalSingle(args[0], item, ctx);
-                        var key = JsonValue::Null; if !kr.isError() { key = kr.values[0]; }
-                        if JsonValueHelper::compare(key, maxKey) > 0 { maxItem = item; maxKey = key; }
+                        var key = JsonValue::Null; if (!kr.isError() ){ key = kr.values[0]; }
+                        if (JsonValueHelper::compare(key, maxKey) > 0 ){ maxItem = item; maxKey = key; }
                     }
                     return EvalResult::single(maxItem);
                 }
@@ -2818,13 +2818,13 @@ class Evaluator
             }
         }
 
-        if name == "first"
-        {
-            if args.len() > 0
-            {
+        if (name == "first"
+        ){
+            if (args.len() > 0
+            ){
                 let r = this.eval(args[0], input, ctx);
-                if r.isError() { return r; }
-                if r.values.len() > 0 { return EvalResult::single(r.values[0]); }
+                if (r.isError() ){ return r; }
+                if (r.values.len() > 0 ){ return EvalResult::single(r.values[0]); }
                 return EvalResult::single(JsonValue::Null);
             }
             match input
@@ -2832,20 +2832,20 @@ class Evaluator
                 Array(a) =>
                 {
                     let arr = a;
-                    if arr.len() > 0 { return EvalResult::single(arr[0]); }
+                    if (arr.len() > 0 ){ return EvalResult::single(arr[0]); }
                     return EvalResult::single(JsonValue::Null);
                 }
                 _ => return EvalResult::err("first requires array");
             }
         }
 
-        if name == "last"
-        {
-            if args.len() > 0
-            {
+        if (name == "last"
+        ){
+            if (args.len() > 0
+            ){
                 let r = this.eval(args[0], input, ctx);
-                if r.isError() { return r; }
-                if r.values.len() > 0 { return EvalResult::single(r.values[r.values.len() - 1]); }
+                if (r.isError() ){ return r; }
+                if (r.values.len() > 0 ){ return EvalResult::single(r.values[r.values.len() - 1]); }
                 return EvalResult::single(JsonValue::Null);
             }
             match input
@@ -2853,27 +2853,27 @@ class Evaluator
                 Array(a) =>
                 {
                     let arr = a;
-                    if arr.len() > 0 { return EvalResult::single(arr[arr.len() - 1]); }
+                    if (arr.len() > 0 ){ return EvalResult::single(arr[arr.len() - 1]); }
                     return EvalResult::single(JsonValue::Null);
                 }
                 _ => return EvalResult::err("last requires array");
             }
         }
 
-        if name == "nth"
-        {
-            if args.len() == 0 { return EvalResult::err("nth requires argument"); }
+        if (name == "nth"
+        ){
+            if (args.len() == 0 ){ return EvalResult::err("nth requires argument"); }
             let nr = this.evalSingle(args[0], input, ctx);
-            if nr.isError() { return nr; }
+            if (nr.isError() ){ return nr; }
             match nr.values[0]
             {
                 Integer(n) =>
                 {
-                    if args.len() > 1
-                    {
+                    if (args.len() > 1
+                    ){
                         let r = this.eval(args[1], input, ctx);
-                        if r.isError() { return r; }
-                        if n < r.values.len() { return EvalResult::single(r.values[n]); }
+                        if (r.isError() ){ return r; }
+                        if (n < r.values.len() ){ return EvalResult::single(r.values[n]); }
                         return EvalResult::single(JsonValue::Null);
                     }
                     match input
@@ -2881,7 +2881,7 @@ class Evaluator
                         Array(a) =>
                         {
                             let arr = a;
-                            if n >= 0 && n < arr.len() { return EvalResult::single(arr[n]); }
+                            if (n >= 0 && n < arr.len() ){ return EvalResult::single(arr[n]); }
                             return EvalResult::single(JsonValue::Null);
                         }
                         _ => return EvalResult::err("nth requires array");
@@ -2891,8 +2891,8 @@ class Evaluator
             }
         }
 
-        if name == "to_entries"
-        {
+        if (name == "to_entries"
+        ){
             match input
             {
                 Object(o) =>
@@ -2927,8 +2927,8 @@ class Evaluator
             }
         }
 
-        if name == "from_entries"
-        {
+        if (name == "from_entries"
+        ){
             match input
             {
                 Array(a) =>
@@ -2942,8 +2942,8 @@ class Evaluator
                             Object(o) =>
                             {
                                 var key = "";
-                                if o.contains("key")
-                                {
+                                if (o.contains("key")
+                                ){
                                     match o.get("key")
                                     {
                                         Str(s) => { key = s; }
@@ -2951,15 +2951,15 @@ class Evaluator
                                         _ => {}
                                     }
                                 }
-                                else if o.contains("name")
-                                {
+                                else if (o.contains("name")
+                                ){
                                     match o.get("name")
                                     {
                                         Str(s) => { key = s; }
                                         _ => {}
                                     }
                                 }
-                                var entryVal = JsonValue::Null; if o.contains("value") { entryVal = o.get("value"); }
+                                var entryVal = JsonValue::Null; if (o.contains("value") ){ entryVal = o.get("value"); }
                                 obj[key] = entryVal;
                             }
                             _ => {}
@@ -2971,19 +2971,19 @@ class Evaluator
             }
         }
 
-        if name == "with_entries"
-        {
-            if args.len() == 0 { return EvalResult::err("with_entries requires argument"); }
+        if (name == "with_entries"
+        ){
+            if (args.len() == 0 ){ return EvalResult::err("with_entries requires argument"); }
             let toEntriesResult = this.evalBuiltin("to_entries", [], input, ctx);
-            if toEntriesResult.isError() { return toEntriesResult; }
+            if (toEntriesResult.isError() ){ return toEntriesResult; }
             let mappedResult = this.evalBuiltin("map", args, toEntriesResult.values[0], ctx);
-            if mappedResult.isError() { return mappedResult; }
+            if (mappedResult.isError() ){ return mappedResult; }
             return this.evalBuiltin("from_entries", [], mappedResult.values[0], ctx);
         }
 
-        if name == "del"
-        {
-            if args.len() == 0 { return EvalResult::single(input); }
+        if (name == "del"
+        ){
+            if (args.len() == 0 ){ return EvalResult::single(input); }
             // del(f) = delpaths([path(f)]) — wie jq: sortieren, rückwärts löschen
             let pathsToDel = this.extractPaths(args[0], input, ctx);
             var sorted = pathsToDel;
@@ -3002,17 +3002,17 @@ class Evaluator
             return EvalResult::single(current);
         }
 
-        if name == "split"
-        {
-            if args.len() == 0 { return EvalResult::err("split requires argument"); }
+        if (name == "split"
+        ){
+            if (args.len() == 0 ){ return EvalResult::err("split requires argument"); }
             let sr = this.evalSingle(args[0], input, ctx);
-            if sr.isError() { return sr; }
+            if (sr.isError() ){ return sr; }
             // split(re; flags) — Regex-Variante (jq: 2-arg = Regex, 1-arg = literal)
-            if args.len() > 1
-            {
+            if (args.len() > 1
+            ){
                 var flags = "";
                 let fr = this.evalSingle(args[1], input, ctx);
-                if fr.isError() { return fr; }
+                if (fr.isError() ){ return fr; }
                 match fr.values[0]
                 {
                     Str(f) => { flags = f; }
@@ -3055,11 +3055,11 @@ class Evaluator
             }
         }
 
-        if name == "join"
-        {
-            if args.len() == 0 { return EvalResult::err("join requires argument"); }
+        if (name == "join"
+        ){
+            if (args.len() == 0 ){ return EvalResult::err("join requires argument"); }
             let sr = this.evalSingle(args[0], input, ctx);
-            if sr.isError() { return sr; }
+            if (sr.isError() ){ return sr; }
             match input
             {
                 Array(a) =>
@@ -3073,7 +3073,7 @@ class Evaluator
                         {
                             Str(s) => { parts.push(s); }
                             Null   => { parts.push(""); }
-                            Bool(b) => { if b { parts.push("true"); } else { parts.push("false"); } }
+                            Bool(b) => { if (b ){ parts.push("true"); } else { parts.push("false"); } }
                             Integer(n) => { parts.push(n.toString()); }
                             Float(f)   => { parts.push(JsonUtil::floatDisplay(f)); }
                             _ => { parts.push(JsonSerializer::stringify(item)); }
@@ -3085,11 +3085,11 @@ class Evaluator
             }
         }
 
-        if name == "ltrimstr"
-        {
-            if args.len() == 0 { return EvalResult::err("ltrimstr requires argument"); }
+        if (name == "ltrimstr"
+        ){
+            if (args.len() == 0 ){ return EvalResult::err("ltrimstr requires argument"); }
             let ar = this.evalSingle(args[0], input, ctx);
-            if ar.isError() { return ar; }
+            if (ar.isError() ){ return ar; }
             match input
             {
                 Str(s) =>
@@ -3098,7 +3098,7 @@ class Evaluator
                     {
                         Str(prefix) =>
                         {
-                            if s.startsWith(prefix) { return EvalResult::single(JsonValue::Str(s.substring(prefix.len(), s.len()))); }
+                            if (s.startsWith(prefix) ){ return EvalResult::single(JsonValue::Str(s.substring(prefix.len(), s.len()))); }
                             return EvalResult::single(JsonValue::Str(s));
                         }
                         _ => return EvalResult::single(input);
@@ -3108,11 +3108,11 @@ class Evaluator
             }
         }
 
-        if name == "rtrimstr"
-        {
-            if args.len() == 0 { return EvalResult::err("rtrimstr requires argument"); }
+        if (name == "rtrimstr"
+        ){
+            if (args.len() == 0 ){ return EvalResult::err("rtrimstr requires argument"); }
             let ar = this.evalSingle(args[0], input, ctx);
-            if ar.isError() { return ar; }
+            if (ar.isError() ){ return ar; }
             match input
             {
                 Str(s) =>
@@ -3121,7 +3121,7 @@ class Evaluator
                     {
                         Str(suffix) =>
                         {
-                            if s.endsWith(suffix) { return EvalResult::single(JsonValue::Str(s.substring(0, s.len() - suffix.len()))); }
+                            if (s.endsWith(suffix) ){ return EvalResult::single(JsonValue::Str(s.substring(0, s.len() - suffix.len()))); }
                             return EvalResult::single(JsonValue::Str(s));
                         }
                         _ => return EvalResult::single(input);
@@ -3131,11 +3131,11 @@ class Evaluator
             }
         }
 
-        if name == "startswith"
-        {
-            if args.len() == 0 { return EvalResult::err("startswith requires argument"); }
+        if (name == "startswith"
+        ){
+            if (args.len() == 0 ){ return EvalResult::err("startswith requires argument"); }
             let ar = this.evalSingle(args[0], input, ctx);
-            if ar.isError() { return ar; }
+            if (ar.isError() ){ return ar; }
             match input
             {
                 Str(s) =>
@@ -3150,11 +3150,11 @@ class Evaluator
             }
         }
 
-        if name == "endswith"
-        {
-            if args.len() == 0 { return EvalResult::err("endswith requires argument"); }
+        if (name == "endswith"
+        ){
+            if (args.len() == 0 ){ return EvalResult::err("endswith requires argument"); }
             let ar = this.evalSingle(args[0], input, ctx);
-            if ar.isError() { return ar; }
+            if (ar.isError() ){ return ar; }
             match input
             {
                 Str(s) =>
@@ -3169,8 +3169,8 @@ class Evaluator
             }
         }
 
-        if name == "ascii_downcase"
-        {
+        if (name == "ascii_downcase"
+        ){
             match input
             {
                 Str(s) => return EvalResult::single(JsonValue::Str(s.toLower()));
@@ -3178,8 +3178,8 @@ class Evaluator
             }
         }
 
-        if name == "ascii_upcase"
-        {
+        if (name == "ascii_upcase"
+        ){
             match input
             {
                 Str(s) => return EvalResult::single(JsonValue::Str(s.toUpper()));
@@ -3187,16 +3187,16 @@ class Evaluator
             }
         }
 
-        if name == "test" || name == "match" || name == "capture" || name == "scan"
-        {
-            if args.len() == 0 { return EvalResult::err(name + " requires argument"); }
+        if (name == "test" || name == "match" || name == "capture" || name == "scan"
+        ){
+            if (args.len() == 0 ){ return EvalResult::err(name + " requires argument"); }
             let pr = this.evalSingle(args[0], input, ctx);
-            if pr.isError() { return pr; }
+            if (pr.isError() ){ return pr; }
             var flags = "";
-            if args.len() > 1
-            {
+            if (args.len() > 1
+            ){
                 let fr = this.evalSingle(args[1], input, ctx);
-                if fr.isError() { return fr; }
+                if (fr.isError() ){ return fr; }
                 match fr.values[0]
                 {
                     Str(f) => { flags = f; }
@@ -3214,12 +3214,12 @@ class Evaluator
                             let tr = regexTranslate(pattern);
                             let posix = rxStrAt(tr, 0);
                             var icase: Int64 = 0;
-                            if flags.contains("i") { icase = 1; }
+                            if (flags.contains("i") ){ icase = 1; }
                             var global = flags.contains("g");
-                            if name == "scan" { global = true; }
+                            if (name == "scan" ){ global = true; }
 
-                            if name == "test"
-                            {
+                            if (name == "test"
+                            ){
                                 let g = regexMatchGroups(posix, s, 0, icase);
                                 return EvalResult::single(JsonValue::Bool(g.len() > 0));
                             }
@@ -3229,25 +3229,25 @@ class Evaluator
                             while pos <= s.len()
                             {
                                 let g = regexMatchGroups(posix, s, pos, icase);
-                                if g.len() == 0 { break; }
-                                if name == "match"
-                                {
+                                if (g.len() == 0 ){ break; }
+                                if (name == "match"
+                                ){
                                     results.push(buildMatchObject(s, g, tr));
                                 }
-                                if name == "capture"
-                                {
+                                if (name == "capture"
+                                ){
                                     results.push(buildCaptureObject(s, g, tr));
                                 }
-                                if name == "scan"
-                                {
+                                if (name == "scan"
+                                ){
                                     // Mit Gruppen: Array der Gruppen-Strings, sonst der Match selbst
-                                    if g.len() > 2
-                                    {
+                                    if (g.len() > 2
+                                    ){
                                         var parts: List<JsonValue> = [];
                                         var gi: Int64 = 2;
                                         while gi + 1 < g.len()
                                         {
-                                            if g[gi] < 0 { parts.push(JsonValue::Null); }
+                                            if (g[gi] < 0 ){ parts.push(JsonValue::Null); }
                                             else { parts.push(JsonValue::Str(s.substring(g[gi], g[gi + 1]))); }
                                             gi += 2;
                                         }
@@ -3259,9 +3259,9 @@ class Evaluator
                                     }
                                 }
                                 var np = g[1];
-                                if np == g[0] { np += 1; }
+                                if (np == g[0] ){ np += 1; }
                                 pos = np;
-                                if !global { break; }
+                                if (!global ){ break; }
                             }
                             return EvalResult::ok(results);
                         }
@@ -3272,16 +3272,16 @@ class Evaluator
             }
         }
 
-        if name == "sub" || name == "gsub"
-        {
-            if args.len() < 2 { return EvalResult::err(name + " requires 2 arguments"); }
+        if (name == "sub" || name == "gsub"
+        ){
+            if (args.len() < 2 ){ return EvalResult::err(name + " requires 2 arguments"); }
             let pr = this.evalSingle(args[0], input, ctx);
-            if pr.isError() { return pr; }
+            if (pr.isError() ){ return pr; }
             var flags = "";
-            if args.len() > 2
-            {
+            if (args.len() > 2
+            ){
                 let fr = this.evalSingle(args[2], input, ctx);
-                if fr.isError() { return fr; }
+                if (fr.isError() ){ return fr; }
                 match fr.values[0]
                 {
                     Str(f) => { flags = f; }
@@ -3299,16 +3299,16 @@ class Evaluator
                             let tr = regexTranslate(pattern);
                             let posix = rxStrAt(tr, 0);
                             var icase: Int64 = 0;
-                            if flags.contains("i") { icase = 1; }
+                            if (flags.contains("i") ){ icase = 1; }
                             var global = flags.contains("g");
-                            if name == "gsub" { global = true; }
+                            if (name == "gsub" ){ global = true; }
 
                             var out = "";
                             var pos: Int64 = 0;
                             while pos <= s.len()
                             {
                                 let g = regexMatchGroups(posix, s, pos, icase);
-                                if g.len() == 0 { break; }
+                                if (g.len() == 0 ){ break; }
                                 let ms = g[0];
                                 let me = g[1];
                                 out = out + s.substring(pos, ms);
@@ -3321,10 +3321,10 @@ class Evaluator
                                 while ni < rxStrCount(tr)
                                 {
                                     let nm = rxStrAt(tr, ni);
-                                    if nm != ""
-                                    {
-                                        if gi + 1 < g.len() && g[gi] >= 0
-                                        {
+                                    if (nm != ""
+                                    ){
+                                        if (gi + 1 < g.len() && g[gi] >= 0
+                                        ){
                                             rctx = rctx.withVar(nm, JsonValue::Str(s.substring(g[gi], g[gi + 1])));
                                         }
                                         else
@@ -3336,22 +3336,22 @@ class Evaluator
                                     gi += 2;
                                 }
                                 let rr = this.eval(args[1], capObj, rctx);
-                                if rr.isError() { return rr; }
-                                if rr.values.len() == 0 { return EvalResult::err(name + ": replacement produced no value"); }
+                                if (rr.isError() ){ return rr; }
+                                if (rr.values.len() == 0 ){ return EvalResult::err(name + ": replacement produced no value"); }
                                 match rr.values[0]
                                 {
                                     Str(rs) => { out = out + rs; }
                                     _ => return EvalResult::err(name + ": replacement must evaluate to a string");
                                 }
-                                if me == ms
-                                {
-                                    if ms < s.len() { out = out + s.substring(ms, ms + 1); }
+                                if (me == ms
+                                ){
+                                    if (ms < s.len() ){ out = out + s.substring(ms, ms + 1); }
                                     pos = ms + 1;
                                 }
                                 else { pos = me; }
-                                if !global { break; }
+                                if (!global ){ break; }
                             }
-                            if pos < s.len() { out = out + s.substring(pos, s.len()); }
+                            if (pos < s.len() ){ out = out + s.substring(pos, s.len()); }
                             return EvalResult::single(JsonValue::Str(out));
                         }
                         _ => return EvalResult::err(name + " pattern must be string");
@@ -3361,16 +3361,16 @@ class Evaluator
             }
         }
 
-        if name == "splits"
-        {
-            if args.len() == 0 { return EvalResult::err("splits requires argument"); }
+        if (name == "splits"
+        ){
+            if (args.len() == 0 ){ return EvalResult::err("splits requires argument"); }
             let pr = this.evalSingle(args[0], input, ctx);
-            if pr.isError() { return pr; }
+            if (pr.isError() ){ return pr; }
             var flags = "";
-            if args.len() > 1
-            {
+            if (args.len() > 1
+            ){
                 let fr = this.evalSingle(args[1], input, ctx);
-                if fr.isError() { return fr; }
+                if (fr.isError() ){ return fr; }
                 match fr.values[0]
                 {
                     Str(f) => { flags = f; }
@@ -3395,8 +3395,8 @@ class Evaluator
             }
         }
 
-        if name == "explode"
-        {
+        if (name == "explode"
+        ){
             match input
             {
                 Str(s) =>
@@ -3410,8 +3410,8 @@ class Evaluator
             }
         }
 
-        if name == "implode"
-        {
+        if (name == "implode"
+        ){
             match input
             {
                 Array(a) =>
@@ -3432,11 +3432,11 @@ class Evaluator
             }
         }
 
-        if name == "indices"
-        {
-            if args.len() == 0 { return EvalResult::err("indices requires argument"); }
+        if (name == "indices"
+        ){
+            if (args.len() == 0 ){ return EvalResult::err("indices requires argument"); }
             let ar = this.evalSingle(args[0], input, ctx);
-            if ar.isError() { return ar; }
+            if (ar.isError() ){ return ar; }
             match input
             {
                 Str(s) =>
@@ -3451,8 +3451,8 @@ class Evaluator
                             let nLen = needle.len();
                             while pos <= sLen - nLen
                             {
-                                if s.substring(pos, pos + nLen) == needle
-                                {
+                                if (s.substring(pos, pos + nLen) == needle
+                                ){
                                     result.push(JsonValue::Integer(pos));
                                     pos = pos + nLen;
                                 }
@@ -3470,7 +3470,7 @@ class Evaluator
                     var i: Int64 = 0;
                     for item in arr
                     {
-                        if JsonValueHelper::equals(item, ar.values[0]) { result.push(JsonValue::Integer(i)); }
+                        if (JsonValueHelper::equals(item, ar.values[0]) ){ result.push(JsonValue::Integer(i)); }
                         i = i + 1;
                     }
                     return EvalResult::single(JsonValue::Array(result));
@@ -3479,52 +3479,52 @@ class Evaluator
             }
         }
 
-        if name == "index"
-        {
-            if args.len() == 0 { return EvalResult::err("index requires argument"); }
+        if (name == "index"
+        ){
+            if (args.len() == 0 ){ return EvalResult::err("index requires argument"); }
             let indicesResult = this.evalBuiltin("indices", args, input, ctx);
-            if indicesResult.isError() { return indicesResult; }
+            if (indicesResult.isError() ){ return indicesResult; }
             match indicesResult.values[0]
             {
                 Array(a) =>
                 {
                     let arr = a;
-                    if arr.len() > 0 { return EvalResult::single(arr[0]); }
+                    if (arr.len() > 0 ){ return EvalResult::single(arr[0]); }
                     return EvalResult::single(JsonValue::Null);
                 }
                 _ => return EvalResult::single(JsonValue::Null);
             }
         }
 
-        if name == "rindex"
-        {
-            if args.len() == 0 { return EvalResult::err("rindex requires argument"); }
+        if (name == "rindex"
+        ){
+            if (args.len() == 0 ){ return EvalResult::err("rindex requires argument"); }
             let indicesResult = this.evalBuiltin("indices", args, input, ctx);
-            if indicesResult.isError() { return indicesResult; }
+            if (indicesResult.isError() ){ return indicesResult; }
             match indicesResult.values[0]
             {
                 Array(a) =>
                 {
                     let arr = a;
-                    if arr.len() > 0 { return EvalResult::single(arr[arr.len() - 1]); }
+                    if (arr.len() > 0 ){ return EvalResult::single(arr[arr.len() - 1]); }
                     return EvalResult::single(JsonValue::Null);
                 }
                 _ => return EvalResult::single(JsonValue::Null);
             }
         }
 
-        if name == "error"
-        {
-            if args.len() > 0
-            {
+        if (name == "error"
+        ){
+            if (args.len() > 0
+            ){
                 let mr = this.evalSingle(args[0], input, ctx);
-                if !mr.isError() { return EvalResult::err(JsonSerializer::stringify(mr.values[0])); }
+                if (!mr.isError() ){ return EvalResult::err(JsonSerializer::stringify(mr.values[0])); }
             }
             return EvalResult::err(JsonSerializer::stringify(input));
         }
 
-        if name == "builtins"
-        {
+        if (name == "builtins"
+        ){
             var names: List<JsonValue> = [];
             for n in ["empty","null","not","type","length","utf8bytelength","abs","floor","ceil","round","sqrt",
                       "tostring","tonumber","tojson","fromjson","keys","keys_unsorted","values","has","in",
@@ -3547,22 +3547,22 @@ class Evaluator
             return EvalResult::single(JsonValue::Array(names));
         }
 
-        if name == "recurse"
-        {
-            if args.len() > 0
-            {
+        if (name == "recurse"
+        ){
+            if (args.len() > 0
+            ){
                 return this.eval(Filter::Recurse(true, args[0]), input, ctx);
             }
             return this.eval(Filter::RecursiveDescent, input, ctx);
         }
 
-        if name == "paths" || name == "leaf_paths"
-        {
+        if (name == "paths" || name == "leaf_paths"
+        ){
             var prefix: List<JsonValue> = [];
             let all = this.allPathsRec(input, prefix, name == "leaf_paths");
             // paths(f): nur Pfade behalten, deren Wert f erfüllt
-            if name == "paths" && args.len() > 0
-            {
+            if (name == "paths" && args.len() > 0
+            ){
                 var kept: List<JsonValue> = [];
                 for p in all
                 {
@@ -3572,9 +3572,9 @@ class Evaluator
                         {
                             let v = this.getPathValue(input, pa, 0);
                             let fr = this.eval(args[0], v, ctx);
-                            if !fr.isError() && fr.values.len() > 0
-                            {
-                                if JsonValueHelper::isTruthy(fr.values[0]) { kept.push(p); }
+                            if (!fr.isError() && fr.values.len() > 0
+                            ){
+                                if (JsonValueHelper::isTruthy(fr.values[0]) ){ kept.push(p); }
                             }
                         }
                         _ => { }
@@ -3585,13 +3585,13 @@ class Evaluator
             return EvalResult::ok(all);
         }
 
-        if name == "setpath"
-        {
-            if args.len() < 2 { return EvalResult::err("setpath requires 2 arguments"); }
+        if (name == "setpath"
+        ){
+            if (args.len() < 2 ){ return EvalResult::err("setpath requires 2 arguments"); }
             let pr = this.evalSingle(args[0], input, ctx);
-            if pr.isError() { return pr; }
+            if (pr.isError() ){ return pr; }
             let vr = this.evalSingle(args[1], input, ctx);
-            if vr.isError() { return vr; }
+            if (vr.isError() ){ return vr; }
             match pr.values[0]
             {
                 Array(pathArr) =>
@@ -3602,11 +3602,11 @@ class Evaluator
             }
         }
 
-        if name == "delpaths"
-        {
-            if args.len() == 0 { return EvalResult::err("delpaths requires a paths argument"); }
+        if (name == "delpaths"
+        ){
+            if (args.len() == 0 ){ return EvalResult::err("delpaths requires a paths argument"); }
             let pr = this.evalSingle(args[0], input, ctx);
-            if pr.isError() { return pr; }
+            if (pr.isError() ){ return pr; }
             match pr.values[0]
             {
                 Array(pathList) =>
@@ -3631,18 +3631,18 @@ class Evaluator
             }
         }
 
-        if name == "tostream"
-        {
+        if (name == "tostream"
+        ){
             var prefix: List<JsonValue> = [];
             let events = this.tostreamRec(input, prefix);
             return EvalResult::ok(events);
         }
 
-        if name == "fromstream"
-        {
-            if args.len() == 0 { return EvalResult::err("fromstream requires argument"); }
+        if (name == "fromstream"
+        ){
+            if (args.len() == 0 ){ return EvalResult::err("fromstream requires argument"); }
             let er = this.eval(args[0], input, ctx);
-            if er.isError() { return er; }
+            if (er.isError() ){ return er; }
             var results: List<JsonValue> = [];
             var acc: JsonValue = JsonValue::Null;
             for evt in er.values
@@ -3652,15 +3652,15 @@ class Evaluator
                     Array(e) =>
                     {
                         let ev = e;
-                        if ev.len() >= 2
-                        {
+                        if (ev.len() >= 2
+                        ){
                             match ev[0]
                             {
                                 Array(pa) =>
                                 {
                                     let pl = pa;
-                                    if pl.len() == 0
-                                    {
+                                    if (pl.len() == 0
+                                    ){
                                         // Skalar auf Top-Level: sofort fertig
                                         results.push(ev[1]);
                                         acc = JsonValue::Null;
@@ -3673,15 +3673,15 @@ class Evaluator
                                 _ => { }
                             }
                         }
-                        else if ev.len() == 1
-                        {
+                        else if (ev.len() == 1
+                        ){
                             match ev[0]
                             {
                                 Array(pa) =>
                                 {
                                     let pl = pa;
-                                    if pl.len() <= 1
-                                    {
+                                    if (pl.len() <= 1
+                                    ){
                                         results.push(acc);
                                         acc = JsonValue::Null;
                                     }
@@ -3696,9 +3696,9 @@ class Evaluator
             return EvalResult::ok(results);
         }
 
-        if name == "truncate_stream"
-        {
-            if args.len() == 0 { return EvalResult::err("truncate_stream requires argument"); }
+        if (name == "truncate_stream"
+        ){
+            if (args.len() == 0 ){ return EvalResult::err("truncate_stream requires argument"); }
             var depth: Int64 = 0;
             match input
             {
@@ -3708,7 +3708,7 @@ class Evaluator
             }
             // Events werden gegen null evaluiert (Input ist die Tiefe, wie jq)
             let er = this.eval(args[0], JsonValue::Null, ctx);
-            if er.isError() { return er; }
+            if (er.isError() ){ return er; }
             var results: List<JsonValue> = [];
             for evt in er.values
             {
@@ -3717,20 +3717,20 @@ class Evaluator
                     Array(e) =>
                     {
                         let ev = e;
-                        if ev.len() == 0 { continue; }
+                        if (ev.len() == 0 ){ continue; }
                         match ev[0]
                         {
                             Array(pa) =>
                             {
                                 let pl = pa;
-                                if pl.len() > depth
-                                {
+                                if (pl.len() > depth
+                                ){
                                     var newPath: List<JsonValue> = [];
                                     var i = depth;
                                     while i < pl.len() { newPath.push(pl[i]); i += 1; }
                                     var newEvt: List<JsonValue> = [];
                                     newEvt.push(JsonValue::Array(newPath));
-                                    if ev.len() >= 2 { newEvt.push(ev[1]); }
+                                    if (ev.len() >= 2 ){ newEvt.push(ev[1]); }
                                     results.push(JsonValue::Array(newEvt));
                                 }
                             }
@@ -3743,23 +3743,23 @@ class Evaluator
             return EvalResult::ok(results);
         }
 
-        if name == "walk"
-        {
-            if args.len() == 0 { return EvalResult::err("walk requires argument"); }
+        if (name == "walk"
+        ){
+            if (args.len() == 0 ){ return EvalResult::err("walk requires argument"); }
             return this.evalWalk(args[0], input, ctx);
         }
 
-        if name == "limit"
-        {
-            if args.len() < 2 { return EvalResult::err("limit requires 2 arguments"); }
+        if (name == "limit"
+        ){
+            if (args.len() < 2 ){ return EvalResult::err("limit requires 2 arguments"); }
             let nr = this.evalSingle(args[0], input, ctx);
-            if nr.isError() { return nr; }
+            if (nr.isError() ){ return nr; }
             match nr.values[0]
             {
                 Integer(n) =>
                 {
                     let r = this.eval(args[1], input, ctx);
-                    if r.isError() { return r; }
+                    if (r.isError() ){ return r; }
                     var result: List<JsonValue> = [];
                     var i: Int64 = 0;
                     while i < n && i < r.values.len() { result.push(r.values[i]); i = i + 1; }
@@ -3769,28 +3769,28 @@ class Evaluator
             }
         }
 
-        if name == "until"
-        {
-            if args.len() < 2 { return EvalResult::err("until requires 2 arguments"); }
+        if (name == "until"
+        ){
+            if (args.len() < 2 ){ return EvalResult::err("until requires 2 arguments"); }
             return this.eval(Filter::Until(args[0], args[1]), input, ctx);
         }
 
-        if name == "while"
-        {
-            if args.len() < 2 { return EvalResult::err("while requires 2 arguments"); }
+        if (name == "while"
+        ){
+            if (args.len() < 2 ){ return EvalResult::err("while requires 2 arguments"); }
             return this.eval(Filter::While(args[0], args[1]), input, ctx);
         }
 
-        if name == "repeat"
-        {
-            if args.len() == 0 { return EvalResult::err("repeat requires argument"); }
+        if (name == "repeat"
+        ){
+            if (args.len() == 0 ){ return EvalResult::err("repeat requires argument"); }
             var results: List<JsonValue> = [];
             var current = input;
             var iters = 0;
             while iters < 1000
             {
                 let r = this.evalSingle(args[0], current, ctx);
-                if r.isError() { break; }
+                if (r.isError() ){ break; }
                 results.push(r.values[0]);
                 current = r.values[0];
                 iters = iters + 1;
@@ -3798,17 +3798,17 @@ class Evaluator
             return EvalResult::ok(results);
         }
 
-        if name == "nan"      { return EvalResult::single(JsonValue::Float(mathNan())); }
-        if name == "infinite" { return EvalResult::single(JsonValue::Float(mathInf())); }
-        if name == "isinfinite" { match input { Float(f) => return EvalResult::single(JsonValue::Bool(mathIsInfinite(f) != 0)); _ => return EvalResult::single(JsonValue::Bool(false)); } return EvalResult::single(JsonValue::Bool(false)); }
-        if name == "isnan"    { match input { Float(f) => return EvalResult::single(JsonValue::Bool(mathIsNan(f) != 0)); _ => return EvalResult::single(JsonValue::Bool(false)); } return EvalResult::single(JsonValue::Bool(false)); }
-        if name == "isnormal" { match input { Float(f) => return EvalResult::single(JsonValue::Bool(mathIsNormal(f) != 0)); Integer(n) => return EvalResult::single(JsonValue::Bool(n != 0)); _ => return EvalResult::single(JsonValue::Bool(false)); } return EvalResult::single(JsonValue::Bool(false)); }
+        if (name == "nan"      ){ return EvalResult::single(JsonValue::Float(mathNan())); }
+        if (name == "infinite" ){ return EvalResult::single(JsonValue::Float(mathInf())); }
+        if (name == "isinfinite" ){ match input { Float(f) => return EvalResult::single(JsonValue::Bool(mathIsInfinite(f) != 0)); _ => return EvalResult::single(JsonValue::Bool(false)); } return EvalResult::single(JsonValue::Bool(false)); }
+        if (name == "isnan"    ){ match input { Float(f) => return EvalResult::single(JsonValue::Bool(mathIsNan(f) != 0)); _ => return EvalResult::single(JsonValue::Bool(false)); } return EvalResult::single(JsonValue::Bool(false)); }
+        if (name == "isnormal" ){ match input { Float(f) => return EvalResult::single(JsonValue::Bool(mathIsNormal(f) != 0)); Integer(n) => return EvalResult::single(JsonValue::Bool(n != 0)); _ => return EvalResult::single(JsonValue::Bool(false)); } return EvalResult::single(JsonValue::Bool(false)); }
 
-        if name == "pow"
-        {
-            if args.len() == 0 { return EvalResult::err("pow requires argument"); }
+        if (name == "pow"
+        ){
+            if (args.len() == 0 ){ return EvalResult::err("pow requires argument"); }
             let er = this.evalSingle(args[0], input, ctx);
-            if er.isError() { return er; }
+            if (er.isError() ){ return er; }
             match input
             {
                 Integer(base) =>
@@ -3838,11 +3838,11 @@ class Evaluator
             }
         }
 
-        if name == "ascii"
-        {
-            if args.len() == 0 { return EvalResult::err("ascii requires argument"); }
+        if (name == "ascii"
+        ){
+            if (args.len() == 0 ){ return EvalResult::err("ascii requires argument"); }
             let nr = this.evalSingle(args[0], input, ctx);
-            if nr.isError() { return nr; }
+            if (nr.isError() ){ return nr; }
             match nr.values[0]
             {
                 Integer(n) => return EvalResult::single(JsonValue::Str(JsonSerializer::codePointToStr(n)));
@@ -3850,34 +3850,34 @@ class Evaluator
             }
         }
 
-        if name == "env"
-        {
+        if (name == "env"
+        ){
             return EvalResult::single(this.buildEnvObject());
         }
 
-        if name == "debug"
-        {
+        if (name == "debug"
+        ){
             var msg = "";
-            if args.len() > 0
-            {
+            if (args.len() > 0
+            ){
                 let mr = this.evalSingle(args[0], input, ctx);
-                if !mr.isError() { msg = JsonSerializer::stringify(mr.values[0]); }
+                if (!mr.isError() ){ msg = JsonSerializer::stringify(mr.values[0]); }
             }
             else { msg = JsonSerializer::stringify(input); }
             printStderr("DEBUG: " + msg);
             return EvalResult::single(input);
         }
 
-        if name == "stderr"
-        {
+        if (name == "stderr"
+        ){
             printStderr(JsonSerializer::stringify(input));
             return EvalResult::single(input);
         }
 
-        if name == "nan_value" { return EvalResult::single(JsonValue::Float(mathNan())); }
+        if (name == "nan_value" ){ return EvalResult::single(JsonValue::Float(mathNan())); }
 
-        if name == "isfinite"
-        {
+        if (name == "isfinite"
+        ){
             match input
             {
                 Float(f) => { return EvalResult::single(JsonValue::Bool(mathIsInfinite(f) == 0 && mathIsNan(f) == 0)); }
@@ -3886,8 +3886,8 @@ class Evaluator
             }
         }
 
-        if name == "floor"
-        {
+        if (name == "floor"
+        ){
             match input
             {
                 Float(f) => { return EvalResult::single(JsonValue::Integer(floor(f) as Int64)); }
@@ -3896,8 +3896,8 @@ class Evaluator
             }
         }
 
-        if name == "ceil"
-        {
+        if (name == "ceil"
+        ){
             match input
             {
                 Float(f) => { return EvalResult::single(JsonValue::Integer(ceil(f) as Int64)); }
@@ -3906,8 +3906,8 @@ class Evaluator
             }
         }
 
-        if name == "round"
-        {
+        if (name == "round"
+        ){
             match input
             {
                 Float(f) => { return EvalResult::single(JsonValue::Integer(round(f) as Int64)); }
@@ -3916,8 +3916,8 @@ class Evaluator
             }
         }
 
-        if name == "sqrt"
-        {
+        if (name == "sqrt"
+        ){
             match input
             {
                 Float(f) => { return EvalResult::single(JsonValue::Float(sqrt(f))); }
@@ -3926,8 +3926,8 @@ class Evaluator
             }
         }
 
-        if name == "log"
-        {
+        if (name == "log"
+        ){
             match input
             {
                 Float(f) => { return EvalResult::single(JsonValue::Float(log(f))); }
@@ -3936,8 +3936,8 @@ class Evaluator
             }
         }
 
-        if name == "exp"
-        {
+        if (name == "exp"
+        ){
             match input
             {
                 Float(f) => { return EvalResult::single(JsonValue::Float(exp(f))); }
@@ -3946,21 +3946,21 @@ class Evaluator
             }
         }
 
-        if name == "fabs"
-        {
+        if (name == "fabs"
+        ){
             match input
             {
                 Float(f) => { return EvalResult::single(JsonValue::Float(fabs(f))); }
-                Integer(n) => { if n < 0 { return EvalResult::single(JsonValue::Integer(0 - n)); } return EvalResult::single(JsonValue::Integer(n)); }
+                Integer(n) => { if (n < 0 ){ return EvalResult::single(JsonValue::Integer(0 - n)); } return EvalResult::single(JsonValue::Integer(n)); }
                 _ => return EvalResult::err("fabs requires number");
             }
         }
 
-        if name == "log2" || name == "log10" || name == "exp2" || name == "exp10"
+        if (name == "log2" || name == "log10" || name == "exp2" || name == "exp10"
             || name == "cbrt" || name == "trunc" || name == "rint" || name == "nearbyint"
             || name == "logb" || name == "significand" || name == "exponent"
             || name == "tgamma" || name == "lgamma"
-        {
+        ){
             var x: Float64 = 0.0;
             match input
             {
@@ -3968,44 +3968,44 @@ class Evaluator
                 Integer(n) => { x = n as Float64; }
                 _ => return EvalResult::err(name + " requires number");
             }
-            if name == "log2" { return EvalResult::single(JsonValue::Float(mathLog2(x))); }
-            if name == "log10" { return EvalResult::single(JsonValue::Float(mathLog10(x))); }
-            if name == "exp2" { return EvalResult::single(JsonValue::Float(mathExp2(x))); }
-            if name == "exp10" { return EvalResult::single(JsonValue::Float(mathExp10(x))); }
-            if name == "cbrt" { return EvalResult::single(JsonValue::Float(mathCbrt(x))); }
-            if name == "trunc" { return EvalResult::single(JsonValue::Float(mathTrunc(x))); }
-            if name == "rint" || name == "nearbyint" { return EvalResult::single(JsonValue::Float(mathRint(x))); }
-            if name == "logb" { return EvalResult::single(JsonValue::Float(mathLogb(x))); }
-            if name == "exponent" { return EvalResult::single(JsonValue::Float(mathLogb(x))); }
-            if name == "significand"
-            {
-                if x == 0.0 { return EvalResult::single(JsonValue::Float(0.0)); }
+            if (name == "log2" ){ return EvalResult::single(JsonValue::Float(mathLog2(x))); }
+            if (name == "log10" ){ return EvalResult::single(JsonValue::Float(mathLog10(x))); }
+            if (name == "exp2" ){ return EvalResult::single(JsonValue::Float(mathExp2(x))); }
+            if (name == "exp10" ){ return EvalResult::single(JsonValue::Float(mathExp10(x))); }
+            if (name == "cbrt" ){ return EvalResult::single(JsonValue::Float(mathCbrt(x))); }
+            if (name == "trunc" ){ return EvalResult::single(JsonValue::Float(mathTrunc(x))); }
+            if (name == "rint" || name == "nearbyint" ){ return EvalResult::single(JsonValue::Float(mathRint(x))); }
+            if (name == "logb" ){ return EvalResult::single(JsonValue::Float(mathLogb(x))); }
+            if (name == "exponent" ){ return EvalResult::single(JsonValue::Float(mathLogb(x))); }
+            if (name == "significand"
+            ){
+                if (x == 0.0 ){ return EvalResult::single(JsonValue::Float(0.0)); }
                 let e = mathLogb(x);
                 return EvalResult::single(JsonValue::Float(x / exp(e * log(2.0))));
             }
-            if name == "tgamma" { return EvalResult::single(JsonValue::Float(mathTgamma(x))); }
-            if name == "lgamma" { return EvalResult::single(JsonValue::Float(mathLgamma(x))); }
+            if (name == "tgamma" ){ return EvalResult::single(JsonValue::Float(mathTgamma(x))); }
+            if (name == "lgamma" ){ return EvalResult::single(JsonValue::Float(mathLgamma(x))); }
         }
 
-        if name == "now"
-        {
+        if (name == "now"
+        ){
             let t = currentTimeSecs();
             return EvalResult::single(JsonValue::Float(t as Float64));
         }
 
-        if name == "todate" || name == "todateiso8601"
-        {
+        if (name == "todate" || name == "todateiso8601"
+        ){
             var ts: Int64 = 0;
             match input { Integer(n) => { ts = n; } Float(f) => { ts = f as Int64; } _ => {} }
             let dateStr = strftimeStr("%Y-%m-%dT%H:%M:%SZ", ts);
             return EvalResult::single(JsonValue::Str(dateStr));
         }
 
-        if name == "strftime"
-        {
-            if args.len() == 0 { return EvalResult::err("strftime requires format argument"); }
+        if (name == "strftime"
+        ){
+            if (args.len() == 0 ){ return EvalResult::err("strftime requires format argument"); }
             let fmtR = this.evalSingle(args[0], input, ctx);
-            if fmtR.isError() { return fmtR; }
+            if (fmtR.isError() ){ return fmtR; }
             var fmtStr = "%Y-%m-%dT%H:%M:%SZ";
             match fmtR.values[0] { Str(s) => { fmtStr = s; } _ => {} }
             var ts: Int64 = 0;
@@ -4014,11 +4014,11 @@ class Evaluator
             return EvalResult::single(JsonValue::Str(dateStr));
         }
 
-        if name == "strptime"
-        {
-            if args.len() == 0 { return EvalResult::err("strptime requires format argument"); }
+        if (name == "strptime"
+        ){
+            if (args.len() == 0 ){ return EvalResult::err("strptime requires format argument"); }
             let fr = this.evalSingle(args[0], input, ctx);
-            if fr.isError() { return fr; }
+            if (fr.isError() ){ return fr; }
             var fmt = "";
             match fr.values[0]
             {
@@ -4030,8 +4030,8 @@ class Evaluator
                 Str(s) =>
                 {
                     let p = strptimeParse(s, fmt);
-                    if p[0] == 0
-                    {
+                    if (p[0] == 0
+                    ){
                         return EvalResult::err("date \"" + s + "\" does not match format \"" + fmt + "\"");
                     }
                     let ts = daysFromCivil(p[1], p[2], p[3]) * 86400 + p[4] * 3600 + p[5] * 60 + p[6] - p[7];
@@ -4041,8 +4041,8 @@ class Evaluator
             }
         }
 
-        if name == "fromdate" || name == "fromdateiso8601"
-        {
+        if (name == "fromdate" || name == "fromdateiso8601"
+        ){
             match input
             {
                 Str(s) =>
@@ -4054,8 +4054,8 @@ class Evaluator
             }
         }
 
-        if name == "gmtime" || name == "localtime"
-        {
+        if (name == "gmtime" || name == "localtime"
+        ){
             // localtime = gmtime: keine Zeitzonen-Unterstützung (UTC)
             var ts: Int64 = 0;
             match input
@@ -4067,14 +4067,14 @@ class Evaluator
             return EvalResult::single(JsonValue::Array(gmtimeArray(ts)));
         }
 
-        if name == "mktime"
-        {
+        if (name == "mktime"
+        ){
             match input
             {
                 Array(a) =>
                 {
                     let tm = a;
-                    if tm.len() < 6 { return EvalResult::err("mktime requires a broken down time array"); }
+                    if (tm.len() < 6 ){ return EvalResult::err("mktime requires a broken down time array"); }
                     let y = jsonToInt(tm[0]);
                     let mon0 = jsonToInt(tm[1]);
                     let d = jsonToInt(tm[2]);
@@ -4090,13 +4090,13 @@ class Evaluator
             }
         }
 
-        if name == "dateadd" || name == "datesub"
-        {
-            if args.len() < 2 { return EvalResult::err(name + " requires 2 arguments"); }
+        if (name == "dateadd" || name == "datesub"
+        ){
+            if (args.len() < 2 ){ return EvalResult::err(name + " requires 2 arguments"); }
             let ur = this.evalSingle(args[0], input, ctx);
-            if ur.isError() { return ur; }
+            if (ur.isError() ){ return ur; }
             let nr = this.evalSingle(args[1], input, ctx);
-            if nr.isError() { return nr; }
+            if (nr.isError() ){ return nr; }
             var unitSecs: Int64 = 0;
             match ur.values[0]
             {
@@ -4104,7 +4104,7 @@ class Evaluator
                 Integer(n) => { unitSecs = n; }
                 _ => { }
             }
-            if unitSecs == 0 { return EvalResult::err(name + ": unknown unit"); }
+            if (unitSecs == 0 ){ return EvalResult::err(name + ": unknown unit"); }
             let amount = jsonToInt(nr.values[0]);
             var ts: Int64 = 0;
             match input
@@ -4113,27 +4113,27 @@ class Evaluator
                 Float(f) => { ts = f as Int64; }
                 _ => return EvalResult::err(name + " requires a number input");
             }
-            if name == "dateadd" { return EvalResult::single(JsonValue::Integer(ts + unitSecs * amount)); }
+            if (name == "dateadd" ){ return EvalResult::single(JsonValue::Integer(ts + unitSecs * amount)); }
             return EvalResult::single(JsonValue::Integer(ts - unitSecs * amount));
         }
 
-        if ctx.defs.contains(name)
-        {
+        if (ctx.defs.contains(name)
+        ){
             let defBody = ctx.defs.get(name);
             var newCtx = ctx;
-            if args.len() > 0
-            {
+            if (args.len() > 0
+            ){
                 var i = 0;
                 while i < args.len() { newCtx = newCtx.withVar("arg" + i.toString(), input); i = i + 1; }
             }
             return this.eval(defBody, input, newCtx);
         }
 
-        if name == "input"
-        {
+        if (name == "input"
+        ){
             let qlen = this.inputQueue.len();
-            if this.inputQueuePos < qlen
-            {
+            if (this.inputQueuePos < qlen
+            ){
                 let v = this.inputQueue[this.inputQueuePos];
                 this.inputQueuePos = this.inputQueuePos + 1;
                 return EvalResult::single(v);
@@ -4141,8 +4141,8 @@ class Evaluator
             return EvalResult::err("input: no more input values");
         }
 
-        if name == "inputs"
-        {
+        if (name == "inputs"
+        ){
             var results: List<JsonValue> = [];
             let qlen = this.inputQueue.len();
             while this.inputQueuePos < qlen
@@ -4153,8 +4153,8 @@ class Evaluator
             return EvalResult::ok(results);
         }
 
-        if name == "modulemeta"
-        {
+        if (name == "modulemeta"
+        ){
             // jgrep hat kein Modulsystem — wie jq bei unbekanntem Modul
             match input
             {
@@ -4163,25 +4163,25 @@ class Evaluator
             }
         }
 
-        if name == "input_line_number"
-        {
+        if (name == "input_line_number"
+        ){
             // Näherung: NDJSON = ein Dokument pro Zeile → konsumierte Dokumente
             return EvalResult::single(JsonValue::Integer(this.linesRead + this.inputQueuePos));
         }
 
-        if name == "halt"
-        {
+        if (name == "halt"
+        ){
             processExit(0);
             return EvalResult::empty();
         }
 
-        if name == "halt_error"
-        {
+        if (name == "halt_error"
+        ){
             var code: Int64 = 5;
-            if args.len() > 0
-            {
+            if (args.len() > 0
+            ){
                 let cr = this.evalSingle(args[0], input, ctx);
-                if cr.isError() { return cr; }
+                if (cr.isError() ){ return cr; }
                 match cr.values[0]
                 {
                     Integer(n) => { code = n; }
@@ -4232,8 +4232,8 @@ class Evaluator
                         for bitem in baArr
                         {
                             var found = false;
-                            for aitem in aaArr { if this.contains(aitem, bitem) { found = true; break; } }
-                            if !found { return false; }
+                            for aitem in aaArr { if (this.contains(aitem, bitem) ){ found = true; break; } }
+                            if (!found ){ return false; }
                         }
                         return true;
                     }
@@ -4249,8 +4249,8 @@ class Evaluator
                         let boKeys = JsonUtil::sortStringList(bo.keys());
                         for key in boKeys
                         {
-                            if !ao.contains(key) { return false; }
-                            if !this.contains(ao.get(key), bo.get(key)) { return false; }
+                            if (!ao.contains(key) ){ return false; }
+                            if (!this.contains(ao.get(key), bo.get(key)) ){ return false; }
                         }
                         return true;
                     }
@@ -4271,7 +4271,7 @@ class Evaluator
                 Array(inner) =>
                 {
                     let innerArr = inner;
-                    if depth > 0 { acc = this.flattenInto(innerArr, acc, depth - 1); }
+                    if (depth > 0 ){ acc = this.flattenInto(innerArr, acc, depth - 1); }
                     else { acc.push(item); }
                 }
                 _ => acc.push(item);
@@ -4289,14 +4289,14 @@ class Evaluator
             var tmp: List<String> = [];
             for r in result
             {
-                if !inserted && s <= r
-                {
+                if (!inserted && s <= r
+                ){
                     tmp.push(s);
                     inserted = true;
                 }
                 tmp.push(r);
             }
-            if !inserted { tmp.push(s); }
+            if (!inserted ){ tmp.push(s); }
             result = tmp;
         }
         return result;
@@ -4313,8 +4313,8 @@ class Evaluator
             var j = i + 1;
             while j < n
             {
-                if JsonValueHelper::compare(sorted[i], sorted[j]) > 0
-                {
+                if (JsonValueHelper::compare(sorted[i], sorted[j]) > 0
+                ){
                     let tmp = sorted[i];
                     sorted[i] = sorted[j];
                     sorted[j] = tmp;
@@ -4333,7 +4333,7 @@ class Evaluator
         for item in arr
         {
             let kr = this.evalSingle(keyFilter, item, ctx);
-            var key = JsonValue::Null; if !kr.isError() { key = kr.values[0]; }
+            var key = JsonValue::Null; if (!kr.isError() ){ key = kr.values[0]; }
             keyedKeys.push(key);
             keyedVals.push(item);
         }
@@ -4346,8 +4346,8 @@ class Evaluator
             {
                 let ki = keyedKeys[i];
                 let kj = keyedKeys[j];
-                if JsonValueHelper::compare(ki, kj) > 0
-                {
+                if (JsonValueHelper::compare(ki, kj) > 0
+                ){
                     let tmpKey = keyedKeys[i];
                     keyedKeys[i] = keyedKeys[j];
                     keyedKeys[j] = tmpKey;
@@ -4375,8 +4375,8 @@ class Evaluator
                 for item in walkArr
                 {
                     let r = this.evalWalk(f, item, ctx);
-                    if r.isError() { return r; }
-                    if r.values.len() > 0 { walked.push(r.values[0]); }
+                    if (r.isError() ){ return r; }
+                    if (r.values.len() > 0 ){ walked.push(r.values[0]); }
                 }
                 let arr = JsonValue::Array(walked);
                 return this.evalSingle(f, arr, ctx);
@@ -4388,8 +4388,8 @@ class Evaluator
                 for key in oKeys
                 {
                     let r = this.evalWalk(f, o.get(key), ctx);
-                    if r.isError() { return r; }
-                    var walkVal = JsonValue::Null; if r.values.len() > 0 { walkVal = r.values[0]; } obj[key] = walkVal;
+                    if (r.isError() ){ return r; }
+                    var walkVal = JsonValue::Null; if (r.values.len() > 0 ){ walkVal = r.values[0]; } obj[key] = walkVal;
                 }
                 let walked = JsonValue::Object(obj);
                 return this.evalSingle(f, walked, ctx);

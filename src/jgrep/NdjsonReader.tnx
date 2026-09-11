@@ -31,10 +31,10 @@ class NdjsonReader
 
     fn tryParseNext() -> List<JsonValue>
     {
-        if !this.hasNext() { return []; }
+        if (!this.hasNext() ){ return []; }
         let doc = this.parser.parseValue();
-        if this.parser.hasError
-        {
+        if (this.parser.hasError
+        ){
             this.errorCount = this.errorCount + 1;
             this.parser.recoverToNextLine();
             return [];
@@ -48,7 +48,7 @@ class NdjsonReader
         while this.hasNext()
         {
             let r = this.tryParseNext();
-            if r.len() > 0 { results.push(r[0]); }
+            if (r.len() > 0 ){ results.push(r[0]); }
         }
         return results;
     }

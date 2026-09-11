@@ -2,8 +2,8 @@ class CompletionGenerator
 {
     fnc generate(shell: String, prog: String) -> Int64
     {
-        if shell == "bash"
-        {
+        if (shell == "bash"
+        ){
             println("# " + prog + " bash completion");
             println("_" + prog + "_complete() {");
             println("  local cur flags");
@@ -14,8 +14,8 @@ class CompletionGenerator
             println("complete -F _" + prog + "_complete " + prog);
             return 0;
         }
-        if shell == "zsh"
-        {
+        if (shell == "zsh"
+        ){
             println("#compdef " + prog);
             println("_" + prog + "() {");
             println("  _arguments \\");
@@ -39,8 +39,8 @@ class CompletionGenerator
             println("_" + prog + " \"" + "$" + "@\"");
             return 0;
         }
-        if shell == "fish"
-        {
+        if (shell == "fish"
+        ){
             println("complete -c " + prog + " -s r -l recursive -d 'Recurse into directories'");
             println("complete -c " + prog + " -s l -l files-with-matches -d 'Print only matching filenames'");
             println("complete -c " + prog + " -s c -l count -d 'Print match count per file'");
@@ -57,8 +57,8 @@ class CompletionGenerator
             println("complete -c " + prog + " -l json -d 'Treat input as JSON'");
             return 0;
         }
-        if shell == "powershell"
-        {
+        if (shell == "powershell"
+        ){
             println("Register-ArgumentCompleter -Native -CommandName " + prog + " -ScriptBlock {");
             println("  param(" + "$" + "wordToComplete, " + "$" + "commandAst, " + "$" + "cursorPosition)");
             println("  " + "$" + "flags = @('-r','-l','-c','-s','-n','-u','-f','--recursive','--files-with-matches',");

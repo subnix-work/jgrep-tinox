@@ -14,7 +14,7 @@ class BuiltinsHelper
         let ev = Evaluator::new();
         let ctx = EvalContext::new();
         let r = ev.eval(f, input, ctx);
-        if r.isError() { return "ERROR:" + r.errorMsg; }
+        if (r.isError() ){ return "ERROR:" + r.errorMsg; }
         var parts: List<String> = [];
         for v in r.values { parts.push(JsonSerializer::stringify(v)); }
         return parts.join("|");

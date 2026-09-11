@@ -4,15 +4,15 @@ class JsonUtil
 {
     fnc floatDisplay(f: Float64) -> String
     {
-        if mathIsNan(f) != 0 { return "null"; }
-        if mathIsInfinite(f) != 0
-        {
-            if f > 0.0 { return "1.7976931348623157e+308"; }
+        if (mathIsNan(f) != 0 ){ return "null"; }
+        if (mathIsInfinite(f) != 0
+        ){
+            if (f > 0.0 ){ return "1.7976931348623157e+308"; }
             return "-1.7976931348623157e+308";
         }
         let s = f.toString();
-        if s.contains(".") { return s; }
-        if s.contains("e") || s.contains("E") { return s; }
+        if (s.contains(".") ){ return s; }
+        if (s.contains("e") || s.contains("E") ){ return s; }
         return s + ".0";
     }
 
@@ -22,14 +22,14 @@ class JsonUtil
         var inserted = false;
         for r in sorted
         {
-            if !inserted && s <= r
-            {
+            if (!inserted && s <= r
+            ){
                 result.push(s);
                 inserted = true;
             }
             result.push(r);
         }
-        if !inserted { result.push(s); }
+        if (!inserted ){ result.push(s); }
         return result;
     }
 

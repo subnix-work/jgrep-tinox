@@ -9,7 +9,7 @@ class Main
     {
         var desc = "grep for JSON — powered by Tinox";
         var dataExt = "json";
-        if prog == "ygrep" { desc = "grep for YAML — powered by Tinox"; dataExt = "yaml"; }
+        if (prog == "ygrep" ){ desc = "grep for YAML — powered by Tinox"; dataExt = "yaml"; }
         println("Usage: " + prog + " [-rclsnuhV] [-f FILE] [--pretty] [--color WHEN] [--color-level] [--color-level-field FIELD] [--no-color] [--yaml|--json] [FILTER] [FILE...]");
         println("");
         println(desc);
@@ -51,7 +51,7 @@ class Main
         println("  " + prog + " -c '.' *." + dataExt);
         println("  " + prog + " --color-level '.' logs." + dataExt);
         println("  tail -f app." + dataExt + " | " + prog + " -u --color-level '.'");
-        if prog == "ygrep" { println("  echo 'x: 1' | ygrep '.x'"); }
+        if (prog == "ygrep" ){ println("  echo 'x: 1' | ygrep '.x'"); }
         else { println("  echo '{\"x\":1}' | jgrep '.x'"); }
     }
 
@@ -61,7 +61,7 @@ class Main
         var i: Int64 = 0;
         while i < path.len()
         {
-            if (path[i] as Int64) == 47 { idx = i; }
+            if ((path[i] as Int64) == 47 ){ idx = i; }
             i = i + 1;
         }
         return path.substring(idx + 1, path.len());
@@ -72,61 +72,61 @@ class Main
         let allArgs = processArgs();
 
         var progName = "jgrep";
-        if allArgs.len() > 0
-        {
+        if (allArgs.len() > 0
+        ){
             let invoked = baseName(allArgs[0]);
-            if invoked.endsWith("ygrep") { progName = "ygrep"; }
+            if (invoked.endsWith("ygrep") ){ progName = "ygrep"; }
         }
 
         var args: List<String> = [];
         var i = 1;
         while i < allArgs.len() { args.push(allArgs[i]); i = i + 1; }
 
-        if args.len() == 0
-        {
+        if (args.len() == 0
+        ){
             printHelp(progName);
             return 2;
         }
 
         let firstArg = args[0];
-        if firstArg == "completion" && args.len() > 1
-        {
+        if (firstArg == "completion" && args.len() > 1
+        ){
             return CompletionGenerator::generate(args[1], progName);
         }
 
         var opts = ArgParser::parse(args);
         opts.progName = progName;
         opts.yamlInput = progName == "ygrep";
-        if opts.yamlFlag { opts.yamlInput = true; }
-        if opts.jsonFlag { opts.yamlInput = false; }
+        if (opts.yamlFlag ){ opts.yamlInput = true; }
+        if (opts.jsonFlag ){ opts.yamlInput = false; }
 
-        if opts.showHelp
-        {
+        if (opts.showHelp
+        ){
             printHelp(progName);
             return 0;
         }
 
-        if opts.showVersion
-        {
-            println(progName + " 1.0.5 (Tinox)");
+        if (opts.showVersion
+        ){
+            println(progName + " 1.0.6 (Tinox)");
             return 0;
         }
 
-        if opts.badOption != ""
-        {
+        if (opts.badOption != ""
+        ){
             println(progName + ": unknown option: " + opts.badOption);
             println("Try '" + progName + " --help' for more information.");
             return 2;
         }
 
-        if opts.colorMode != "auto" && opts.colorMode != "always" && opts.colorMode != "never"
-        {
+        if (opts.colorMode != "auto" && opts.colorMode != "always" && opts.colorMode != "never"
+        ){
             println(progName + ": invalid --color mode: " + opts.colorMode + " (expected auto, always or never)");
             return 2;
         }
 
-        if opts.count && opts.filesWithMatches
-        {
+        if (opts.count && opts.filesWithMatches
+        ){
             println(progName + ": --count and --files-with-matches are mutually exclusive");
             return 2;
         }

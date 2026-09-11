@@ -142,7 +142,7 @@ class JsonValueHelper
         match v
         {
             Null       => return 0;
-            Bool(b)    => { if b { return 2; } return 1; }
+            Bool(b)    => { if (b ){ return 2; } return 1; }
             Integer(_) => return 3;
             Float(_)   => return 3;
             Str(_)     => return 4;
@@ -194,11 +194,11 @@ class JsonValueHelper
                     {
                         let aaArr = aa;
                         let baArr = ba;
-                        if aaArr.len() != baArr.len() { return false; }
+                        if (aaArr.len() != baArr.len() ){ return false; }
                         var i: Int64 = 0;
                         while i < aaArr.len()
                         {
-                            if !JsonValueHelper::equals(aaArr[i], baArr[i]) { return false; }
+                            if (!JsonValueHelper::equals(aaArr[i], baArr[i]) ){ return false; }
                             i = i + 1;
                         }
                         return true;
@@ -212,12 +212,12 @@ class JsonValueHelper
                 {
                     Object(bo) =>
                     {
-                        if ao.len() != bo.len() { return false; }
+                        if (ao.len() != bo.len() ){ return false; }
                         let aoKeys = JsonUtil::sortStringList(ao.keys());
                         for key in aoKeys
                         {
-                            if !bo.contains(key) { return false; }
-                            if !JsonValueHelper::equals(ao.get(key), bo.get(key)) { return false; }
+                            if (!bo.contains(key) ){ return false; }
+                            if (!JsonValueHelper::equals(ao.get(key), bo.get(key)) ){ return false; }
                         }
                         return true;
                     }
@@ -232,7 +232,7 @@ class JsonValueHelper
     {
         let aOrder = JsonValueHelper::typeOrder(a);
         let bOrder = JsonValueHelper::typeOrder(b);
-        if aOrder != bOrder { return aOrder - bOrder; }
+        if (aOrder != bOrder ){ return aOrder - bOrder; }
 
         match a
         {
@@ -242,15 +242,15 @@ class JsonValueHelper
                 {
                     Integer(bn) =>
                     {
-                        if an < bn { return -1; }
-                        if an > bn { return 1; }
+                        if (an < bn ){ return -1; }
+                        if (an > bn ){ return 1; }
                         return 0;
                     }
                     Float(bf) =>
                     {
                         let af = an as Float64;
-                        if af < bf { return -1; }
-                        if af > bf { return 1; }
+                        if (af < bf ){ return -1; }
+                        if (af > bf ){ return 1; }
                         return 0;
                     }
                     _ => return 0;
@@ -262,15 +262,15 @@ class JsonValueHelper
                 {
                     Float(bf) =>
                     {
-                        if af < bf { return -1; }
-                        if af > bf { return 1; }
+                        if (af < bf ){ return -1; }
+                        if (af > bf ){ return 1; }
                         return 0;
                     }
                     Integer(bn) =>
                     {
                         let bfv = bn as Float64;
-                        if af < bfv { return -1; }
-                        if af > bfv { return 1; }
+                        if (af < bfv ){ return -1; }
+                        if (af > bfv ){ return 1; }
                         return 0;
                     }
                     _ => return 0;
@@ -282,8 +282,8 @@ class JsonValueHelper
                 {
                     Str(bs) =>
                     {
-                        if sv < bs { return -1; }
-                        if sv > bs { return 1; }
+                        if (sv < bs ){ return -1; }
+                        if (sv > bs ){ return 1; }
                         return 0;
                     }
                     _ => return 0;
@@ -299,15 +299,15 @@ class JsonValueHelper
                         let baArr = ba;
                         var i: Int64 = 0;
                         var minLen = aaArr.len();
-                        if baArr.len() < minLen { minLen = baArr.len(); }
+                        if (baArr.len() < minLen ){ minLen = baArr.len(); }
                         while i < minLen
                         {
                             let c = JsonValueHelper::compare(aaArr[i], baArr[i]);
-                            if c != 0 { return c; }
+                            if (c != 0 ){ return c; }
                             i = i + 1;
                         }
-                        if aaArr.len() < baArr.len() { return -1; }
-                        if aaArr.len() > baArr.len() { return 1; }
+                        if (aaArr.len() < baArr.len() ){ return -1; }
+                        if (aaArr.len() > baArr.len() ){ return 1; }
                         return 0;
                     }
                     _ => return 0;
@@ -431,9 +431,9 @@ class JsonValueHelper
                             var found = false;
                             for bitem in baArr
                             {
-                                if JsonValueHelper::equals(item, bitem) { found = true; break; }
+                                if (JsonValueHelper::equals(item, bitem) ){ found = true; break; }
                             }
-                            if !found { result.push(item); }
+                            if (!found ){ result.push(item); }
                         }
                         return JsonValue::Array(result);
                     }
@@ -476,7 +476,7 @@ class JsonValueHelper
                 {
                     Integer(n) =>
                     {
-                        if n <= 0 { return JsonValue::Null; }
+                        if (n <= 0 ){ return JsonValue::Null; }
                         var result = "";
                         var i: Int64 = 0;
                         while i < n { result = result + sv; i = i + 1; }
@@ -497,8 +497,8 @@ class JsonValueHelper
                         let boKs = JsonUtil::sortStringList(bo.keys());
                         for key in boKs
                         {
-                            if result.contains(key)
-                            {
+                            if (result.contains(key)
+                            ){
                                 result[key] = JsonValueHelper::multiplyValues(result.get(key), bo.get(key));
                             }
                             else
@@ -526,13 +526,13 @@ class JsonValueHelper
                 {
                     Integer(bn) =>
                     {
-                        if bn == 0 { throw "Division by zero"; return JsonValue::Null; }
-                        if an % bn == 0 { return JsonValue::Integer(an / bn); }
+                        if (bn == 0 ){ throw "Division by zero"; return JsonValue::Null; }
+                        if (an % bn == 0 ){ return JsonValue::Integer(an / bn); }
                         return JsonValue::Float((an as Float64) / (bn as Float64));
                     }
                     Float(bf) =>
                     {
-                        if bf == 0.0 { throw "Division by zero"; }
+                        if (bf == 0.0 ){ throw "Division by zero"; }
                         return JsonValue::Float((an as Float64) / bf);
                     }
                     _ => { throw "Cannot divide: type mismatch"; return JsonValue::Null; }
@@ -544,12 +544,12 @@ class JsonValueHelper
                 {
                     Float(bf) =>
                     {
-                        if bf == 0.0 { throw "Division by zero"; }
+                        if (bf == 0.0 ){ throw "Division by zero"; }
                         return JsonValue::Float(af / bf);
                     }
                     Integer(bn) =>
                     {
-                        if bn == 0 { throw "Division by zero"; return JsonValue::Null; }
+                        if (bn == 0 ){ throw "Division by zero"; return JsonValue::Null; }
                         return JsonValue::Float(af / (bn as Float64));
                     }
                     _ => { throw "Cannot divide: type mismatch"; return JsonValue::Null; }
@@ -561,7 +561,7 @@ class JsonValueHelper
                 {
                     Str(bs) =>
                     {
-                        if bs.len() == 0 { throw "Division by empty string"; }
+                        if (bs.len() == 0 ){ throw "Division by empty string"; }
                         let parts = sv.split(bs);
                         var result: List<JsonValue> = [];
                         for p in parts { result.push(JsonValue::Str(p)); }
@@ -585,7 +585,7 @@ class JsonValueHelper
                 {
                     Integer(bn) =>
                     {
-                        if bn == 0 { throw "Modulo by zero"; }
+                        if (bn == 0 ){ throw "Modulo by zero"; }
                         return JsonValue::Integer(an % bn);
                     }
                     _ => { throw "Cannot modulo: type mismatch"; return JsonValue::Null; }

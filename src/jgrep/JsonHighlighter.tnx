@@ -10,13 +10,13 @@ class JsonHighlighter
 {
     fnc highlight(value: JsonValue, config: ColorConfig) -> String
     {
-        if !config.enabled { return JsonSerializer::stringify(value); }
+        if (!config.enabled ){ return JsonSerializer::stringify(value); }
         return JsonHighlighter::highlightValue(value);
     }
 
     fnc highlightPretty(value: JsonValue, config: ColorConfig) -> String
     {
-        if !config.enabled { return JsonSerializer::prettyStringify(value, 2); }
+        if (!config.enabled ){ return JsonSerializer::prettyStringify(value, 2); }
         return JsonHighlighter::highlightPrettyValue(value, 0);
     }
 
@@ -27,7 +27,7 @@ class JsonHighlighter
             Null    => return Ansi::colorize("null", Ansi::magenta());
             Bool(b) =>
             {
-                if b { return Ansi::colorize("true", Ansi::magenta()); }
+                if (b ){ return Ansi::colorize("true", Ansi::magenta()); }
                 return Ansi::colorize("false", Ansi::magenta());
             }
             Integer(n) => return Ansi::colorize(n.toString(), Ansi::yellow());
@@ -36,12 +36,12 @@ class JsonHighlighter
             Array(a) =>
             {
                 let ha = a;
-                if ha.len() == 0 { return "[]"; }
+                if (ha.len() == 0 ){ return "[]"; }
                 var result = "[";
                 var i = 0;
                 for item in ha
                 {
-                    if i > 0 { result = result + ","; }
+                    if (i > 0 ){ result = result + ","; }
                     result = result + JsonHighlighter::highlightValue(item);
                     i = i + 1;
                 }
@@ -50,13 +50,13 @@ class JsonHighlighter
             Object(o) =>
             {
                 let hoLen = o.len();
-                if hoLen == 0 { return "{}"; }
+                if (hoLen == 0 ){ return "{}"; }
                 var result = "{";
                 var i = 0;
                 let hoKs = JsonUtil::sortStringList(o.keys());
                 for key in hoKs
                 {
-                    if i > 0 { result = result + ","; }
+                    if (i > 0 ){ result = result + ","; }
                     result = result + Ansi::colorize("\"" + JsonSerializer::escapeString(key) + "\"", Ansi::cyan());
                     result = result + ":";
                     result = result + JsonHighlighter::highlightValue(o.get(key));
@@ -78,7 +78,7 @@ class JsonHighlighter
             Null    => return Ansi::colorize("null", Ansi::magenta());
             Bool(b) =>
             {
-                if b { return Ansi::colorize("true", Ansi::magenta()); }
+                if (b ){ return Ansi::colorize("true", Ansi::magenta()); }
                 return Ansi::colorize("false", Ansi::magenta());
             }
             Integer(n) => return Ansi::colorize(n.toString(), Ansi::yellow());
@@ -87,12 +87,12 @@ class JsonHighlighter
             Array(a) =>
             {
                 let hpa = a;
-                if hpa.len() == 0 { return "[]"; }
+                if (hpa.len() == 0 ){ return "[]"; }
                 var result = "[\n";
                 var i = 0;
                 for item in hpa
                 {
-                    if i > 0 { result = result + ",\n"; }
+                    if (i > 0 ){ result = result + ",\n"; }
                     result = result + pad + JsonHighlighter::highlightPrettyValue(item, depth + 1);
                     i = i + 1;
                 }
@@ -101,13 +101,13 @@ class JsonHighlighter
             Object(o) =>
             {
                 let hpoLen = o.len();
-                if hpoLen == 0 { return "{}"; }
+                if (hpoLen == 0 ){ return "{}"; }
                 var result = "{\n";
                 var i = 0;
                 let hpoKs = JsonUtil::sortStringList(o.keys());
                 for key in hpoKs
                 {
-                    if i > 0 { result = result + ",\n"; }
+                    if (i > 0 ){ result = result + ",\n"; }
                     result = result + pad + Ansi::colorize("\"" + JsonSerializer::escapeString(key) + "\"", Ansi::cyan());
                     result = result + ": ";
                     result = result + JsonHighlighter::highlightPrettyValue(o.get(key), depth + 1);

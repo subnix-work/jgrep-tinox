@@ -17,16 +17,16 @@ class JsonLexer
 
     fn peekChar() -> Int64
     {
-        if this.pos >= this.srcLen { return 0; }
+        if (this.pos >= this.srcLen ){ return 0; }
         return this.source[this.pos] as Int64;
     }
 
     fn nextChar() -> Int64
     {
-        if this.pos >= this.srcLen { return 0; }
+        if (this.pos >= this.srcLen ){ return 0; }
         let code = this.source[this.pos] as Int64;
         this.pos = this.pos + 1;
-        if code == 10 { this.line = this.line + 1; this.col = 1; }
+        if (code == 10 ){ this.line = this.line + 1; this.col = 1; }
         else          { this.col = this.col + 1; }
         return code;
     }
@@ -36,8 +36,8 @@ class JsonLexer
         while this.pos < this.srcLen
         {
             let ch = this.peekChar();
-            if ch == 32 || ch == 9 || ch == 10 || ch == 13
-            {
+            if (ch == 32 || ch == 9 || ch == 10 || ch == 13
+            ){
                 this.nextChar();
             }
             else { break; }
@@ -46,21 +46,21 @@ class JsonLexer
 
     fn hexDigit(ch: Int64) -> Int64
     {
-        if ch >= 48 && ch <= 57 { return ch - 48; }
-        if ch >= 97 && ch <= 102 { return ch - 97 + 10; }
-        if ch >= 65 && ch <= 70  { return ch - 65 + 10; }
+        if (ch >= 48 && ch <= 57 ){ return ch - 48; }
+        if (ch >= 97 && ch <= 102 ){ return ch - 97 + 10; }
+        if (ch >= 65 && ch <= 70  ){ return ch - 65 + 10; }
         return -1;
     }
 
     fnc codePointToStr(code: Int64) -> String
     {
         let ascii = " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~";
-        if code >= 32 && code <= 126 { return ascii.substring(code - 32, code - 31); }
-        if code == 10 { return "\n"; }
-        if code == 13 { return "\r"; }
-        if code == 9  { return "\t"; }
-        if code == 8  { return "\x08"; }
-        if code == 12 { return "\x0c"; }
+        if (code >= 32 && code <= 126 ){ return ascii.substring(code - 32, code - 31); }
+        if (code == 10 ){ return "\n"; }
+        if (code == 13 ){ return "\r"; }
+        if (code == 9  ){ return "\t"; }
+        if (code == 8  ){ return "\x08"; }
+        if (code == 12 ){ return "\x0c"; }
         return "?";
     }
 
@@ -70,20 +70,20 @@ class JsonLexer
         while this.pos < this.srcLen
         {
             let ch = this.nextChar();
-            if ch == 34 { return result; }
-            if ch == 92
-            {
+            if (ch == 34 ){ return result; }
+            if (ch == 92
+            ){
                 let esc = this.nextChar();
-                if esc == 34  { result = result + "\""; }
-                else if esc == 92 { result = result + "\\"; }
-                else if esc == 47  { result = result + "/"; }
-                else if esc == 98  { result = result + "\x08"; }
-                else if esc == 102  { result = result + "\x0c"; }
-                else if esc == 110  { result = result + "\n"; }
-                else if esc == 114  { result = result + "\r"; }
-                else if esc == 116  { result = result + "\t"; }
-                else if esc == 117
-                {
+                if (esc == 34  ){ result = result + "\""; }
+                else if (esc == 92 ){ result = result + "\\"; }
+                else if (esc == 47  ){ result = result + "/"; }
+                else if (esc == 98  ){ result = result + "\x08"; }
+                else if (esc == 102  ){ result = result + "\x0c"; }
+                else if (esc == 110  ){ result = result + "\n"; }
+                else if (esc == 114  ){ result = result + "\r"; }
+                else if (esc == 116  ){ result = result + "\t"; }
+                else if (esc == 117
+                ){
                     var codepoint: Int64 = 0;
                     var i = 0;
                     while i < 4
@@ -110,21 +110,21 @@ class JsonLexer
         while this.pos < this.srcLen
         {
             let ch = this.peekChar();
-            if ch >= 48 && ch <= 57 { numStr = numStr + JsonLexer::codePointToStr(ch); this.nextChar(); }
-            else if ch == 46 && !isFloat
-            {
+            if (ch >= 48 && ch <= 57 ){ numStr = numStr + JsonLexer::codePointToStr(ch); this.nextChar(); }
+            else if (ch == 46 && !isFloat
+            ){
                 isFloat = true;
                 numStr = numStr + ".";
                 this.nextChar();
             }
-            else if ch == 101 || ch == 69
-            {
+            else if (ch == 101 || ch == 69
+            ){
                 isFloat = true;
                 numStr = numStr + JsonLexer::codePointToStr(ch);
                 this.nextChar();
                 let sign = this.peekChar();
-                if sign == 43 || sign == 45
-                {
+                if (sign == 43 || sign == 45
+                ){
                     numStr = numStr + JsonLexer::codePointToStr(sign);
                     this.nextChar();
                 }
@@ -132,50 +132,50 @@ class JsonLexer
             else { break; }
         }
 
-        if isFloat { return JsonToken::FloatToken(numStr.toFloat()); }
+        if (isFloat ){ return JsonToken::FloatToken(numStr.toFloat()); }
         return JsonToken::IntToken(numStr.toInt());
     }
 
     fn nextToken() -> JsonToken
     {
         this.skipWhitespace();
-        if this.pos >= this.srcLen { return JsonToken::EOF; }
+        if (this.pos >= this.srcLen ){ return JsonToken::EOF; }
 
         let ch = this.nextChar();
 
-        if ch == 123 { return JsonToken::LBrace; }
-        if ch == 125 { return JsonToken::RBrace; }
-        if ch == 91 { return JsonToken::LBracket; }
-        if ch == 93 { return JsonToken::RBracket; }
-        if ch == 58 { return JsonToken::Colon; }
-        if ch == 44 { return JsonToken::Comma; }
-        if ch == 34 { return JsonToken::StringToken(this.readString()); }
-        if ch == 116
-        {
+        if (ch == 123 ){ return JsonToken::LBrace; }
+        if (ch == 125 ){ return JsonToken::RBrace; }
+        if (ch == 91 ){ return JsonToken::LBracket; }
+        if (ch == 93 ){ return JsonToken::RBracket; }
+        if (ch == 58 ){ return JsonToken::Colon; }
+        if (ch == 44 ){ return JsonToken::Comma; }
+        if (ch == 34 ){ return JsonToken::StringToken(this.readString()); }
+        if (ch == 116
+        ){
             let c1 = this.nextChar();
             let c2 = this.nextChar();
             let c3 = this.nextChar();
-            if c1 == 114 && c2 == 117 && c3 == 101 { return JsonToken::TrueToken; }
+            if (c1 == 114 && c2 == 117 && c3 == 101 ){ return JsonToken::TrueToken; }
             return JsonToken::Invalid;
         }
-        if ch == 102
-        {
+        if (ch == 102
+        ){
             let c1 = this.nextChar();
             let c2 = this.nextChar();
             let c3 = this.nextChar();
             let c4 = this.nextChar();
-            if c1 == 97 && c2 == 108 && c3 == 115 && c4 == 101 { return JsonToken::FalseToken; }
+            if (c1 == 97 && c2 == 108 && c3 == 115 && c4 == 101 ){ return JsonToken::FalseToken; }
             return JsonToken::Invalid;
         }
-        if ch == 110
-        {
+        if (ch == 110
+        ){
             let c1 = this.nextChar();
             let c2 = this.nextChar();
             let c3 = this.nextChar();
-            if c1 == 117 && c2 == 108 && c3 == 108 { return JsonToken::NullToken; }
+            if (c1 == 117 && c2 == 108 && c3 == 108 ){ return JsonToken::NullToken; }
             return JsonToken::Invalid;
         }
-        if ch == 45 || (ch >= 48 && ch <= 57) { return this.readNumber(ch); }
+        if (ch == 45 || (ch >= 48 && ch <= 57) ){ return this.readNumber(ch); }
 
         return JsonToken::Invalid;
     }
@@ -198,8 +198,8 @@ class JsonLexer
         {
             let c = this.source[this.pos] as Int64;
             this.pos = this.pos + 1;
-            if c == 10
-            {
+            if (c == 10
+            ){
                 this.line = this.line + 1;
                 this.col = 1;
                 break;

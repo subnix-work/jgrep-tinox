@@ -14,16 +14,16 @@ class FileWalker
 
     fnc matchesMode(path: String, yamlMode: Bool) -> Bool
     {
-        if yamlMode { return FileWalker::isYamlFile(path); }
+        if (yamlMode ){ return FileWalker::isYamlFile(path); }
         return FileWalker::isJsonFile(path);
     }
 
     fnc listModeFiles(path: String, recursive: Bool, yamlMode: Bool) -> List<String>
     {
         var result: List<String> = [];
-        if FileWalker::isJsonFile(path) || FileWalker::isYamlFile(path)
-        {
-            if fileExists(path) { result.push(path); }
+        if (FileWalker::isJsonFile(path) || FileWalker::isYamlFile(path)
+        ){
+            if (fileExists(path) ){ result.push(path); }
         }
         else
         {
@@ -45,14 +45,14 @@ class FileWalker
         {
             let entry = entries[ei];
             let fullPath = path + "/" + entry;
-            if FileWalker::matchesMode(fullPath, yamlMode)
-            {
-                if fileExists(fullPath) { files.push(fullPath); }
+            if (FileWalker::matchesMode(fullPath, yamlMode)
+            ){
+                if (fileExists(fullPath) ){ files.push(fullPath); }
             }
             else
             {
-                if recursive && !FileWalker::isJsonFile(fullPath) && !FileWalker::isYamlFile(fullPath)
-                {
+                if (recursive && !FileWalker::isJsonFile(fullPath) && !FileWalker::isYamlFile(fullPath)
+                ){
                     dirs.push(fullPath);
                 }
             }
@@ -62,8 +62,8 @@ class FileWalker
         var fi: Int64 = 0;
         while fi < files.len() { result.push(files[fi]); fi = fi + 1; }
 
-        if recursive
-        {
+        if (recursive
+        ){
             var di: Int64 = 0;
             while di < dirs.len()
             {
@@ -108,7 +108,7 @@ class FileWalker
             var i: Int64 = 1;
             while i < n
             {
-                if remaining[i] < remaining[minIdx] { minIdx = i; }
+                if (remaining[i] < remaining[minIdx] ){ minIdx = i; }
                 i = i + 1;
             }
             result.push(remaining[minIdx]);
@@ -116,7 +116,7 @@ class FileWalker
             var j: Int64 = 0;
             while j < n
             {
-                if j != minIdx { next.push(remaining[j]); }
+                if (j != minIdx ){ next.push(remaining[j]); }
                 j = j + 1;
             }
             remaining = next;

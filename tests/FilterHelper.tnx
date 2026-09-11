@@ -13,14 +13,14 @@ class FilterHelper
         let ev = Evaluator::new();
         let ctx = EvalContext::new();
         let r = ev.eval(f, input, ctx);
-        if r.isError() { return []; }
+        if (r.isError() ){ return []; }
         return r.values;
     }
 
     fnc runSingle(filterStr: String, inputJson: String) -> JsonValue
     {
         let results = FilterHelper::run(filterStr, inputJson);
-        if results.len() == 0 { return JsonValue::Null; }
+        if (results.len() == 0 ){ return JsonValue::Null; }
         return results[0];
     }
 }

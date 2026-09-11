@@ -156,8 +156,8 @@ class JsonParser
     {
         var parser = JsonParser::new(input);
         let result = parser.parseValue();
-        if parser.hasError
-        {
+        if (parser.hasError
+        ){
             println("JSON parse error: " + parser.errorMsg);
             processExit(2);
         }
@@ -167,10 +167,10 @@ class JsonParser
     fnc tryParse(input: String) -> List<JsonValue>
     {
         let trimmed = input.trim();
-        if trimmed.len() == 0 { return []; }
+        if (trimmed.len() == 0 ){ return []; }
         var parser = JsonParser::new(trimmed);
         let result = parser.parseValue();
-        if parser.hasError { return []; }
+        if (parser.hasError ){ return []; }
         return [result];
     }
 
@@ -187,7 +187,7 @@ class JsonParser
                 _ =>
                 {
                     let v = parser.parseValue();
-                    if parser.hasError { parser.recoverToNextLine(); }
+                    if (parser.hasError ){ parser.recoverToNextLine(); }
                     else { results.push(v); }
                 }
             }

@@ -182,7 +182,7 @@ class FilterTest
     fn testObjectConstruct() -> Bool
     {
         let v = FilterHelper::runSingle("{n: .name}", "{\"name\":\"Alice\"}");
-        if !JsonValueHelper::isObject(v) { return false; }
+        if (!JsonValueHelper::isObject(v) ){ return false; }
         let o = JsonValueHelper::asObject(v);
         return o.contains("n") && JsonValueHelper::asString(o.get("n")) == "Alice";
     }
@@ -191,7 +191,7 @@ class FilterTest
     fn testArrayConstruct() -> Bool
     {
         let v = FilterHelper::runSingle("[.a, .b]", "{\"a\":1,\"b\":2}");
-        if !JsonValueHelper::isArray(v) { return false; }
+        if (!JsonValueHelper::isArray(v) ){ return false; }
         let a = JsonValueHelper::asArray(v);
         return a.len() == 2 && JsonValueHelper::asInteger(a[0]) == 1;
     }
@@ -228,7 +228,7 @@ class FilterTest
     fn testKeysObject() -> Bool
     {
         let v = FilterHelper::runSingle("keys", "{\"b\":2,\"a\":1}");
-        if !JsonValueHelper::isArray(v) { return false; }
+        if (!JsonValueHelper::isArray(v) ){ return false; }
         let a = JsonValueHelper::asArray(v);
         return a.len() == 2 && JsonValueHelper::asString(a[0]) == "a";
     }
@@ -237,7 +237,7 @@ class FilterTest
     fn testMap() -> Bool
     {
         let v = FilterHelper::runSingle("map(. * 2)", "[1,2,3]");
-        if !JsonValueHelper::isArray(v) { return false; }
+        if (!JsonValueHelper::isArray(v) ){ return false; }
         let a = JsonValueHelper::asArray(v);
         return a.len() == 3 && JsonValueHelper::asInteger(a[2]) == 6;
     }
@@ -246,7 +246,7 @@ class FilterTest
     fn testMapSelect() -> Bool
     {
         let v = FilterHelper::runSingle("[.[] | select(. > 2)]", "[1,2,3,4]");
-        if !JsonValueHelper::isArray(v) { return false; }
+        if (!JsonValueHelper::isArray(v) ){ return false; }
         let a = JsonValueHelper::asArray(v);
         return a.len() == 2;
     }
@@ -280,7 +280,7 @@ class FilterTest
     fn testSplit() -> Bool
     {
         let v = FilterHelper::runSingle("split(\",\")", "\"a,b,c\"");
-        if !JsonValueHelper::isArray(v) { return false; }
+        if (!JsonValueHelper::isArray(v) ){ return false; }
         let a = JsonValueHelper::asArray(v);
         return a.len() == 3 && JsonValueHelper::asString(a[1]) == "b";
     }
@@ -296,9 +296,9 @@ class FilterTest
     fn testToEntries() -> Bool
     {
         let v = FilterHelper::runSingle("to_entries", "{\"x\":1}");
-        if !JsonValueHelper::isArray(v) { return false; }
+        if (!JsonValueHelper::isArray(v) ){ return false; }
         let a = JsonValueHelper::asArray(v);
-        if a.len() != 1 { return false; }
+        if (a.len() != 1 ){ return false; }
         let entry = JsonValueHelper::asObject(a[0]);
         return entry.contains("key") && entry.contains("value");
     }
@@ -307,7 +307,7 @@ class FilterTest
     fn testFromEntries() -> Bool
     {
         let v = FilterHelper::runSingle("from_entries", "[{\"key\":\"a\",\"value\":1}]");
-        if !JsonValueHelper::isObject(v) { return false; }
+        if (!JsonValueHelper::isObject(v) ){ return false; }
         let o = JsonValueHelper::asObject(v);
         return o.contains("a") && JsonValueHelper::asInteger(o.get("a")) == 1;
     }
@@ -323,7 +323,7 @@ class FilterTest
     fn testSort() -> Bool
     {
         let v = FilterHelper::runSingle("sort", "[3,1,2]");
-        if !JsonValueHelper::isArray(v) { return false; }
+        if (!JsonValueHelper::isArray(v) ){ return false; }
         let a = JsonValueHelper::asArray(v);
         return JsonValueHelper::asInteger(a[0]) == 1 &&
                JsonValueHelper::asInteger(a[1]) == 2 &&
@@ -334,7 +334,7 @@ class FilterTest
     fn testReverse() -> Bool
     {
         let v = FilterHelper::runSingle("reverse", "[1,2,3]");
-        if !JsonValueHelper::isArray(v) { return false; }
+        if (!JsonValueHelper::isArray(v) ){ return false; }
         let a = JsonValueHelper::asArray(v);
         return JsonValueHelper::asInteger(a[0]) == 3;
     }
@@ -343,7 +343,7 @@ class FilterTest
     fn testUnique() -> Bool
     {
         let v = FilterHelper::runSingle("unique", "[1,2,1,3,2]");
-        if !JsonValueHelper::isArray(v) { return false; }
+        if (!JsonValueHelper::isArray(v) ){ return false; }
         return JsonValueHelper::asArray(v).len() == 3;
     }
 
@@ -351,7 +351,7 @@ class FilterTest
     fn testFlatten() -> Bool
     {
         let v = FilterHelper::runSingle("flatten(1)", "[[1,2],[3,[4]]]");
-        if !JsonValueHelper::isArray(v) { return false; }
+        if (!JsonValueHelper::isArray(v) ){ return false; }
         let a = JsonValueHelper::asArray(v);
         return a.len() == 4;
     }

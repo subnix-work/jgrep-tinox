@@ -8,12 +8,12 @@ class JsonSerializer
     fnc codePointToStr(code: Int64) -> String
     {
         let ascii = " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~";
-        if code >= 32 && code <= 126 { return ascii.substring(code - 32, code - 31); }
-        if code == 10 { return "\n"; }
-        if code == 13 { return "\r"; }
-        if code == 9  { return "\t"; }
-        if code == 8  { return "\x08"; }
-        if code == 12 { return "\x0c"; }
+        if (code >= 32 && code <= 126 ){ return ascii.substring(code - 32, code - 31); }
+        if (code == 10 ){ return "\n"; }
+        if (code == 13 ){ return "\r"; }
+        if (code == 9  ){ return "\t"; }
+        if (code == 8  ){ return "\x08"; }
+        if (code == 12 ){ return "\x0c"; }
         return "?";
     }
 
@@ -22,19 +22,19 @@ class JsonSerializer
         match value
         {
             Null       => return "null";
-            Bool(b)    => { if b { return "true"; } return "false"; }
+            Bool(b)    => { if (b ){ return "true"; } return "false"; }
             Integer(n) => return n.toString();
             Float(s)   => return JsonUtil::floatDisplay(s);
             Str(s)     => return "\"" + JsonSerializer::escapeString(s) + "\"";
             Array(a)   =>
             {
                 let aa = a;
-                if aa.len() == 0 { return "[]"; }
+                if (aa.len() == 0 ){ return "[]"; }
                 var result = "[";
                 var i = 0;
                 for item in aa
                 {
-                    if i > 0 { result = result + ","; }
+                    if (i > 0 ){ result = result + ","; }
                     result = result + JsonSerializer::stringify(item);
                     i = i + 1;
                 }
@@ -43,13 +43,13 @@ class JsonSerializer
             Object(o)  =>
             {
                 let oLen = o.len();
-                if oLen == 0 { return "{}"; }
+                if (oLen == 0 ){ return "{}"; }
                 var result = "{";
                 var i = 0;
                 let oKs = JsonUtil::sortStringList(o.keys());
                 for key in oKs
                 {
-                    if i > 0 { result = result + ","; }
+                    if (i > 0 ){ result = result + ","; }
                     result = result + "\"" + JsonSerializer::escapeString(key) + "\":" + JsonSerializer::stringify(o.get(key));
                     i = i + 1;
                 }
@@ -72,19 +72,19 @@ class JsonSerializer
         match value
         {
             Null       => return "null";
-            Bool(b)    => { if b { return "true"; } return "false"; }
+            Bool(b)    => { if (b ){ return "true"; } return "false"; }
             Integer(n) => return n.toString();
             Float(s)   => return JsonUtil::floatDisplay(s);
             Str(s)     => return "\"" + JsonSerializer::escapeString(s) + "\"";
             Array(a)   =>
             {
                 let pa = a;
-                if pa.len() == 0 { return "[]"; }
+                if (pa.len() == 0 ){ return "[]"; }
                 var result = "[\n";
                 var i = 0;
                 for item in pa
                 {
-                    if i > 0 { result = result + ",\n"; }
+                    if (i > 0 ){ result = result + ",\n"; }
                     result = result + pad + JsonSerializer::prettyStringifyInner(item, indent, depth + 1);
                     i = i + 1;
                 }
@@ -93,13 +93,13 @@ class JsonSerializer
             Object(o)  =>
             {
                 let poLen = o.len();
-                if poLen == 0 { return "{}"; }
+                if (poLen == 0 ){ return "{}"; }
                 var result = "{\n";
                 var i = 0;
                 let poKs = JsonUtil::sortStringList(o.keys());
                 for key in poKs
                 {
-                    if i > 0 { result = result + ",\n"; }
+                    if (i > 0 ){ result = result + ",\n"; }
                     result = result + pad + "\"" + JsonSerializer::escapeString(key) + "\": " + JsonSerializer::prettyStringifyInner(o.get(key), indent, depth + 1);
                     i = i + 1;
                 }
@@ -116,13 +116,13 @@ class JsonSerializer
         while i < s.len()
         {
             let code = s[i] as Int64;
-            if code == 34       { result = result + "\\\""; }
-            else if code == 92  { result = result + "\\\\"; }
-            else if code == 10  { result = result + "\\n"; }
-            else if code == 13  { result = result + "\\r"; }
-            else if code == 9   { result = result + "\\t"; }
-            else if code == 8   { result = result + "\\b"; }
-            else if code == 12  { result = result + "\\f"; }
+            if (code == 34       ){ result = result + "\\\""; }
+            else if (code == 92  ){ result = result + "\\\\"; }
+            else if (code == 10  ){ result = result + "\\n"; }
+            else if (code == 13  ){ result = result + "\\r"; }
+            else if (code == 9   ){ result = result + "\\t"; }
+            else if (code == 8   ){ result = result + "\\b"; }
+            else if (code == 12  ){ result = result + "\\f"; }
             else                { result = result + s.substring(i, i + 1); }
             i = i + 1;
         }
@@ -144,7 +144,7 @@ class JsonSerializer
             Str(s) => return s;
             _ =>
             {
-                if pretty { return JsonSerializer::prettyStringify(value, 2); }
+                if (pretty ){ return JsonSerializer::prettyStringify(value, 2); }
                 return JsonSerializer::stringify(value);
             }
         }

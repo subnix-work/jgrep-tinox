@@ -20,8 +20,8 @@ class Matcher
     {
         let ctx = EvalContext::new();
         let result = this.evaluator.eval(filter, input, ctx);
-        if result.isError()
-        {
+        if (result.isError()
+        ){
             return MatchResult::new([], true, result.errorMsg);
         }
         return MatchResult::new(result.values, false, "");
@@ -31,7 +31,7 @@ class Matcher
     {
         let ctx = EvalContext::new();
         let result = this.evaluator.eval(filter, input, ctx);
-        if result.isError() { return []; }
+        if (result.isError() ){ return []; }
         return result.values;
     }
 

@@ -19,13 +19,13 @@ class FilterParser
 
     fn peek() -> FilterToken
     {
-        if this.pos >= this.tokens.len() { return FilterToken::EOF; }
+        if (this.pos >= this.tokens.len() ){ return FilterToken::EOF; }
         return this.tokens[this.pos];
     }
 
     fn peek2() -> FilterToken
     {
-        if this.pos + 1 >= this.tokens.len() { return FilterToken::EOF; }
+        if (this.pos + 1 >= this.tokens.len() ){ return FilterToken::EOF; }
         return this.tokens[this.pos + 1];
     }
 
@@ -78,7 +78,7 @@ class FilterParser
             }
         }
         let body = this.parseComma();
-        if defs.len() == 0 { return body; }
+        if (defs.len() == 0 ){ return body; }
         var result = body;
         var i = defs.len() - 1;
         while i >= 0
@@ -644,7 +644,7 @@ class FilterParser
             VarName(name) =>
             {
                 this.consume();
-                if name == "ENV" { return Filter::Env; }
+                if (name == "ENV" ){ return Filter::Env; }
                 return Filter::Variable(name);
             }
             Format(fmt) =>
@@ -660,9 +660,9 @@ class FilterParser
             StrLit(s) =>
             {
                 this.consume();
-                if s == "null"  { return Filter::LiteralNull; }
-                if s == "true"  { return Filter::LiteralBool(true); }
-                if s == "false" { return Filter::LiteralBool(false); }
+                if (s == "null"  ){ return Filter::LiteralNull; }
+                if (s == "true"  ){ return Filter::LiteralBool(true); }
+                if (s == "false" ){ return Filter::LiteralBool(false); }
                 return Filter::LiteralStr(s);
             }
             InterpStr(parts) =>

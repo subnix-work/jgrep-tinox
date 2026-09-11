@@ -13,13 +13,13 @@ class ColorConfig
 
     fnc detectEnabled(mode: String, noColorFlag: Bool) -> Bool
     {
-        if noColorFlag { return false; }
-        if mode == "never" { return false; }
-        if mode == "always" { return true; }
+        if (noColorFlag ){ return false; }
+        if (mode == "never" ){ return false; }
+        if (mode == "always" ){ return true; }
         let noColorEnv = envGet("NO_COLOR");
-        if noColorEnv != "" { return false; }
+        if (noColorEnv != "" ){ return false; }
         let term = envGet("TERM");
-        if term == "dumb" { return false; }
+        if (term == "dumb" ){ return false; }
         return isStdoutTty() == 1;
     }
 }

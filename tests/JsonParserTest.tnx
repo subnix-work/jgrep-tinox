@@ -72,7 +72,7 @@ class JsonParserTest
     fn testParseArray() -> Bool
     {
         let v = JsonParser::parse("[1,2,3]");
-        if !JsonValueHelper::isArray(v) { return false; }
+        if (!JsonValueHelper::isArray(v) ){ return false; }
         let a = JsonValueHelper::asArray(v);
         return a.len() == 3 && JsonValueHelper::asInteger(a[1]) == 2;
     }
@@ -88,7 +88,7 @@ class JsonParserTest
     fn testParseObject() -> Bool
     {
         let v = JsonParser::parse("{\"name\":\"Alice\",\"age\":30}");
-        if !JsonValueHelper::isObject(v) { return false; }
+        if (!JsonValueHelper::isObject(v) ){ return false; }
         let o = JsonValueHelper::asObject(v);
         return o.contains("name") && JsonValueHelper::asString(o.get("name")) == "Alice";
     }
@@ -97,11 +97,11 @@ class JsonParserTest
     fn testParseNested() -> Bool
     {
         let v = JsonParser::parse("{\"a\":{\"b\":[1,2]}}");
-        if !JsonValueHelper::isObject(v) { return false; }
+        if (!JsonValueHelper::isObject(v) ){ return false; }
         let o = JsonValueHelper::asObject(v);
-        if !o.contains("a") { return false; }
+        if (!o.contains("a") ){ return false; }
         let inner = o.get("a");
-        if !JsonValueHelper::isObject(inner) { return false; }
+        if (!JsonValueHelper::isObject(inner) ){ return false; }
         let innerObj = JsonValueHelper::asObject(inner);
         return innerObj.contains("b");
     }

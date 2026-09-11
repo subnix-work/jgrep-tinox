@@ -201,16 +201,16 @@ class BuiltinsTest
     @Test("base32 encodes with padding")
     fn testBase32Encode() -> Bool
     {
-        if BuiltinsHelper::run("@base32", "\"hi\"") != "\"NBUQ====\"" { return false; }
-        if BuiltinsHelper::run("@base32", "\"hello\"") != "\"NBSWY3DP\"" { return false; }
-        if BuiltinsHelper::run("@base32", "\"a\"") != "\"ME======\"" { return false; }
+        if (BuiltinsHelper::run("@base32", "\"hi\"") != "\"NBUQ====\"" ){ return false; }
+        if (BuiltinsHelper::run("@base32", "\"hello\"") != "\"NBSWY3DP\"" ){ return false; }
+        if (BuiltinsHelper::run("@base32", "\"a\"") != "\"ME======\"" ){ return false; }
         return BuiltinsHelper::run("@base32", "\"abcd\"") == "\"MFRGGZA=\"";
     }
 
     @Test("base32d decodes")
     fn testBase32Decode() -> Bool
     {
-        if BuiltinsHelper::run("@base32d", "\"NBSWY3DP\"") != "\"hello\"" { return false; }
+        if (BuiltinsHelper::run("@base32d", "\"NBSWY3DP\"") != "\"hello\"" ){ return false; }
         return BuiltinsHelper::run("@base32d", "\"ME======\"") == "\"a\"";
     }
 
@@ -258,7 +258,7 @@ class BuiltinsTest
     {
         let reader = NdjsonReader::fromString("{\"id\":1}\n{invalid}\n{\"id\":3}");
         let docs = reader.readAll();
-        if docs.len() != 2 { return false; }
+        if (docs.len() != 2 ){ return false; }
         return reader.errorCount == 1;
     }
 }
