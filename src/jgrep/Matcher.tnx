@@ -1,54 +1,54 @@
-module jgrep.matcher;
+module jgrep.matcher
 
-import JsonValue;
-import Filter;
-import Evaluator;
-import EvalContext;
-import EvalResult;
-import MatchResult;
+import JsonValue
+import Filter
+import Evaluator
+import EvalContext
+import EvalResult
+import MatchResult
 
 class Matcher
 {
-    var evaluator: Evaluator;
+    var evaluator: Evaluator
 
     fnc new() -> Matcher
     {
-        return Matcher { evaluator: Evaluator::new() };
+        return Matcher { evaluator: Evaluator::new() }
     }
 
     fn runMatch(filter: Filter, input: JsonValue) -> MatchResult
     {
-        let ctx = EvalContext::new();
-        let result = this.evaluator.eval(filter, input, ctx);
+        let ctx = EvalContext::new()
+        let result = this.evaluator.eval(filter, input, ctx)
         if (result.isError()
         ){
-            return MatchResult::new([], true, result.errorMsg);
+            return MatchResult::new([], true, result.errorMsg)
         }
-        return MatchResult::new(result.values, false, "");
+        return MatchResult::new(result.values, false, "")
     }
 
     fn matchRaw(filter: Filter, input: JsonValue) -> List<JsonValue>
     {
-        let ctx = EvalContext::new();
-        let result = this.evaluator.eval(filter, input, ctx);
-        if (result.isError() ){ return []; }
-        return result.values;
+        let ctx = EvalContext::new()
+        let result = this.evaluator.eval(filter, input, ctx)
+        if (result.isError() ){ return [] }
+        return result.values
     }
 
     fn setInputQueue(q: List<JsonValue>)
     {
-        this.evaluator.inputQueue = q;
-        this.evaluator.inputQueuePos = 0;
+        this.evaluator.inputQueue = q
+        this.evaluator.inputQueuePos = 0
     }
 
     fn noteDocRead()
     {
-        this.evaluator.linesRead = this.evaluator.linesRead + 1;
+        this.evaluator.linesRead = this.evaluator.linesRead + 1
     }
 
     fn runEval(filter: Filter, input: JsonValue) -> EvalResult
     {
-        let ctx = EvalContext::new();
-        return this.evaluator.eval(filter, input, ctx);
+        let ctx = EvalContext::new()
+        return this.evaluator.eval(filter, input, ctx)
     }
 }

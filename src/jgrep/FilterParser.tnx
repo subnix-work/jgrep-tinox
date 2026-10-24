@@ -1,133 +1,150 @@
-module jgrep.filter;
+module jgrep.filter
 
-import FilterToken;
-import Filter;
-import ObjKey;
-import ObjEntry;
-import FilterLexer;
+import FilterToken
+import Filter
+import ObjKey
+import ObjEntry
+import FilterLexer
 
 class FilterParser
 {
-    var tokens: List<FilterToken>;
-    var pos: Int64;
-    var defs: Map<String, Filter>;
+    var tokens: List<FilterToken>
+    var pos: Int64
+    var defs: Map<String, Filter>
 
     fnc new(toks: List<FilterToken>) -> FilterParser
     {
-        return FilterParser { tokens: toks, pos: 0, defs: @{} };
+        return FilterParser { tokens: toks, pos: 0, defs: @{} }
     }
 
     fn peek() -> FilterToken
     {
-        if (this.pos >= this.tokens.len() ){ return FilterToken::EOF; }
-        return this.tokens[this.pos];
+        if (this.pos >= this.tokens.len() ){ return FilterToken::EOF }
+        return this.tokens[this.pos]
     }
 
     fn peek2() -> FilterToken
     {
-        if (this.pos + 1 >= this.tokens.len() ){ return FilterToken::EOF; }
-        return this.tokens[this.pos + 1];
+        if (this.pos + 1 >= this.tokens.len() ){ return FilterToken::EOF }
+        return this.tokens[this.pos + 1]
     }
 
     fn consume() -> FilterToken
     {
-        let tok = this.peek();
-        this.pos = this.pos + 1;
-        return tok;
+        let tok = this.peek()
+        this.pos = this.pos + 1
+        return tok
     }
 
     fn isPeek(tok: FilterToken) -> Bool
     {
         match this.peek()
         {
-            Pipe      => { match tok { Pipe => return true; _ => return false; } }
-            Comma     => { match tok { Comma => return true; _ => return false; } }
-            AltOp     => { match tok { AltOp => return true; _ => return false; } }
-            Or        => { match tok { Or => return true; _ => return false; } }
-            And       => { match tok { And => return true; _ => return false; } }
-            EqEq      => { match tok { EqEq => return true; _ => return false; } }
-            BangEq    => { match tok { BangEq => return true; _ => return false; } }
-            Lt        => { match tok { Lt => return true; _ => return false; } }
-            Gt        => { match tok { Gt => return true; _ => return false; } }
-            LtEq      => { match tok { LtEq => return true; _ => return false; } }
-            GtEq      => { match tok { GtEq => return true; _ => return false; } }
-            Plus      => { match tok { Plus => return true; _ => return false; } }
-            Minus     => { match tok { Minus => return true; _ => return false; } }
-            Star      => { match tok { Star => return true; _ => return false; } }
-            Slash     => { match tok { Slash => return true; _ => return false; } }
-            Percent   => { match tok { Percent => return true; _ => return false; } }
-            _         => return false;
+            Pipe      => { match tok { Pipe => return true
+            _ => return false } }
+            Comma     => { match tok { Comma => return true
+            _ => return false } }
+            AltOp     => { match tok { AltOp => return true
+            _ => return false } }
+            Or        => { match tok { Or => return true
+            _ => return false } }
+            And       => { match tok { And => return true
+            _ => return false } }
+            EqEq      => { match tok { EqEq => return true
+            _ => return false } }
+            BangEq    => { match tok { BangEq => return true
+            _ => return false } }
+            Lt        => { match tok { Lt => return true
+            _ => return false } }
+            Gt        => { match tok { Gt => return true
+            _ => return false } }
+            LtEq      => { match tok { LtEq => return true
+            _ => return false } }
+            GtEq      => { match tok { GtEq => return true
+            _ => return false } }
+            Plus      => { match tok { Plus => return true
+            _ => return false } }
+            Minus     => { match tok { Minus => return true
+            _ => return false } }
+            Star      => { match tok { Star => return true
+            _ => return false } }
+            Slash     => { match tok { Slash => return true
+            _ => return false } }
+            Percent   => { match tok { Percent => return true
+            _ => return false } }
+            _         => return false
         }
     }
 
     fn parseTopLevel() -> Filter
     {
-        var defs: List<Filter> = [];
+        var defs: List<Filter> = []
         loop
         {
             match this.peek()
             {
                 Def =>
                 {
-                    let d = this.parseDef();
-                    defs.push(d);
-                    match this.peek() { Semicolon => { this.consume(); } _ => {} }
+                    let d = this.parseDef()
+                    defs.push(d)
+                    match this.peek() { Semicolon => { this.consume() } _ => {} }
                 }
-                EOF => break;
-                _   => break;
+                EOF => break
+                _   => break
             }
         }
-        let body = this.parseComma();
-        if (defs.len() == 0 ){ return body; }
-        var result = body;
-        var i = defs.len() - 1;
+        let body = this.parseComma()
+        if (defs.len() == 0 ){ return body }
+        var result = body
+        var i = defs.len() - 1
         while i >= 0
         {
             match defs[i]
             {
                 Def(name, args, defBody) =>
                 {
-                    result = Filter::Pipe(Filter::Def(name, args, defBody), result);
+                    result = Filter::Pipe(Filter::Def(name, args, defBody), result)
                 }
                 _ => {}
             }
-            i = i - 1;
+            i = i - 1
         }
-        return result;
+        return result
     }
 
     fn parseDef() -> Filter
     {
-        this.consume();
-        var name = "";
-        match this.consume() { Ident(n) => { name = n; } _ => { name = "?"; } }
-        var args: List<String> = [];
+        this.consume()
+        var name = ""
+        match this.consume() { Ident(n) => { name = n } _ => { name = "?" } }
+        var args: List<String> = []
         match this.peek()
         {
             LParen =>
             {
-                this.consume();
+                this.consume()
                 loop
                 {
                     match this.consume()
                     {
-                        VarName(a) => { args.push(a); }
-                        Ident(a)   => { args.push(a); }
+                        VarName(a) => { args.push(a) }
+                        Ident(a)   => { args.push(a) }
                         _          => {}
                     }
                     match this.peek()
                     {
-                        Semicolon => { this.consume(); }
-                        RParen    => { this.consume(); break; }
-                        _         => break;
+                        Semicolon => { this.consume() }
+                        RParen    => { this.consume()
+                        break }
+                        _         => break
                     }
                 }
             }
             _ => {}
         }
-        match this.peek() { Colon => { this.consume(); } _ => {} }
-        let body = this.parseComma();
-        return Filter::Def(name, args, body);
+        match this.peek() { Colon => { this.consume() } _ => {} }
+        let body = this.parseComma()
+        return Filter::Def(name, args, body)
     }
 
     // Top-Level-Einstieg. Wie jq: Pipe bindet am schwächsten, Komma enger —
@@ -135,168 +152,194 @@ class FilterParser
     // weiterhin den vollständigen Ausdruck parsen.
     fn parseComma() -> Filter
     {
-        var left = this.parseCommaChain();
+        var left = this.parseCommaChain()
         while this.isPeek(FilterToken::Pipe)
         {
-            this.consume();
-            let right = this.parseCommaChain();
-            left = Filter::Pipe(left, right);
+            this.consume()
+            let right = this.parseCommaChain()
+            left = Filter::Pipe(left, right)
         }
-        return left;
+        return left
     }
 
     fn parseCommaChain() -> Filter
     {
-        var left = this.parseAs();
+        var left = this.parseAs()
         while this.isPeek(FilterToken::Comma)
         {
-            this.consume();
-            let right = this.parseAs();
-            left = Filter::Comma(left, right);
+            this.consume()
+            let right = this.parseAs()
+            left = Filter::Comma(left, right)
         }
-        return left;
+        return left
     }
 
     // Pipe-Kette ohne Komma — für Objekt-Werte ({k: f|g, ...}),
     // wo das Komma Einträge trennt
     fn parsePipe() -> Filter
     {
-        var left = this.parseAs();
+        var left = this.parseAs()
         while this.isPeek(FilterToken::Pipe)
         {
-            this.consume();
-            let right = this.parseAs();
-            left = Filter::Pipe(left, right);
+            this.consume()
+            let right = this.parseAs()
+            left = Filter::Pipe(left, right)
         }
-        return left;
+        return left
     }
 
     fn parseAs() -> Filter
     {
-        let left = this.parseAlternative();
+        let left = this.parseAlternative()
         match this.peek()
         {
             As =>
             {
-                this.consume();
-                var varName = "";
+                this.consume()
+                var varName = ""
                 match this.consume()
                 {
-                    VarName(n) => { varName = n; }
-                    _          => { varName = "?"; }
+                    VarName(n) => { varName = n }
+                    _          => { varName = "?" }
                 }
-                match this.peek() { Pipe => { this.consume(); } _ => {} }
+                match this.peek() { Pipe => { this.consume() } _ => {} }
                 // Der as-Body erstreckt sich wie in jq über den Rest des Ausdrucks
-                let body = this.parseComma();
-                return Filter::AsPattern(left, varName, body);
+                let body = this.parseComma()
+                return Filter::AsPattern(left, varName, body)
             }
-            _ => return left;
+            _ => return left
         }
-        return left;
+        return left
     }
 
     fn parseAlternative() -> Filter
     {
-        var left = this.parseOr();
+        var left = this.parseOr()
         while this.isPeek(FilterToken::AltOp)
         {
-            this.consume();
-            let right = this.parseOr();
-            left = Filter::Alternative(left, right);
+            this.consume()
+            let right = this.parseOr()
+            left = Filter::Alternative(left, right)
         }
-        return left;
+        return left
     }
 
     fn parseOr() -> Filter
     {
-        var left = this.parseAnd();
+        var left = this.parseAnd()
         while this.isPeek(FilterToken::Or)
         {
-            this.consume();
-            let right = this.parseAnd();
-            left = Filter::Or(left, right);
+            this.consume()
+            let right = this.parseAnd()
+            left = Filter::Or(left, right)
         }
-        return left;
+        return left
     }
 
     fn parseAnd() -> Filter
     {
-        var left = this.parseNot();
+        var left = this.parseNot()
         while this.isPeek(FilterToken::And)
         {
-            this.consume();
-            let right = this.parseNot();
-            left = Filter::And(left, right);
+            this.consume()
+            let right = this.parseNot()
+            left = Filter::And(left, right)
         }
-        return left;
+        return left
     }
 
     fn parseNot() -> Filter
     {
         match this.peek()
         {
-            Not => { this.consume(); return Filter::FunctionCall("not", [this.parseComparison()]); }
-            _   => return this.parseComparison();
+            Not => { this.consume()
+            return Filter::FunctionCall("not", [this.parseComparison()]) }
+            _   => return this.parseComparison()
         }
-        return Filter::LiteralNull;
+        return Filter::LiteralNull
     }
 
     fn parseComparison() -> Filter
     {
-        var left = this.parseAddSub();
+        var left = this.parseAddSub()
         loop
         {
             match this.peek()
             {
-                EqEq        => { this.consume(); left = Filter::Equals(left, this.parseAddSub()); }
-                BangEq      => { this.consume(); left = Filter::NotEquals(left, this.parseAddSub()); }
-                Lt          => { this.consume(); left = Filter::LessThan(left, this.parseAddSub()); }
-                Gt          => { this.consume(); left = Filter::GreaterThan(left, this.parseAddSub()); }
-                LtEq        => { this.consume(); left = Filter::LessThanOrEqual(left, this.parseAddSub()); }
-                GtEq        => { this.consume(); left = Filter::GreaterThanOrEqual(left, this.parseAddSub()); }
-                Assign      => { this.consume(); return Filter::SetPath(left, this.parseAlternative()); }
-                UpdateAssign => { this.consume(); return Filter::UpdatePath(left, this.parseAlternative()); }
-                PlusAssign  => { this.consume(); let rhs = this.parseAlternative(); return Filter::UpdatePath(left, Filter::Add(Filter::Identity, rhs)); }
-                MinusAssign => { this.consume(); let rhs = this.parseAlternative(); return Filter::UpdatePath(left, Filter::Subtract(Filter::Identity, rhs)); }
-                MulAssign   => { this.consume(); let rhs = this.parseAlternative(); return Filter::UpdatePath(left, Filter::Multiply(Filter::Identity, rhs)); }
-                DivAssign   => { this.consume(); let rhs = this.parseAlternative(); return Filter::UpdatePath(left, Filter::Divide(Filter::Identity, rhs)); }
-                ModAssign   => { this.consume(); let rhs = this.parseAlternative(); return Filter::UpdatePath(left, Filter::Modulo(Filter::Identity, rhs)); }
-                AltAssign   => { this.consume(); let rhs = this.parseAlternative(); return Filter::UpdatePath(left, Filter::Alternative(Filter::Identity, rhs)); }
-                _           => break;
+                EqEq        => { this.consume()
+                left = Filter::Equals(left, this.parseAddSub()) }
+                BangEq      => { this.consume()
+                left = Filter::NotEquals(left, this.parseAddSub()) }
+                Lt          => { this.consume()
+                left = Filter::LessThan(left, this.parseAddSub()) }
+                Gt          => { this.consume()
+                left = Filter::GreaterThan(left, this.parseAddSub()) }
+                LtEq        => { this.consume()
+                left = Filter::LessThanOrEqual(left, this.parseAddSub()) }
+                GtEq        => { this.consume()
+                left = Filter::GreaterThanOrEqual(left, this.parseAddSub()) }
+                Assign      => { this.consume()
+                return Filter::SetPath(left, this.parseAlternative()) }
+                UpdateAssign => { this.consume()
+                return Filter::UpdatePath(left, this.parseAlternative()) }
+                PlusAssign  => { this.consume()
+                let rhs = this.parseAlternative()
+                return Filter::UpdatePath(left, Filter::Add(Filter::Identity, rhs)) }
+                MinusAssign => { this.consume()
+                let rhs = this.parseAlternative()
+                return Filter::UpdatePath(left, Filter::Subtract(Filter::Identity, rhs)) }
+                MulAssign   => { this.consume()
+                let rhs = this.parseAlternative()
+                return Filter::UpdatePath(left, Filter::Multiply(Filter::Identity, rhs)) }
+                DivAssign   => { this.consume()
+                let rhs = this.parseAlternative()
+                return Filter::UpdatePath(left, Filter::Divide(Filter::Identity, rhs)) }
+                ModAssign   => { this.consume()
+                let rhs = this.parseAlternative()
+                return Filter::UpdatePath(left, Filter::Modulo(Filter::Identity, rhs)) }
+                AltAssign   => { this.consume()
+                let rhs = this.parseAlternative()
+                return Filter::UpdatePath(left, Filter::Alternative(Filter::Identity, rhs)) }
+                _           => break
             }
         }
-        return left;
+        return left
     }
 
     fn parseAddSub() -> Filter
     {
-        var left = this.parseMulDiv();
+        var left = this.parseMulDiv()
         loop
         {
             match this.peek()
             {
-                Plus  => { this.consume(); left = Filter::Add(left, this.parseMulDiv()); }
-                Minus => { this.consume(); left = Filter::Subtract(left, this.parseMulDiv()); }
-                _     => break;
+                Plus  => { this.consume()
+                left = Filter::Add(left, this.parseMulDiv()) }
+                Minus => { this.consume()
+                left = Filter::Subtract(left, this.parseMulDiv()) }
+                _     => break
             }
         }
-        return left;
+        return left
     }
 
     fn parseMulDiv() -> Filter
     {
-        var left = this.parseUnary();
+        var left = this.parseUnary()
         loop
         {
             match this.peek()
             {
-                Star    => { this.consume(); left = Filter::Multiply(left, this.parseUnary()); }
-                Slash   => { this.consume(); left = Filter::Divide(left, this.parseUnary()); }
-                Percent => { this.consume(); left = Filter::Modulo(left, this.parseUnary()); }
-                _       => break;
+                Star    => { this.consume()
+                left = Filter::Multiply(left, this.parseUnary()) }
+                Slash   => { this.consume()
+                left = Filter::Divide(left, this.parseUnary()) }
+                Percent => { this.consume()
+                left = Filter::Modulo(left, this.parseUnary()) }
+                _       => break
             }
         }
-        return left;
+        return left
     }
 
     fn parseUnary() -> Filter
@@ -305,26 +348,26 @@ class FilterParser
         {
             Minus =>
             {
-                this.consume();
-                let inner = this.parsePostfixChain(this.parseAtom());
-                return Filter::Subtract(Filter::LiteralInt(0), inner);
+                this.consume()
+                let inner = this.parsePostfixChain(this.parseAtom())
+                return Filter::Subtract(Filter::LiteralInt(0), inner)
             }
-            _ => return this.parsePostfixChain(this.parseAtom());
+            _ => return this.parsePostfixChain(this.parseAtom())
         }
-        return Filter::LiteralNull;
+        return Filter::LiteralNull
     }
 
     fn parsePostfixChain(inner: Filter) -> Filter
     {
-        var result = inner;
+        var result = inner
         loop
         {
             match this.peek()
             {
                 Question =>
                 {
-                    this.consume();
-                    result = Filter::Optional(result);
+                    this.consume()
+                    result = Filter::Optional(result)
                 }
                 Dot =>
                 {
@@ -332,7 +375,7 @@ class FilterParser
                     {
                         Ident(_) =>
                         {
-                            this.consume();
+                            this.consume()
                             match this.consume()
                             {
                                 Ident(field) =>
@@ -341,10 +384,10 @@ class FilterParser
                                     {
                                         Question =>
                                         {
-                                            this.consume();
-                                            result = Filter::Pipe(result, Filter::OptionalField(field));
+                                            this.consume()
+                                            result = Filter::Pipe(result, Filter::OptionalField(field))
                                         }
-                                        _ => result = Filter::Pipe(result, Filter::Field(field));
+                                        _ => result = Filter::Pipe(result, Filter::Field(field))
                                     }
                                 }
                                 _ => {}
@@ -352,219 +395,225 @@ class FilterParser
                         }
                         LBracket =>
                         {
-                            this.consume();
-                            result = Filter::Pipe(result, this.parseIndexer());
+                            this.consume()
+                            result = Filter::Pipe(result, this.parseIndexer())
                         }
-                        _ => break;
+                        _ => break
                     }
                 }
                 LBracket =>
                 {
-                    result = Filter::Pipe(result, this.parseIndexer());
+                    result = Filter::Pipe(result, this.parseIndexer())
                 }
-                _ => break;
+                _ => break
             }
         }
-        return result;
+        return result
     }
 
     fn parseIndexer() -> Filter
     {
-        this.consume();
-        var result: Filter = Filter::LiteralNull;
-        var done = false;
+        this.consume()
+        var result: Filter = Filter::LiteralNull
+        var done = false
 
         // Dispatch on first token
         match this.peek()
         {
             RBracket =>
             {
-                this.consume();
+                this.consume()
                 match this.peek()
                 {
-                    Question => { this.consume(); result = Filter::OptionalIterator; done = true; }
-                    _        => { result = Filter::IterEach; done = true; }
+                    Question => { this.consume()
+                    result = Filter::OptionalIterator
+                    done = true }
+                    _        => { result = Filter::IterEach
+                    done = true }
                 }
             }
             IntLit(n) =>
             {
-                this.consume();
+                this.consume()
                 match this.peek()
                 {
                     Colon =>
                     {
-                        this.consume();
+                        this.consume()
                         match this.peek()
                         {
                             IntLit(m) =>
                             {
-                                this.consume();
-                                this.consume();
-                                result = Filter::SliceAccess(n, m, true, true);
-                                done = true;
+                                this.consume()
+                                this.consume()
+                                result = Filter::SliceAccess(n, m, true, true)
+                                done = true
                             }
                             Minus =>
                             {
-                                this.consume();
+                                this.consume()
                                 match this.consume()
                                 {
                                     IntLit(m) =>
                                     {
-                                        this.consume();
-                                        result = Filter::SliceAccess(n, 0 - m, true, true);
-                                        done = true;
+                                        this.consume()
+                                        result = Filter::SliceAccess(n, 0 - m, true, true)
+                                        done = true
                                     }
                                     _ =>
                                     {
-                                        result = Filter::SliceAccess(n, 0, true, false);
-                                        done = true;
+                                        result = Filter::SliceAccess(n, 0, true, false)
+                                        done = true
                                     }
                                 }
                             }
                             RBracket =>
                             {
-                                this.consume();
-                                result = Filter::SliceAccess(n, 0, true, false);
-                                done = true;
+                                this.consume()
+                                result = Filter::SliceAccess(n, 0, true, false)
+                                done = true
                             }
                             _ =>
                             {
-                                this.consume();
-                                result = Filter::IndexAccess(n);
-                                done = true;
+                                this.consume()
+                                result = Filter::IndexAccess(n)
+                                done = true
                             }
                         }
                     }
                     RBracket =>
                     {
-                        this.consume();
-                        result = Filter::IndexAccess(n);
-                        done = true;
+                        this.consume()
+                        result = Filter::IndexAccess(n)
+                        done = true
                     }
                     _ =>
                     {
-                        this.consume();
-                        result = Filter::IndexAccess(n);
-                        done = true;
+                        this.consume()
+                        result = Filter::IndexAccess(n)
+                        done = true
                     }
                 }
             }
             Minus =>
             {
-                this.consume();
+                this.consume()
                 match this.peek()
                 {
                     IntLit(n) =>
                     {
-                        this.consume();
+                        this.consume()
                         match this.peek()
                         {
                             Colon =>
                             {
-                                this.consume();
+                                this.consume()
                                 match this.peek()
                                 {
                                     IntLit(m) =>
                                     {
-                                        this.consume();
-                                        this.consume();
-                                        result = Filter::SliceAccess(0 - n, m, true, true);
-                                        done = true;
+                                        this.consume()
+                                        this.consume()
+                                        result = Filter::SliceAccess(0 - n, m, true, true)
+                                        done = true
                                     }
                                     Minus =>
                                     {
-                                        this.consume();
+                                        this.consume()
                                         match this.consume()
                                         {
                                             IntLit(m) =>
                                             {
-                                                this.consume();
-                                                result = Filter::SliceAccess(0 - n, 0 - m, true, true);
-                                                done = true;
+                                                this.consume()
+                                                result = Filter::SliceAccess(0 - n, 0 - m, true, true)
+                                                done = true
                                             }
-                                            _ => { result = Filter::SliceAccess(0 - n, 0, true, false); done = true; }
+                                            _ => { result = Filter::SliceAccess(0 - n, 0, true, false)
+                                            done = true }
                                         }
                                     }
                                     RBracket =>
                                     {
-                                        this.consume();
-                                        result = Filter::SliceAccess(0 - n, 0, true, false);
-                                        done = true;
+                                        this.consume()
+                                        result = Filter::SliceAccess(0 - n, 0, true, false)
+                                        done = true
                                     }
                                     _ =>
                                     {
-                                        this.consume();
-                                        result = Filter::SliceAccess(0 - n, 0, true, false);
-                                        done = true;
+                                        this.consume()
+                                        result = Filter::SliceAccess(0 - n, 0, true, false)
+                                        done = true
                                     }
                                 }
                             }
                             RBracket =>
                             {
-                                this.consume();
-                                result = Filter::IndexAccess(0 - n);
-                                done = true;
+                                this.consume()
+                                result = Filter::IndexAccess(0 - n)
+                                done = true
                             }
                             _ =>
                             {
-                                this.consume();
-                                result = Filter::IndexAccess(0 - n);
-                                done = true;
+                                this.consume()
+                                result = Filter::IndexAccess(0 - n)
+                                done = true
                             }
                         }
                     }
                     _ =>
                     {
-                        let expr = this.parseComma();
-                        this.consume();
-                        result = expr;
-                        done = true;
+                        let expr = this.parseComma()
+                        this.consume()
+                        result = expr
+                        done = true
                     }
                 }
             }
             Colon =>
             {
-                this.consume();
+                this.consume()
                 match this.peek()
                 {
                     IntLit(m) =>
                     {
-                        this.consume();
-                        this.consume();
-                        result = Filter::SliceAccess(0, m, false, true);
-                        done = true;
+                        this.consume()
+                        this.consume()
+                        result = Filter::SliceAccess(0, m, false, true)
+                        done = true
                     }
                     Minus =>
                     {
-                        this.consume();
+                        this.consume()
                         match this.consume()
                         {
                             IntLit(m) =>
                             {
-                                this.consume();
-                                result = Filter::SliceAccess(0, 0 - m, false, true);
-                                done = true;
+                                this.consume()
+                                result = Filter::SliceAccess(0, 0 - m, false, true)
+                                done = true
                             }
-                            _ => { this.consume(); result = Filter::IterEach; done = true; }
+                            _ => { this.consume()
+                            result = Filter::IterEach
+                            done = true }
                         }
                     }
                     _ =>
                     {
-                        this.consume();
-                        result = Filter::IterEach;
-                        done = true;
+                        this.consume()
+                        result = Filter::IterEach
+                        done = true
                     }
                 }
             }
             _ =>
             {
-                let expr = this.parseComma();
-                this.consume();
-                result = expr;
-                done = true;
+                let expr = this.parseComma()
+                this.consume()
+                result = expr
+                done = true
             }
         }
-        return result;
+        return result
     }
 
     fn parseAtom() -> Filter
@@ -573,314 +622,322 @@ class FilterParser
         {
             Dot =>
             {
-                this.consume();
+                this.consume()
                 match this.peek()
                 {
                     Ident(field) =>
                     {
-                        this.consume();
+                        this.consume()
                         match this.peek()
                         {
-                            Question => { this.consume(); return Filter::OptionalField(field); }
-                            _        => return Filter::Field(field);
+                            Question => { this.consume()
+                            return Filter::OptionalField(field) }
+                            _        => return Filter::Field(field)
                         }
                     }
-                    LBracket => return this.parseIndexer();
-                    _        => return Filter::Identity;
+                    LBracket => return this.parseIndexer()
+                    _        => return Filter::Identity
                 }
             }
-            DotDot => { this.consume(); return Filter::RecursiveDescent; }
+            DotDot => { this.consume()
+            return Filter::RecursiveDescent }
             LParen =>
             {
-                this.consume();
-                let inner = this.parseComma();
+                this.consume()
+                let inner = this.parseComma()
                 match this.consume() { RParen => {} _ => {} }
-                return inner;
+                return inner
             }
             LBracket =>
             {
-                this.consume();
+                this.consume()
                 match this.peek()
                 {
-                    RBracket => { this.consume(); return Filter::ArrayConstruct(Filter::LiteralNull); }
+                    RBracket => { this.consume()
+                    return Filter::ArrayConstruct(Filter::LiteralNull) }
                     _ =>
                     {
-                        let inner = this.parseComma();
+                        let inner = this.parseComma()
                         match this.consume() { RBracket => {} _ => {} }
-                        return Filter::ArrayConstruct(inner);
+                        return Filter::ArrayConstruct(inner)
                     }
                 }
             }
-            LBrace => return this.parseObjectConstruct();
-            If     => return this.parseIfThenElse();
-            Try    => return this.parseTryCatch();
-            Reduce => return this.parseReduce();
-            Foreach => return this.parseForeach();
+            LBrace => return this.parseObjectConstruct()
+            If     => return this.parseIfThenElse()
+            Try    => return this.parseTryCatch()
+            Reduce => return this.parseReduce()
+            Foreach => return this.parseForeach()
             Label  =>
             {
-                this.consume();
-                var name = "";
-                match this.consume() { LabelName(n) => { name = n; } VarName(n) => { name = n; } _ => {} }
+                this.consume()
+                var name = ""
+                match this.consume() { LabelName(n) => { name = n } VarName(n) => { name = n } _ => {} }
                 match this.consume() { Pipe => {} _ => {} }
-                let body = this.parseComma();
-                return Filter::LabelBind(name, body);
+                let body = this.parseComma()
+                return Filter::LabelBind(name, body)
             }
             Break =>
             {
-                this.consume();
-                var name = "";
-                match this.consume() { LabelName(n) => { name = n; } VarName(n) => { name = n; } _ => {} }
-                return Filter::Break(name);
+                this.consume()
+                var name = ""
+                match this.consume() { LabelName(n) => { name = n } VarName(n) => { name = n } _ => {} }
+                return Filter::Break(name)
             }
             Def =>
             {
-                return this.parseDef();
+                return this.parseDef()
             }
             Not =>
             {
-                this.consume();
-                return Filter::Not;
+                this.consume()
+                return Filter::Not
             }
             VarName(name) =>
             {
-                this.consume();
-                if (name == "ENV" ){ return Filter::Env; }
-                return Filter::Variable(name);
+                this.consume()
+                if (name == "ENV" ){ return Filter::Env }
+                return Filter::Variable(name)
             }
             Format(fmt) =>
             {
-                this.consume();
+                this.consume()
                 match this.peek()
                 {
-                    StrLit(_)     => { let inner = this.parseAtom(); return Filter::Format(fmt, true, inner); }
-                    InterpStr(_)  => { let inner = this.parseAtom(); return Filter::Format(fmt, true, inner); }
-                    _             => return Filter::Format(fmt, false, Filter::Identity);
+                    StrLit(_)     => { let inner = this.parseAtom()
+                    return Filter::Format(fmt, true, inner) }
+                    InterpStr(_)  => { let inner = this.parseAtom()
+                    return Filter::Format(fmt, true, inner) }
+                    _             => return Filter::Format(fmt, false, Filter::Identity)
                 }
             }
             StrLit(s) =>
             {
-                this.consume();
-                if (s == "null"  ){ return Filter::LiteralNull; }
-                if (s == "true"  ){ return Filter::LiteralBool(true); }
-                if (s == "false" ){ return Filter::LiteralBool(false); }
-                return Filter::LiteralStr(s);
+                this.consume()
+                if (s == "null"  ){ return Filter::LiteralNull }
+                if (s == "true"  ){ return Filter::LiteralBool(true) }
+                if (s == "false" ){ return Filter::LiteralBool(false) }
+                return Filter::LiteralStr(s)
             }
             InterpStr(parts) =>
             {
-                this.consume();
-                return Filter::StringInterp(parts);
+                this.consume()
+                return Filter::StringInterp(parts)
             }
             IntLit(n) =>
             {
-                this.consume();
-                return Filter::LiteralInt(n);
+                this.consume()
+                return Filter::LiteralInt(n)
             }
             FloatLit(s) =>
             {
-                this.consume();
-                return Filter::LiteralFloat(s);
+                this.consume()
+                return Filter::LiteralFloat(s)
             }
             Ident(name) =>
             {
-                this.consume();
+                this.consume()
                 match this.peek()
                 {
                     LParen =>
                     {
-                        this.consume();
-                        var args: List<Filter> = [];
+                        this.consume()
+                        var args: List<Filter> = []
                         match this.peek()
                         {
-                            RParen => { this.consume(); }
+                            RParen => { this.consume() }
                             _ =>
                             {
                                 loop
                                 {
-                                    args.push(this.parseComma());
+                                    args.push(this.parseComma())
                                     match this.peek()
                                     {
-                                        Semicolon => { this.consume(); }
-                                        RParen    => { this.consume(); break; }
-                                        _         => break;
+                                        Semicolon => { this.consume() }
+                                        RParen    => { this.consume()
+                                        break }
+                                        _         => break
                                     }
                                 }
                             }
                         }
-                        return Filter::FunctionCall(name, args);
+                        return Filter::FunctionCall(name, args)
                     }
-                    _ => return Filter::FunctionCall(name, []);
+                    _ => return Filter::FunctionCall(name, [])
                 }
             }
-            _ => return Filter::LiteralNull;
+            _ => return Filter::LiteralNull
         }
-        return Filter::LiteralNull;
+        return Filter::LiteralNull
     }
 
     fn parseObjectConstruct() -> Filter
     {
-        this.consume();
-        var entries: List<ObjEntry> = [];
+        this.consume()
+        var entries: List<ObjEntry> = []
 
         match this.peek()
         {
-            RBrace => { this.consume(); return Filter::ObjectConstruct(entries); }
+            RBrace => { this.consume()
+            return Filter::ObjectConstruct(entries) }
             _ => {}
         }
 
         loop
         {
-            var key: ObjKey = ObjKey::Literal("?");
-            var valueFilter: Filter = Filter::Identity;
+            var key: ObjKey = ObjKey::Literal("?")
+            var valueFilter: Filter = Filter::Identity
 
             match this.peek()
             {
                 Ident(field) =>
                 {
-                    this.consume();
+                    this.consume()
                     match this.peek()
                     {
                         Colon =>
                         {
-                            this.consume();
-                            key = ObjKey::Literal(field);
-                            valueFilter = this.parsePipe();
+                            this.consume()
+                            key = ObjKey::Literal(field)
+                            valueFilter = this.parsePipe()
                         }
                         _ =>
                         {
-                            key = ObjKey::Literal(field);
-                            valueFilter = Filter::Field(field);
+                            key = ObjKey::Literal(field)
+                            valueFilter = Filter::Field(field)
                         }
                     }
                 }
                 StrLit(s) =>
                 {
-                    this.consume();
+                    this.consume()
                     match this.peek()
                     {
                         Colon =>
                         {
-                            this.consume();
-                            key = ObjKey::Literal(s);
-                            valueFilter = this.parsePipe();
+                            this.consume()
+                            key = ObjKey::Literal(s)
+                            valueFilter = this.parsePipe()
                         }
                         _ =>
                         {
-                            key = ObjKey::Literal(s);
-                            valueFilter = Filter::Field(s);
+                            key = ObjKey::Literal(s)
+                            valueFilter = Filter::Field(s)
                         }
                     }
                 }
                 LParen =>
                 {
-                    this.consume();
-                    let keyExpr = this.parseComma();
+                    this.consume()
+                    let keyExpr = this.parseComma()
                     match this.consume() { RParen => {} _ => {} }
                     match this.consume() { Colon  => {} _ => {} }
-                    key = ObjKey::Computed(keyExpr);
-                    valueFilter = this.parsePipe();
+                    key = ObjKey::Computed(keyExpr)
+                    valueFilter = this.parsePipe()
                 }
                 _ =>
                 {
-                    this.consume();
+                    this.consume()
                 }
             }
 
-            entries.push(ObjEntry { keySpec: key, valFilter: valueFilter });
+            entries.push(ObjEntry { keySpec: key, valFilter: valueFilter })
 
             match this.peek()
             {
-                Comma  => { this.consume(); }
-                RBrace => { this.consume(); break; }
-                _      => break;
+                Comma  => { this.consume() }
+                RBrace => { this.consume()
+                break }
+                _      => break
             }
         }
 
-        return Filter::ObjectConstruct(entries);
+        return Filter::ObjectConstruct(entries)
     }
 
     fn parseIfThenElse() -> Filter
     {
-        this.consume();
-        let cond = this.parseComma();
+        this.consume()
+        let cond = this.parseComma()
         match this.consume() { Then => {} _ => {} }
-        let thenBranch = this.parseComma();
+        let thenBranch = this.parseComma()
         match this.peek()
         {
             Else =>
             {
-                this.consume();
-                let elseBranch = this.parseComma();
+                this.consume()
+                let elseBranch = this.parseComma()
                 match this.consume() { End => {} _ => {} }
-                return Filter::IfThenElse(cond, thenBranch, elseBranch);
+                return Filter::IfThenElse(cond, thenBranch, elseBranch)
             }
             Elif =>
             {
-                let elseBranch = this.parseIfThenElse();
-                return Filter::IfThenElse(cond, thenBranch, elseBranch);
+                let elseBranch = this.parseIfThenElse()
+                return Filter::IfThenElse(cond, thenBranch, elseBranch)
             }
             End =>
             {
-                this.consume();
-                return Filter::IfThenElse(cond, thenBranch, Filter::LiteralNull);
+                this.consume()
+                return Filter::IfThenElse(cond, thenBranch, Filter::LiteralNull)
             }
             _ =>
             {
-                return Filter::IfThenElse(cond, thenBranch, Filter::LiteralNull);
+                return Filter::IfThenElse(cond, thenBranch, Filter::LiteralNull)
             }
         }
-        return Filter::LiteralNull;
+        return Filter::LiteralNull
     }
 
     fn parseTryCatch() -> Filter
     {
-        this.consume();
-        let body = this.parsePostfixChain(this.parseAtom());
+        this.consume()
+        let body = this.parsePostfixChain(this.parseAtom())
         match this.peek()
         {
             Catch =>
             {
-                this.consume();
-                let handler = this.parsePostfixChain(this.parseAtom());
-                return Filter::TryCatchWith(body, handler);
+                this.consume()
+                let handler = this.parsePostfixChain(this.parseAtom())
+                return Filter::TryCatchWith(body, handler)
             }
-            _ => return Filter::TryOnly(body);
+            _ => return Filter::TryOnly(body)
         }
-        return Filter::LiteralNull;
+        return Filter::LiteralNull
     }
 
     fn parseReduce() -> Filter
     {
-        this.consume();
-        let gen = this.parseAlternative();
+        this.consume()
+        let gen = this.parseAlternative()
         match this.consume() { As => {} _ => {} }
-        var varName = "";
-        match this.consume() { VarName(n) => { varName = n; } _ => {} }
+        var varName = ""
+        match this.consume() { VarName(n) => { varName = n } _ => {} }
         match this.consume() { LParen => {} _ => {} }
-        let init = this.parseComma();
+        let init = this.parseComma()
         match this.consume() { Semicolon => {} _ => {} }
-        let body = this.parseComma();
+        let body = this.parseComma()
         match this.consume() { RParen => {} _ => {} }
-        return Filter::Reduce(gen, varName, init, body);
+        return Filter::Reduce(gen, varName, init, body)
     }
 
     fn parseForeach() -> Filter
     {
-        this.consume();
-        let gen = this.parseAlternative();
+        this.consume()
+        let gen = this.parseAlternative()
         match this.consume() { As => {} _ => {} }
-        var varName = "";
-        match this.consume() { VarName(n) => { varName = n; } _ => {} }
+        var varName = ""
+        match this.consume() { VarName(n) => { varName = n } _ => {} }
         match this.consume() { LParen => {} _ => {} }
-        let init = this.parseComma();
+        let init = this.parseComma()
         match this.consume() { Semicolon => {} _ => {} }
-        let body = this.parseComma();
-        var extracts: List<Filter> = [];
+        let body = this.parseComma()
+        var extracts: List<Filter> = []
         match this.peek()
         {
             Semicolon =>
             {
-                this.consume();
-                extracts.push(this.parseComma());
+                this.consume()
+                extracts.push(this.parseComma())
                 match this.consume() { RParen => {} _ => {} }
             }
             _ =>
@@ -888,22 +945,22 @@ class FilterParser
                 match this.consume() { RParen => {} _ => {} }
             }
         }
-        return Filter::Foreach(gen, varName, init, body, extracts);
+        return Filter::Foreach(gen, varName, init, body, extracts)
     }
 
     fnc parseExprStr(src: String) -> Filter
     {
-        let lexer = FilterLexer::new(src);
-        let tokens = lexer.tokenize();
-        var parser = FilterParser::new(tokens);
-        return parser.parseTopLevel();
+        let lexer = FilterLexer::new(src)
+        let tokens = lexer.tokenize()
+        var parser = FilterParser::new(tokens)
+        return parser.parseTopLevel()
     }
 
     fnc compile(src: String) -> Filter
     {
-        let lexer = FilterLexer::new(src);
-        let tokens = lexer.tokenize();
-        var parser = FilterParser::new(tokens);
-        return parser.parseTopLevel();
+        let lexer = FilterLexer::new(src)
+        let tokens = lexer.tokenize()
+        var parser = FilterParser::new(tokens)
+        return parser.parseTopLevel()
     }
 }

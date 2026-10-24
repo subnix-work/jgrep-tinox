@@ -1,10 +1,10 @@
-module jgrep.filter;
+module jgrep.filter
 
-import ObjKey;
-import Filter;
+import ObjKey
+import Filter
 
 class ObjEntry
 {
-    var keySpec: ObjKey;
-    var valFilter: Filter;
+    var keySpec: ObjKey
+    var valFilter: Filter
 }

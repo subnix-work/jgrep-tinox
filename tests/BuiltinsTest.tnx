@@ -1,5 +1,5 @@
-import jgrep.NdjsonReader;
-import BuiltinsHelper;
+import jgrep.NdjsonReader
+import BuiltinsHelper
 
 // Tests für die 2026-07-05 nachgerüsteten Builtins:
 // sub/gsub/splits, label/break, gmtime/mktime, Mathe, Pfad-Maschinerie, Streaming
@@ -9,256 +9,256 @@ class BuiltinsTest
     @Test("gsub replaces all matches")
     fn testGsub() -> Bool
     {
-        return BuiltinsHelper::run("gsub(\" \"; \"_\")", "\"a b c\"") == "\"a_b_c\"";
+        return BuiltinsHelper::run("gsub(\" \"; \"_\")", "\"a b c\"") == "\"a_b_c\""
     }
 
     @Test("sub replaces first match only")
     fn testSub() -> Bool
     {
-        return BuiltinsHelper::run("sub(\" \"; \"_\")", "\"a b c\"") == "\"a_b c\"";
+        return BuiltinsHelper::run("sub(\" \"; \"_\")", "\"a b c\"") == "\"a_b c\""
     }
 
     @Test("gsub with named capture")
     fn testGsubNamedCapture() -> Bool
     {
-        return BuiltinsHelper::run("gsub(\"(?<x>o)\"; \"[\\(.x)]\")", "\"hello world\"") == "\"hell[o] w[o]rld\"";
+        return BuiltinsHelper::run("gsub(\"(?<x>o)\"; \"[\\(.x)]\")", "\"hello world\"") == "\"hell[o] w[o]rld\""
     }
 
     @Test("gsub case-insensitive flag")
     fn testGsubIcase() -> Bool
     {
-        return BuiltinsHelper::run("gsub(\"foo\"; \"X\"; \"i\")", "\"FOO bar\"") == "\"X bar\"";
+        return BuiltinsHelper::run("gsub(\"foo\"; \"X\"; \"i\")", "\"FOO bar\"") == "\"X bar\""
     }
 
     @Test("splits streams parts")
     fn testSplits() -> Bool
     {
-        return BuiltinsHelper::run("[splits(\"[0-9]+\")]", "\"a1b22c\"") == "[\"a\",\"b\",\"c\"]";
+        return BuiltinsHelper::run("[splits(\"[0-9]+\")]", "\"a1b22c\"") == "[\"a\",\"b\",\"c\"]"
     }
 
     @Test("split with regex and flags")
     fn testSplitRegex() -> Bool
     {
-        return BuiltinsHelper::run("split(\"[0-9]+\"; \"\")", "\"a1b22c\"") == "[\"a\",\"b\",\"c\"]";
+        return BuiltinsHelper::run("split(\"[0-9]+\"; \"\")", "\"a1b22c\"") == "[\"a\",\"b\",\"c\"]"
     }
 
     @Test("capture builds named group object")
     fn testCapture() -> Bool
     {
-        return BuiltinsHelper::run("capture(\"(?<y>[0-9]+)-(?<m>[0-9]+)\")", "\"2024-07\"") == "{\"m\":\"07\",\"y\":\"2024\"}";
+        return BuiltinsHelper::run("capture(\"(?<y>[0-9]+)-(?<m>[0-9]+)\")", "\"2024-07\"") == "{\"m\":\"07\",\"y\":\"2024\"}"
     }
 
     @Test("scan emits all matches")
     fn testScan() -> Bool
     {
-        return BuiltinsHelper::run("[scan(\"ba.\")]", "\"foo bar baz\"") == "[\"bar\",\"baz\"]";
+        return BuiltinsHelper::run("[scan(\"ba.\")]", "\"foo bar baz\"") == "[\"bar\",\"baz\"]"
     }
 
     @Test("match object has offset and captures")
     fn testMatchObject() -> Bool
     {
-        return BuiltinsHelper::run("match(\"[0-9]+\") | .offset, .string", "\"ab123\"") == "2|\"123\"";
+        return BuiltinsHelper::run("match(\"[0-9]+\") | .offset, .string", "\"ab123\"") == "2|\"123\""
     }
 
     @Test("test with icase flag")
     fn testTestIcase() -> Bool
     {
-        return BuiltinsHelper::run("test(\"HELLO\"; \"i\")", "\"hello\"") == "true";
+        return BuiltinsHelper::run("test(\"HELLO\"; \"i\")", "\"hello\"") == "true"
     }
 
     @Test("label break stops stream")
     fn testLabelBreak() -> Bool
     {
-        return BuiltinsHelper::run("label $out | .[] | if . == 3 then break $out else . end", "[1,2,3,4]") == "1|2";
+        return BuiltinsHelper::run("label $out | .[] | if . == 3 then break $out else . end", "[1,2,3,4]") == "1|2"
     }
 
     @Test("break crossing array construct discards array")
     fn testBreakArrayConstruct() -> Bool
     {
-        return BuiltinsHelper::run("label $out | [1, 2, break $out]", "null") == "";
+        return BuiltinsHelper::run("label $out | [1, 2, break $out]", "null") == ""
     }
 
     @Test("break collects range prefix")
     fn testBreakRange() -> Bool
     {
-        return BuiltinsHelper::run("[label $out | range(10) | if . > 2 then break $out else . end]", "null") == "[0,1,2]";
+        return BuiltinsHelper::run("[label $out | range(10) | if . > 2 then break $out else . end]", "null") == "[0,1,2]"
     }
 
     @Test("gmtime epoch")
     fn testGmtimeEpoch() -> Bool
     {
-        return BuiltinsHelper::run("gmtime", "0") == "[1970,0,1,0,0,0,4,0]";
+        return BuiltinsHelper::run("gmtime", "0") == "[1970,0,1,0,0,0,4,0]"
     }
 
     @Test("gmtime mktime roundtrip")
     fn testGmtimeMktimeRoundtrip() -> Bool
     {
-        return BuiltinsHelper::run("gmtime | mktime", "1751673600") == "1751673600";
+        return BuiltinsHelper::run("gmtime | mktime", "1751673600") == "1751673600"
     }
 
     @Test("dateadd days")
     fn testDateadd() -> Bool
     {
-        return BuiltinsHelper::run("dateadd(\"days\"; 2)", "1000") == "173800";
+        return BuiltinsHelper::run("dateadd(\"days\"; 2)", "1000") == "173800"
     }
 
     @Test("log2 exact")
     fn testLog2() -> Bool
     {
-        return BuiltinsHelper::run("log2", "1024") == "10.0";
+        return BuiltinsHelper::run("log2", "1024") == "10.0"
     }
 
     @Test("exp10 exact")
     fn testExp10() -> Bool
     {
-        return BuiltinsHelper::run("exp10", "3") == "1000.0";
+        return BuiltinsHelper::run("exp10", "3") == "1000.0"
     }
 
     @Test("trunc toward zero")
     fn testTrunc() -> Bool
     {
-        return BuiltinsHelper::run("trunc", "-3.7") == "-3.0";
+        return BuiltinsHelper::run("trunc", "-3.7") == "-3.0"
     }
 
     @Test("tgamma factorial")
     fn testTgamma() -> Bool
     {
-        return BuiltinsHelper::run("tgamma", "5") == "24.0";
+        return BuiltinsHelper::run("tgamma", "5") == "24.0"
     }
 
     @Test("getpath walks nested value")
     fn testGetpath() -> Bool
     {
-        return BuiltinsHelper::run("getpath([\"a\",\"b\"])", "{\"a\":{\"b\":7}}") == "7";
+        return BuiltinsHelper::run("getpath([\"a\",\"b\"])", "{\"a\":{\"b\":7}}") == "7"
     }
 
     @Test("setpath creates missing containers")
     fn testSetpath() -> Bool
     {
-        return BuiltinsHelper::run("setpath([\"a\",\"b\"]; 42)", "{}") == "{\"a\":{\"b\":42}}";
+        return BuiltinsHelper::run("setpath([\"a\",\"b\"]; 42)", "{}") == "{\"a\":{\"b\":42}}"
     }
 
     @Test("delpaths removes multiple paths")
     fn testDelpaths() -> Bool
     {
-        return BuiltinsHelper::run("delpaths([[0],[2]])", "[1,2,3]") == "[2]";
+        return BuiltinsHelper::run("delpaths([[0],[2]])", "[1,2,3]") == "[2]"
     }
 
     @Test("del nested field")
     fn testDelNested() -> Bool
     {
-        return BuiltinsHelper::run("del(.x.y)", "{\"x\":{\"y\":1,\"z\":2}}") == "{\"x\":{\"z\":2}}";
+        return BuiltinsHelper::run("del(.x.y)", "{\"x\":{\"y\":1,\"z\":2}}") == "{\"x\":{\"z\":2}}"
     }
 
     @Test("del multiple array indices")
     fn testDelMultiIndex() -> Bool
     {
-        return BuiltinsHelper::run("del(.[1], .[2])", "[1,2,3,4]") == "[1,4]";
+        return BuiltinsHelper::run("del(.[1], .[2])", "[1,2,3,4]") == "[1,4]"
     }
 
     @Test("paths lists all paths")
     fn testPaths() -> Bool
     {
-        return BuiltinsHelper::run("[paths]", "{\"a\":{\"b\":7}}") == "[[\"a\"],[\"a\",\"b\"]]";
+        return BuiltinsHelper::run("[paths]", "{\"a\":{\"b\":7}}") == "[[\"a\"],[\"a\",\"b\"]]"
     }
 
     @Test("leaf_paths lists scalar paths")
     fn testLeafPaths() -> Bool
     {
-        return BuiltinsHelper::run("[leaf_paths]", "{\"a\":{\"b\":7},\"c\":1}") == "[[\"a\",\"b\"],[\"c\"]]";
+        return BuiltinsHelper::run("[leaf_paths]", "{\"a\":{\"b\":7},\"c\":1}") == "[[\"a\",\"b\"],[\"c\"]]"
     }
 
     @Test("tostream emits path leaf events")
     fn testTostream() -> Bool
     {
-        return BuiltinsHelper::run("[tostream]", "{\"a\":[1,2]}") == "[[[\"a\",0],1],[[\"a\",1],2],[[\"a\",1]],[[\"a\"]]]";
+        return BuiltinsHelper::run("[tostream]", "{\"a\":[1,2]}") == "[[[\"a\",0],1],[[\"a\",1],2],[[\"a\",1]],[[\"a\"]]]"
     }
 
     @Test("fromstream tostream roundtrip")
     fn testFromstreamRoundtrip() -> Bool
     {
-        return BuiltinsHelper::run("fromstream(tostream)", "{\"a\":[1,2],\"b\":\"x\"}") == "{\"a\":[1,2],\"b\":\"x\"}";
+        return BuiltinsHelper::run("fromstream(tostream)", "{\"a\":[1,2],\"b\":\"x\"}") == "{\"a\":[1,2],\"b\":\"x\"}"
     }
 
     @Test("truncate_stream drops path prefix")
     fn testTruncateStream() -> Bool
     {
-        return BuiltinsHelper::run("[1|truncate_stream([[0],1],[[1,0],2],[[1,0]],[[1]])]", "null") == "[[[0],2],[[0]]]";
+        return BuiltinsHelper::run("[1|truncate_stream([[0],1],[[1,0],2],[[1,0]],[[1]])]", "null") == "[[[0],2],[[0]]]"
     }
 
     @Test("loc variable")
     fn testLoc() -> Bool
     {
-        return BuiltinsHelper::run("$__loc__.line", "null") == "1";
+        return BuiltinsHelper::run("$__loc__.line", "null") == "1"
     }
 
     @Test("halt_error unknown-code passes through evaluator error")
     fn testModulemeta() -> Bool
     {
-        return BuiltinsHelper::run("modulemeta", "\"foo\"") == "ERROR:module not found: foo";
+        return BuiltinsHelper::run("modulemeta", "\"foo\"") == "ERROR:module not found: foo"
     }
 
     @Test("base32 encodes with padding")
     fn testBase32Encode() -> Bool
     {
-        if (BuiltinsHelper::run("@base32", "\"hi\"") != "\"NBUQ====\"" ){ return false; }
-        if (BuiltinsHelper::run("@base32", "\"hello\"") != "\"NBSWY3DP\"" ){ return false; }
-        if (BuiltinsHelper::run("@base32", "\"a\"") != "\"ME======\"" ){ return false; }
-        return BuiltinsHelper::run("@base32", "\"abcd\"") == "\"MFRGGZA=\"";
+        if (BuiltinsHelper::run("@base32", "\"hi\"") != "\"NBUQ====\"" ){ return false }
+        if (BuiltinsHelper::run("@base32", "\"hello\"") != "\"NBSWY3DP\"" ){ return false }
+        if (BuiltinsHelper::run("@base32", "\"a\"") != "\"ME======\"" ){ return false }
+        return BuiltinsHelper::run("@base32", "\"abcd\"") == "\"MFRGGZA=\""
     }
 
     @Test("base32d decodes")
     fn testBase32Decode() -> Bool
     {
-        if (BuiltinsHelper::run("@base32d", "\"NBSWY3DP\"") != "\"hello\"" ){ return false; }
-        return BuiltinsHelper::run("@base32d", "\"ME======\"") == "\"a\"";
+        if (BuiltinsHelper::run("@base32d", "\"NBSWY3DP\"") != "\"hello\"" ){ return false }
+        return BuiltinsHelper::run("@base32d", "\"ME======\"") == "\"a\""
     }
 
     @Test("base32 roundtrip")
     fn testBase32Roundtrip() -> Bool
     {
-        return BuiltinsHelper::run("@base32 | @base32d", "\"jgrep rocks!\"") == "\"jgrep rocks!\"";
+        return BuiltinsHelper::run("@base32 | @base32d", "\"jgrep rocks!\"") == "\"jgrep rocks!\""
     }
 
     @Test("flatten depth one keeps deeper nesting")
     fn testFlattenDepthOne() -> Bool
     {
-        return BuiltinsHelper::run("flatten(1)", "[[1,2],[3,[4]]]") == "[1,2,3,[4]]";
+        return BuiltinsHelper::run("flatten(1)", "[[1,2],[3,[4]]]") == "[1,2,3,[4]]"
     }
 
     @Test("flatten default flattens fully")
     fn testFlattenFull() -> Bool
     {
-        return BuiltinsHelper::run("flatten", "[[1,[2]],[3,[4,[5]]]]") == "[1,2,3,4,5]";
+        return BuiltinsHelper::run("flatten", "[[1,[2]],[3,[4,[5]]]]") == "[1,2,3,4,5]"
     }
 
     @Test("strptime returns broken down time")
     fn testStrptimeArray() -> Bool
     {
-        return BuiltinsHelper::run("strptime(\"%Y-%m-%d\")", "\"2024-01-15\"")
-            == "[2024,0,15,0,0,0,1,14]";
+        return BuiltinsHelper::run("strptime(\"%Y-%m-%d\")", "\"2024-01-15\"") ==
+            "[2024,0,15,0,0,0,1,14]"
     }
 
     @Test("strptime mktime roundtrip")
     fn testStrptimeMktime() -> Bool
     {
-        return BuiltinsHelper::run("strptime(\"%Y-%m-%dT%H:%M:%SZ\") | mktime", "\"2024-06-15T10:30:00Z\"")
-            == "1718447400";
+        return BuiltinsHelper::run("strptime(\"%Y-%m-%dT%H:%M:%SZ\") | mktime", "\"2024-06-15T10:30:00Z\"") ==
+            "1718447400"
     }
 
     @Test("strptime rejects mismatched input")
     fn testStrptimeMismatch() -> Bool
     {
-        return BuiltinsHelper::run("strptime(\"%Y-%m-%d\")", "\"nodate\"")
-            == "ERROR:date \"nodate\" does not match format \"%Y-%m-%d\"";
+        return BuiltinsHelper::run("strptime(\"%Y-%m-%d\")", "\"nodate\"") ==
+            "ERROR:date \"nodate\" does not match format \"%Y-%m-%d\""
     }
 
     @Test("ndjson recovery continues after bad line")
     fn testNdjsonRecoveryContinues() -> Bool
     {
-        let reader = NdjsonReader::fromString("{\"id\":1}\n{invalid}\n{\"id\":3}");
-        let docs = reader.readAll();
-        if (docs.len() != 2 ){ return false; }
-        return reader.errorCount == 1;
+        let reader = NdjsonReader::fromString("{\"id\":1}\n{invalid}\n{\"id\":3}")
+        let docs = reader.readAll()
+        if (docs.len() != 2 ){ return false }
+        return reader.errorCount == 1
     }
 }

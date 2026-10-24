@@ -1,17 +1,17 @@
-module jgrep.matcher;
+module jgrep.matcher
 
-import JsonValue;
+import JsonValue
 
 class MatchResult
 {
-    var values: List<JsonValue>;
-    var hadError: Bool;
-    var errorMsg: String;
+    var values: List<JsonValue>
+    var hadError: Bool
+    var errorMsg: String
 
     fnc new(values: List<JsonValue>, hadError: Bool, errorMsg: String) -> MatchResult
     {
-        return MatchResult { values: values, hadError: hadError, errorMsg: errorMsg };
+        return MatchResult { values: values, hadError: hadError, errorMsg: errorMsg }
     }
 
-    fn hasMatch() -> Bool { return this.values.len() > 0; }
+    fn hasMatch() -> Bool { return this.values.len() > 0 }
 }

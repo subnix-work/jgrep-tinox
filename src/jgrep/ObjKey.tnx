@@ -1,9 +1,9 @@
-module jgrep.filter;
+module jgrep.filter
 
-import Filter;
+import Filter
 
 enum ObjKey
 {
-    Literal(String);
-    Computed(Filter);
+    Literal(String)
+    Computed(Filter)
 }

@@ -1,55 +1,55 @@
-module jgrep.ndjson;
+module jgrep.ndjson
 
-import JsonValue;
-import JsonParser;
+import JsonValue
+import JsonParser
 
 class NdjsonReader
 {
-    var parser: JsonParser;
-    var errorCount: Int64;
+    var parser: JsonParser
+    var errorCount: Int64
 
     fnc fromFile(path: String) -> NdjsonReader
     {
-        let content = fileReadAllText(path);
-        return NdjsonReader::fromString(content);
+        let content = fileReadAllText(path)
+        return NdjsonReader::fromString(content)
     }
 
     fnc fromString(content: String) -> NdjsonReader
     {
-        return NdjsonReader { parser: JsonParser::new(content), errorCount: 0 };
+        return NdjsonReader { parser: JsonParser::new(content), errorCount: 0 }
     }
 
     fn hasNext() -> Bool
     {
         match this.parser.peek()
         {
-            EOF => return false;
-            _   => return true;
+            EOF => return false
+            _   => return true
         }
-        return false;
+        return false
     }
 
     fn tryParseNext() -> List<JsonValue>
     {
-        if (!this.hasNext() ){ return []; }
-        let doc = this.parser.parseValue();
+        if (!this.hasNext() ){ return [] }
+        let doc = this.parser.parseValue()
         if (this.parser.hasError
         ){
-            this.errorCount = this.errorCount + 1;
-            this.parser.recoverToNextLine();
-            return [];
+            this.errorCount = this.errorCount + 1
+            this.parser.recoverToNextLine()
+            return []
         }
-        return [doc];
+        return [doc]
     }
 
     fn readAll() -> List<JsonValue>
     {
-        var results: List<JsonValue> = [];
+        var results: List<JsonValue> = []
         while this.hasNext()
         {
-            let r = this.tryParseNext();
-            if (r.len() > 0 ){ results.push(r[0]); }
+            let r = this.tryParseNext()
+            if (r.len() > 0 ){ results.push(r[0]) }
         }
-        return results;
+        return results
     }
 }

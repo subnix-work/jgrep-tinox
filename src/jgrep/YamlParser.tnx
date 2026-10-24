@@ -1,180 +1,183 @@
-module jgrep.yaml_parser;
+module jgrep.yaml_parser
 
-import JsonValue;
-import YamlScalar;
-import YamlFlow;
-import YamlParseResult;
+import JsonValue
+import YamlScalar
+import YamlFlow
+import YamlParseResult
 
 class YamlParser
 {
-    var rawLines: List<String>;
-    var count: Int64;
-    var pos: Int64;
-    var hasError: Bool;
-    var errorMsg: String;
+    var rawLines: List<String>
+    var count: Int64
+    var pos: Int64
+    var hasError: Bool
+    var errorMsg: String
 
     fnc new(docLines: List<String>) -> YamlParser
     {
-        return YamlParser { rawLines: docLines, count: docLines.len(), pos: 0, hasError: false, errorMsg: "" };
+        return YamlParser { rawLines: docLines, count: docLines.len(), pos: 0, hasError: false, errorMsg: "" }
     }
 
     fnc splitRawLines(content: String) -> List<String>
     {
-        var lines: List<String> = [];
-        var cur = "";
-        var i: Int64 = 0;
+        var lines: List<String> = []
+        var cur = ""
+        var i: Int64 = 0
         while i < content.len()
         {
-            let c = content[i] as Int64;
-            if (c == 10 ){ lines.push(cur); cur = ""; }
+            let c = content[i] as Int64
+            if (c == 10 ){ lines.push(cur)
+            cur = "" }
             else if (c == 13 ){ }
-            else { cur = cur + content.charAt(i); }
-            i = i + 1;
+            else { cur = cur + content.charAt(i) }
+            i = i + 1
         }
-        if (cur.len() > 0 ){ lines.push(cur); }
-        return lines;
+        if (cur.len() > 0 ){ lines.push(cur) }
+        return lines
     }
 
     fnc indentOf(line: String) -> Int64
     {
-        var i: Int64 = 0;
-        while i < line.len() && (line[i] as Int64) == 32 { i = i + 1; }
-        return i;
+        var i: Int64 = 0
+        while i < line.len() && (line[i] as Int64) == 32 { i = i + 1 }
+        return i
     }
 
     fnc isBlankLine(line: String) -> Bool
     {
-        return line.trim().len() == 0;
+        return line.trim().len() == 0
     }
 
     fnc trimRight(s: String) -> String
     {
-        var n = s.len();
+        var n = s.len()
         while n > 0
         {
-            let c = s[n - 1] as Int64;
-            if (c == 32 || c == 9 ){ n = n - 1; }
-            else { break; }
+            let c = s[n - 1] as Int64
+            if (c == 32 || c == 9 ){ n = n - 1 }
+            else { break }
         }
-        return s.substring(0, n);
+        return s.substring(0, n)
     }
 
     fnc stripComment(text: String) -> String
     {
-        var inD = false;
-        var inS = false;
-        var cut: Int64 = -1;
-        var i: Int64 = 0;
+        var inD = false
+        var inS = false
+        var cut: Int64 = -1
+        var i: Int64 = 0
         while i < text.len()
         {
-            let c = text[i] as Int64;
+            let c = text[i] as Int64
             if (inD
             ){
-                if (c == 92 ){ i = i + 1; }
-                else if (c == 34 ){ inD = false; }
+                if (c == 92 ){ i = i + 1 }
+                else if (c == 34 ){ inD = false }
             }
             else if (inS
             ){
-                if (c == 39 ){ inS = false; }
+                if (c == 39 ){ inS = false }
             }
-            else if (c == 34 ){ inD = true; }
-            else if (c == 39 ){ inS = true; }
+            else if (c == 34 ){ inD = true }
+            else if (c == 39 ){ inS = true }
             else if (c == 35
             ){
-                if (i == 0 ){ cut = 0; break; }
-                let p = text[i - 1] as Int64;
-                if (p == 32 || p == 9 ){ cut = i; break; }
+                if (i == 0 ){ cut = 0
+                break }
+                let p = text[i - 1] as Int64
+                if (p == 32 || p == 9 ){ cut = i
+                break }
             }
-            i = i + 1;
+            i = i + 1
         }
-        var result = text;
-        if (cut >= 0 ){ result = text.substring(0, cut); }
-        return YamlParser::trimRight(result);
+        var result = text
+        if (cut >= 0 ){ result = text.substring(0, cut) }
+        return YamlParser::trimRight(result)
     }
 
     fnc isSeqItem(text: String) -> Bool
     {
-        return text == "-" || text.startsWith("- ");
+        return text == "-" || text.startsWith("- ")
     }
 
     fnc findKeyColon(text: String) -> Int64
     {
-        var inD = false;
-        var inS = false;
-        var depth: Int64 = 0;
-        var i: Int64 = 0;
+        var inD = false
+        var inS = false
+        var depth: Int64 = 0
+        var i: Int64 = 0
         while i < text.len()
         {
-            let c = text[i] as Int64;
+            let c = text[i] as Int64
             if (inD
             ){
-                if (c == 92 ){ i = i + 1; }
-                else if (c == 34 ){ inD = false; }
+                if (c == 92 ){ i = i + 1 }
+                else if (c == 34 ){ inD = false }
             }
             else if (inS
             ){
-                if (c == 39 ){ inS = false; }
+                if (c == 39 ){ inS = false }
             }
-            else if (c == 34 ){ inD = true; }
-            else if (c == 39 ){ inS = true; }
-            else if (c == 91 || c == 123 ){ depth = depth + 1; }
-            else if (c == 93 || c == 125 ){ depth = depth - 1; }
+            else if (c == 34 ){ inD = true }
+            else if (c == 39 ){ inS = true }
+            else if (c == 91 || c == 123 ){ depth = depth + 1 }
+            else if (c == 93 || c == 125 ){ depth = depth - 1 }
             else if (c == 58 && depth == 0
             ){
-                if (i + 1 >= text.len() ){ return i; }
-                let nx = text[i + 1] as Int64;
-                if (nx == 32 || nx == 9 ){ return i; }
+                if (i + 1 >= text.len() ){ return i }
+                let nx = text[i + 1] as Int64
+                if (nx == 32 || nx == 9 ){ return i }
             }
-            i = i + 1;
+            i = i + 1
         }
-        return -1;
+        return -1
     }
 
     fnc flowBalanced(text: String) -> Bool
     {
-        var inD = false;
-        var inS = false;
-        var depth: Int64 = 0;
-        var i: Int64 = 0;
+        var inD = false
+        var inS = false
+        var depth: Int64 = 0
+        var i: Int64 = 0
         while i < text.len()
         {
-            let c = text[i] as Int64;
+            let c = text[i] as Int64
             if (inD
             ){
-                if (c == 92 ){ i = i + 1; }
-                else if (c == 34 ){ inD = false; }
+                if (c == 92 ){ i = i + 1 }
+                else if (c == 34 ){ inD = false }
             }
             else if (inS
             ){
-                if (c == 39 ){ inS = false; }
+                if (c == 39 ){ inS = false }
             }
-            else if (c == 34 ){ inD = true; }
-            else if (c == 39 ){ inS = true; }
-            else if (c == 91 || c == 123 ){ depth = depth + 1; }
-            else if (c == 93 || c == 125 ){ depth = depth - 1; }
-            i = i + 1;
+            else if (c == 34 ){ inD = true }
+            else if (c == 39 ){ inS = true }
+            else if (c == 91 || c == 123 ){ depth = depth + 1 }
+            else if (c == 93 || c == 125 ){ depth = depth - 1 }
+            i = i + 1
         }
-        return depth <= 0;
+        return depth <= 0
     }
 
     fn indentOfLine(i: Int64) -> Int64
     {
-        return YamlParser::indentOf(this.rawLines[i]);
+        return YamlParser::indentOf(this.rawLines[i])
     }
 
     fn lineText(i: Int64) -> String
     {
-        let raw = this.rawLines[i];
-        let ind = YamlParser::indentOf(raw);
-        return YamlParser::stripComment(raw.substring(ind, raw.len()));
+        let raw = this.rawLines[i]
+        let ind = YamlParser::indentOf(raw)
+        return YamlParser::stripComment(raw.substring(ind, raw.len()))
     }
 
     fn skipIgnorable()
     {
         while this.pos < this.count
         {
-            if (this.lineText(this.pos).len() == 0 ){ this.pos = this.pos + 1; }
-            else { break; }
+            if (this.lineText(this.pos).len() == 0 ){ this.pos = this.pos + 1 }
+            else { break }
         }
     }
 
@@ -182,306 +185,307 @@ class YamlParser
     {
         if (!this.hasError
         ){
-            this.hasError = true;
-            this.errorMsg = msg;
+            this.hasError = true
+            this.errorMsg = msg
         }
     }
 
     fn parseNode() -> JsonValue
     {
-        this.skipIgnorable();
-        if (this.pos >= this.count ){ return JsonValue::Null; }
-        let ind = this.indentOfLine(this.pos);
-        let text = this.lineText(this.pos);
-        this.pos = this.pos + 1;
-        if (YamlParser::isSeqItem(text) ){ return this.parseSequenceFrom(text, ind); }
-        let ci = YamlParser::findKeyColon(text);
-        if (ci >= 0 ){ return this.parseMappingFrom(text, ind); }
-        return this.parseValueRest(text, ind);
+        this.skipIgnorable()
+        if (this.pos >= this.count ){ return JsonValue::Null }
+        let ind = this.indentOfLine(this.pos)
+        let text = this.lineText(this.pos)
+        this.pos = this.pos + 1
+        if (YamlParser::isSeqItem(text) ){ return this.parseSequenceFrom(text, ind) }
+        let ci = YamlParser::findKeyColon(text)
+        if (ci >= 0 ){ return this.parseMappingFrom(text, ind) }
+        return this.parseValueRest(text, ind)
     }
 
     fn parseChildValue(parentInd: Int64) -> JsonValue
     {
-        this.skipIgnorable();
-        if (this.pos >= this.count ){ return JsonValue::Null; }
-        let ind = this.indentOfLine(this.pos);
-        if (ind > parentInd ){ return this.parseNode(); }
-        if (ind == parentInd && YamlParser::isSeqItem(this.lineText(this.pos)) ){ return this.parseNode(); }
-        return JsonValue::Null;
+        this.skipIgnorable()
+        if (this.pos >= this.count ){ return JsonValue::Null }
+        let ind = this.indentOfLine(this.pos)
+        if (ind > parentInd ){ return this.parseNode() }
+        if (ind == parentInd && YamlParser::isSeqItem(this.lineText(this.pos)) ){ return this.parseNode() }
+        return JsonValue::Null
     }
 
     fn parseChildValueSeq(dashInd: Int64) -> JsonValue
     {
-        this.skipIgnorable();
-        if (this.pos < this.count && this.indentOfLine(this.pos) > dashInd ){ return this.parseNode(); }
-        return JsonValue::Null;
+        this.skipIgnorable()
+        if (this.pos < this.count && this.indentOfLine(this.pos) > dashInd ){ return this.parseNode() }
+        return JsonValue::Null
     }
 
     fn parseMappingFrom(firstText: String, ind: Int64) -> JsonValue
     {
-        var obj: Map<String, JsonValue> = @{};
-        var text = firstText;
+        var obj: Map<String, JsonValue> = @{}
+        var text = firstText
         loop
         {
-            let ci = YamlParser::findKeyColon(text);
+            let ci = YamlParser::findKeyColon(text)
             if (ci < 0
             ){
-                this.fail("Expected 'key:' mapping entry");
-                break;
+                this.fail("Expected 'key:' mapping entry")
+                break
             }
-            let keyRaw = text.substring(0, ci).trim();
-            let key = YamlScalar::keyText(keyRaw);
-            var rest = "";
-            if (ci + 1 < text.len() ){ rest = text.substring(ci + 1, text.len()).trim(); }
+            let keyRaw = text.substring(0, ci).trim()
+            let key = YamlScalar::keyText(keyRaw)
+            var rest = ""
+            if (ci + 1 < text.len() ){ rest = text.substring(ci + 1, text.len()).trim() }
 
-            if (rest.len() == 0 ){ obj[key] = this.parseChildValue(ind); }
-            else { obj[key] = this.parseValueRest(rest, ind); }
+            if (rest.len() == 0 ){ obj[key] = this.parseChildValue(ind) }
+            else { obj[key] = this.parseValueRest(rest, ind) }
 
-            this.skipIgnorable();
-            if (this.pos >= this.count ){ break; }
-            if (this.indentOfLine(this.pos) != ind ){ break; }
-            let t = this.lineText(this.pos);
-            if (YamlParser::isSeqItem(t) ){ break; }
-            text = t;
-            this.pos = this.pos + 1;
+            this.skipIgnorable()
+            if (this.pos >= this.count ){ break }
+            if (this.indentOfLine(this.pos) != ind ){ break }
+            let t = this.lineText(this.pos)
+            if (YamlParser::isSeqItem(t) ){ break }
+            text = t
+            this.pos = this.pos + 1
         }
-        return JsonValue::Object(obj);
+        return JsonValue::Object(obj)
     }
 
     fn parseSequenceFrom(firstText: String, ind: Int64) -> JsonValue
     {
-        var arr: List<JsonValue> = [];
-        var text = firstText;
+        var arr: List<JsonValue> = []
+        var text = firstText
         loop
         {
             if (text == "-"
             ){
-                arr.push(this.parseChildValueSeq(ind));
+                arr.push(this.parseChildValueSeq(ind))
             }
             else
             {
-                var k: Int64 = 1;
-                while k < text.len() && (text[k] as Int64) == 32 { k = k + 1; }
-                let rest = text.substring(k, text.len());
-                let restInd = ind + k;
-                arr.push(this.parseSeqItemValue(rest, restInd, ind));
+                var k: Int64 = 1
+                while k < text.len() && (text[k] as Int64) == 32 { k = k + 1 }
+                let rest = text.substring(k, text.len())
+                let restInd = ind + k
+                arr.push(this.parseSeqItemValue(rest, restInd, ind))
             }
 
-            this.skipIgnorable();
-            if (this.pos >= this.count ){ break; }
-            if (this.indentOfLine(this.pos) != ind ){ break; }
-            let t = this.lineText(this.pos);
-            if (!YamlParser::isSeqItem(t) ){ break; }
-            text = t;
-            this.pos = this.pos + 1;
+            this.skipIgnorable()
+            if (this.pos >= this.count ){ break }
+            if (this.indentOfLine(this.pos) != ind ){ break }
+            let t = this.lineText(this.pos)
+            if (!YamlParser::isSeqItem(t) ){ break }
+            text = t
+            this.pos = this.pos + 1
         }
-        return JsonValue::Array(arr);
+        return JsonValue::Array(arr)
     }
 
     fn parseSeqItemValue(rest: String, restInd: Int64, dashInd: Int64) -> JsonValue
     {
-        if (YamlParser::isSeqItem(rest) ){ return this.parseSequenceFrom(rest, restInd); }
-        let ci = YamlParser::findKeyColon(rest);
-        if (ci >= 0 ){ return this.parseMappingFrom(rest, restInd); }
-        return this.parseValueRest(rest, dashInd);
+        if (YamlParser::isSeqItem(rest) ){ return this.parseSequenceFrom(rest, restInd) }
+        let ci = YamlParser::findKeyColon(rest)
+        if (ci >= 0 ){ return this.parseMappingFrom(rest, restInd) }
+        return this.parseValueRest(rest, dashInd)
     }
 
     fn parseValueRest(rest: String, parentInd: Int64) -> JsonValue
     {
-        var r = rest;
-        var stripping = true;
+        var r = rest
+        var stripping = true
         while stripping && r.len() > 0
         {
-            let a0 = r[0] as Int64;
+            let a0 = r[0] as Int64
             if (a0 == 38 || a0 == 33
             ){
-                var j: Int64 = 0;
-                while j < r.len() && (r[j] as Int64) != 32 && (r[j] as Int64) != 9 { j = j + 1; }
-                if (j >= r.len() ){ r = ""; }
-                else { r = r.substring(j, r.len()).trim(); }
+                var j: Int64 = 0
+                while j < r.len() && (r[j] as Int64) != 32 && (r[j] as Int64) != 9 { j = j + 1 }
+                if (j >= r.len() ){ r = "" }
+                else { r = r.substring(j, r.len()).trim() }
             }
-            else { stripping = false; }
+            else { stripping = false }
         }
-        if (r.len() == 0 ){ return this.parseChildValue(parentInd); }
+        if (r.len() == 0 ){ return this.parseChildValue(parentInd) }
 
-        let c0 = r[0] as Int64;
-        if (c0 == 42 ){ return JsonValue::Null; }
+        let c0 = r[0] as Int64
+        if (c0 == 42 ){ return JsonValue::Null }
         if (c0 == 124 || c0 == 62
         ){
-            var okInd = true;
-            var chomp: Int64 = 0;
-            var j: Int64 = 1;
+            var okInd = true
+            var chomp: Int64 = 0
+            var j: Int64 = 1
             while j < r.len()
             {
-                let cj = r[j] as Int64;
-                if (cj == 45 ){ chomp = -1; }
-                else if (cj == 43 ){ chomp = 1; }
+                let cj = r[j] as Int64
+                if (cj == 45 ){ chomp = -1 }
+                else if (cj == 43 ){ chomp = 1 }
                 else if (cj >= 48 && cj <= 57 ){ }
-                else { okInd = false; }
-                j = j + 1;
+                else { okInd = false }
+                j = j + 1
             }
-            if (okInd ){ return this.parseBlockScalar(parentInd, c0 == 62, chomp); }
-            return YamlScalar::parseScalarText(r);
+            if (okInd ){ return this.parseBlockScalar(parentInd, c0 == 62, chomp) }
+            return YamlScalar::parseScalarText(r)
         }
         if (c0 == 91 || c0 == 123
         ){
-            let full = this.completeFlow(r);
-            return this.parseFlow(full);
+            let full = this.completeFlow(r)
+            return this.parseFlow(full)
         }
-        return YamlScalar::parseScalarText(r);
+        return YamlScalar::parseScalarText(r)
     }
 
     fn completeFlow(start: String) -> String
     {
-        var full = start;
+        var full = start
         while !YamlParser::flowBalanced(full) && this.pos < this.count
         {
-            let t = this.lineText(this.pos);
-            this.pos = this.pos + 1;
-            full = full + " " + t;
+            let t = this.lineText(this.pos)
+            this.pos = this.pos + 1
+            full = full + " " + t
         }
-        if (!YamlParser::flowBalanced(full) ){ this.fail("Unterminated flow collection"); }
-        return full;
+        if (!YamlParser::flowBalanced(full) ){ this.fail("Unterminated flow collection") }
+        return full
     }
 
     fn parseFlow(text: String) -> JsonValue
     {
-        var f = YamlFlow::new(text);
-        let v = f.parseValue();
-        if (f.hasError ){ this.fail(f.errorMsg); }
-        return v;
+        var f = YamlFlow::new(text)
+        let v = f.parseValue()
+        if (f.hasError ){ this.fail(f.errorMsg) }
+        return v
     }
 
     fn parseBlockScalar(parentInd: Int64, folded: Bool, chomp: Int64) -> JsonValue
     {
-        var contentInd: Int64 = -1;
-        var collected: List<String> = [];
+        var contentInd: Int64 = -1
+        var collected: List<String> = []
         while this.pos < this.count
         {
-            let raw = this.rawLines[this.pos];
+            let raw = this.rawLines[this.pos]
             if (YamlParser::isBlankLine(raw)
             ){
-                collected.push("");
-                this.pos = this.pos + 1;
+                collected.push("")
+                this.pos = this.pos + 1
             }
             else
             {
-                let ind = YamlParser::indentOf(raw);
-                if (ind <= parentInd ){ break; }
-                if (contentInd < 0 ){ contentInd = ind; }
-                var takeFrom = contentInd;
-                if (ind < contentInd ){ takeFrom = ind; }
-                collected.push(raw.substring(takeFrom, raw.len()));
-                this.pos = this.pos + 1;
+                let ind = YamlParser::indentOf(raw)
+                if (ind <= parentInd ){ break }
+                if (contentInd < 0 ){ contentInd = ind }
+                var takeFrom = contentInd
+                if (ind < contentInd ){ takeFrom = ind }
+                collected.push(raw.substring(takeFrom, raw.len()))
+                this.pos = this.pos + 1
             }
         }
 
-        var endNonBlank: Int64 = collected.len();
-        while endNonBlank > 0 && collected[endNonBlank - 1] == "" { endNonBlank = endNonBlank - 1; }
-        let trailing = collected.len() - endNonBlank;
+        var endNonBlank: Int64 = collected.len()
+        while endNonBlank > 0 && collected[endNonBlank - 1] == "" { endNonBlank = endNonBlank - 1 }
+        let trailing = collected.len() - endNonBlank
 
-        var body = "";
+        var body = ""
         if (folded
         ){
-            var i: Int64 = 0;
-            var prevBlank = true;
+            var i: Int64 = 0
+            var prevBlank = true
             while i < endNonBlank
             {
-                let ln = collected[i];
+                let ln = collected[i]
                 if (ln == ""
                 ){
-                    body = body + "\n";
-                    prevBlank = true;
+                    body = body + "\n"
+                    prevBlank = true
                 }
                 else
                 {
-                    if (i > 0 && !prevBlank ){ body = body + " "; }
-                    body = body + ln;
-                    prevBlank = false;
+                    if (i > 0 && !prevBlank ){ body = body + " " }
+                    body = body + ln
+                    prevBlank = false
                 }
-                i = i + 1;
+                i = i + 1
             }
         }
         else
         {
-            var i: Int64 = 0;
+            var i: Int64 = 0
             while i < endNonBlank
             {
-                if (i > 0 ){ body = body + "\n"; }
-                body = body + collected[i];
-                i = i + 1;
+                if (i > 0 ){ body = body + "\n" }
+                body = body + collected[i]
+                i = i + 1
             }
         }
 
         if (chomp == 0
         ){
-            if (endNonBlank > 0 ){ body = body + "\n"; }
+            if (endNonBlank > 0 ){ body = body + "\n" }
         }
         else if (chomp > 0
         ){
-            body = body + "\n";
-            var t: Int64 = 0;
-            while t < trailing { body = body + "\n"; t = t + 1; }
+            body = body + "\n"
+            var t: Int64 = 0
+            while t < trailing { body = body + "\n"
+            t = t + 1 }
         }
-        return JsonValue::Str(body);
+        return JsonValue::Str(body)
     }
 
     fnc parseDocLines(docLines: List<String>, out: YamlParseResult) -> Int64
     {
-        var p = YamlParser::new(docLines);
-        p.skipIgnorable();
-        if (p.pos >= p.count ){ return 0; }
-        let v = p.parseNode();
+        var p = YamlParser::new(docLines)
+        p.skipIgnorable()
+        if (p.pos >= p.count ){ return 0 }
+        let v = p.parseNode()
         if (!p.hasError
         ){
-            p.skipIgnorable();
+            p.skipIgnorable()
             if (p.pos < p.count
             ){
-                let lineNo = p.pos + 1;
-                p.fail("Unexpected content at document line " + lineNo.toString());
+                let lineNo = p.pos + 1
+                p.fail("Unexpected content at document line " + lineNo.toString())
             }
         }
         if (p.hasError
         ){
-            out.errorCount = out.errorCount + 1;
-            out.errorMsg = p.errorMsg;
+            out.errorCount = out.errorCount + 1
+            out.errorMsg = p.errorMsg
         }
-        else { out.docs.push(v); }
-        return 0;
+        else { out.docs.push(v) }
+        return 0
     }
 
     fnc parseAllTracked(content: String) -> YamlParseResult
     {
-        var out = YamlParseResult { docs: [], errorCount: 0, errorMsg: "" };
-        let lines = YamlParser::splitRawLines(content);
-        var current: List<String> = [];
-        var i: Int64 = 0;
+        var out = YamlParseResult { docs: [], errorCount: 0, errorMsg: "" }
+        let lines = YamlParser::splitRawLines(content)
+        var current: List<String> = []
+        var i: Int64 = 0
         while i < lines.len()
         {
-            let ln = lines[i];
-            let t = YamlParser::trimRight(ln);
+            let ln = lines[i]
+            let t = YamlParser::trimRight(ln)
             if (t == "---" || t == "..." || t.startsWith("... ")
             ){
-                YamlParser::parseDocLines(current, out);
-                current = [];
+                YamlParser::parseDocLines(current, out)
+                current = []
             }
             else if (ln.startsWith("--- ")
             ){
-                YamlParser::parseDocLines(current, out);
-                current = [];
-                current.push(ln.substring(4, ln.len()));
+                YamlParser::parseDocLines(current, out)
+                current = []
+                current.push(ln.substring(4, ln.len()))
             }
             else if (ln.startsWith("%") ){ }
-            else { current.push(ln); }
-            i = i + 1;
+            else { current.push(ln) }
+            i = i + 1
         }
-        YamlParser::parseDocLines(current, out);
-        return out;
+        YamlParser::parseDocLines(current, out)
+        return out
     }
 
     fnc parseAll(content: String) -> List<JsonValue>
     {
-        let r = YamlParser::parseAllTracked(content);
-        return r.docs;
+        let r = YamlParser::parseAllTracked(content)
+        return r.docs
     }
 }

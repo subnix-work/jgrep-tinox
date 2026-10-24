@@ -80,13 +80,13 @@ Tinox-Enum mit Daten-Payload für alle JSON-Typen:
 ```tinox
 enum JsonValue
 {
-    Null;
-    Bool(Bool);
-    Integer(Int64);
-    Float(Float64);
-    Str(String);
-    Array(List<JsonValue>);
-    Object(Map<String, JsonValue>);
+    Null
+    Bool(Bool)
+    Integer(Int64)
+    Float(Float64)
+    Str(String)
+    Array(List<JsonValue>)
+    Object(Map<String, JsonValue>)
 }
 ```
 - [ ] Enum `JsonValue` mit allen 7 Varianten anlegen
@@ -202,67 +202,67 @@ Jeder jq-Ausdruck wird in einen AST umgewandelt:
 ```tinox
 enum Filter
 {
-    Identity;                            // .
-    RecursiveDescent;                    // ..
-    Field(String);                       // .name
-    OptionalField(String);               // .name?
-    Index(Int64);                        // .[0]
-    Slice(Int64?, Int64?);              // .[2:5], .[2:], .[:5]
-    Iterator;                            // .[]
-    OptionalIterator;                    // .[]?
-    Pipe(Filter, Filter);               // f1 | f2
-    Comma(Filter, Filter);              // f1, f2
-    Literal(JsonValue);                 // 1, "hello", true, null, [], {}
-    ObjectConstruct(List<(ObjKey, Filter)>);  // {key: f}
-    ArrayConstruct(Filter);             // [f]
-    Add(Filter, Filter);               // f1 + f2
-    Subtract(Filter, Filter);          // f1 - f2
-    Multiply(Filter, Filter);          // f1 * f2
-    Divide(Filter, Filter);            // f1 / f2
-    Modulo(Filter, Filter);            // f1 % f2
-    Equals(Filter, Filter);            // f1 == f2
-    NotEquals(Filter, Filter);         // f1 != f2
-    LessThan(Filter, Filter);          // f1 < f2
-    GreaterThan(Filter, Filter);       // f1 > f2
-    LessThanOrEqual(Filter, Filter);   // f1 <= f2
-    GreaterThanOrEqual(Filter, Filter);// f1 >= f2
-    And(Filter, Filter);               // f1 and f2
-    Or(Filter, Filter);                // f1 or f2
-    Not;                               // not
-    Alternative(Filter, Filter);       // f1 // f2 (null/false fallback)
-    TryCatch(Filter, Filter?);         // try f catch f
-    Optional(Filter);                  // f?
-    IfThenElse(Filter, Filter, Filter?); // if f then f else f end
-    FunctionCall(String, List<Filter>);  // length, keys, values, has(...), etc.
-    StringInterp(List<StringPart>);    // "\(.name) is \(.age)"
-    Label(String);                     // label $name
-    Break(String);                     // break $name
-    Path(Filter);                      // path(f)
-    GetPath(Filter);                   // getpath(f)
-    SetPath(Filter, Filter);           // setpath(f; v)
-    Reduce(Filter, String, Filter);    // reduce f as $x (init; body)
-    Foreach(Filter, String, Filter, Filter?); // foreach f as $x
-    Variable(String);                  // $name (e.g. from as pattern)
-    AsPattern(Filter, String, Filter); // f as $x | body
-    Recurse(Filter?);                  // recurse, recurse(f)
-    Limit(Filter, Filter);             // limit(n; f)
-    Until(Filter, Filter);             // until(cond; body)
-    While(Filter, Filter);             // while(cond; body)
-    Env;                               // $ENV
-    EnvField(String);                  // $ENV.HOME
+    Identity                            // .
+    RecursiveDescent                    // ..
+    Field(String)                       // .name
+    OptionalField(String)               // .name?
+    Index(Int64)                        // .[0]
+    Slice(Int64?, Int64?)              // .[2:5], .[2:], .[:5]
+    Iterator                            // .[]
+    OptionalIterator                    // .[]?
+    Pipe(Filter, Filter)               // f1 | f2
+    Comma(Filter, Filter)              // f1, f2
+    Literal(JsonValue)                 // 1, "hello", true, null, [], {}
+    ObjectConstruct(List<(ObjKey, Filter)>)  // {key: f}
+    ArrayConstruct(Filter)             // [f]
+    Add(Filter, Filter)               // f1 + f2
+    Subtract(Filter, Filter)          // f1 - f2
+    Multiply(Filter, Filter)          // f1 * f2
+    Divide(Filter, Filter)            // f1 / f2
+    Modulo(Filter, Filter)            // f1 % f2
+    Equals(Filter, Filter)            // f1 == f2
+    NotEquals(Filter, Filter)         // f1 != f2
+    LessThan(Filter, Filter)          // f1 < f2
+    GreaterThan(Filter, Filter)       // f1 > f2
+    LessThanOrEqual(Filter, Filter)   // f1 <= f2
+    GreaterThanOrEqual(Filter, Filter)// f1 >= f2
+    And(Filter, Filter)               // f1 and f2
+    Or(Filter, Filter)                // f1 or f2
+    Not                               // not
+    Alternative(Filter, Filter)       // f1 // f2 (null/false fallback)
+    TryCatch(Filter, Filter?)         // try f catch f
+    Optional(Filter)                  // f?
+    IfThenElse(Filter, Filter, Filter?) // if f then f else f end
+    FunctionCall(String, List<Filter>)  // length, keys, values, has(...), etc.
+    StringInterp(List<StringPart>)    // "\(.name) is \(.age)"
+    Label(String)                     // label $name
+    Break(String)                     // break $name
+    Path(Filter)                      // path(f)
+    GetPath(Filter)                   // getpath(f)
+    SetPath(Filter, Filter)           // setpath(f; v)
+    Reduce(Filter, String, Filter)    // reduce f as $x (init; body)
+    Foreach(Filter, String, Filter, Filter?) // foreach f as $x
+    Variable(String)                  // $name (e.g. from as pattern)
+    AsPattern(Filter, String, Filter) // f as $x | body
+    Recurse(Filter?)                  // recurse, recurse(f)
+    Limit(Filter, Filter)             // limit(n; f)
+    Until(Filter, Filter)             // until(cond; body)
+    While(Filter, Filter)             // while(cond; body)
+    Env                               // $ENV
+    EnvField(String)                  // $ENV.HOME
 }
 
 enum ObjKey
 {
-    Literal(String);
-    Computed(Filter);
-    Variable(String);    // {(.key): value}
+    Literal(String)
+    Computed(Filter)
+    Variable(String)    // {(.key): value}
 }
 
 enum StringPart
 {
-    Text(String);
-    Expr(Filter);
+    Text(String)
+    Expr(Filter)
 }
 ```
 - [ ] Alle Enum-Varianten implementieren
@@ -636,40 +636,40 @@ Für `--color-level` Modus: gesamte Zeile anhand des Log-Level-Felds einfärben.
 class JGrepCommand
 {
     @Argument(0, "jq filter expression")
-    var filter: String?;
+    var filter: String?
 
     @Argument(1, "files to search")
-    var files: List<String>;
+    var files: List<String>
 
     @Option("--recursive,-r", "recurse into directories")
-    var recursive: Bool = false;
+    var recursive: Bool = false
 
     @Option("--files-with-matches,-l", "print only filenames")
-    var filesWithMatches: Bool = false;
+    var filesWithMatches: Bool = false
 
     @Option("--count,-c", "print match count per file")
-    var count: Bool = false;
+    var count: Bool = false
 
     @Option("--slurp,-s", "collect all results into one array")
-    var slurp: Bool = false;
+    var slurp: Bool = false
 
     @Option("--null-input,-n", "use null as input")
-    var nullInput: Bool = false;
+    var nullInput: Bool = false
 
     @Option("--from-file,-f", "read filter from file")
-    var fromFile: String?;
+    var fromFile: String?
 
     @Option("--pretty", "pretty-print JSON output")
-    var pretty: Bool = false;
+    var pretty: Bool = false
 
     @Option("--color-level", "colorize by log level field")
-    var colorLevel: Bool = false;
+    var colorLevel: Bool = false
 
     @Option("--color-level-field", "field to read log level from")
-    var colorLevelField: String?;
+    var colorLevelField: String?
 
     @Option("--no-color", "disable color output")
-    var noColor: Bool = false;
+    var noColor: Bool = false
 
     fn run() -> Int64 { ... }
 }

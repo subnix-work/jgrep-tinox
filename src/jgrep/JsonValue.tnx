@@ -1,12 +1,12 @@
-module jgrep.json_value;
+module jgrep.json_value
 
 enum JsonValue
 {
-    Null;
-    Bool(Bool);
-    Integer(Int64);
-    Float(Float64);
-    Str(String);
-    Array(List<JsonValue>);
-    Object(Map<String, JsonValue>);
+    Null
+    Bool(Bool)
+    Integer(Int64)
+    Float(Float64)
+    Str(String)
+    Array(List<JsonValue>)
+    Object(Map<String, JsonValue>)
 }

@@ -1,125 +1,142 @@
-module jgrep.json_value;
+module jgrep.json_value
 
-import JsonUtil;
-import JsonValue;
+import JsonUtil
+import JsonValue
 
 class JsonValueHelper
 {
     fnc isNull(v: JsonValue) -> Bool
     {
-        match v { Null => return true; _ => return false; }
+        match v { Null => return true
+        _ => return false }
     }
 
     fnc isBool(v: JsonValue) -> Bool
     {
-        match v { Bool(_) => return true; _ => return false; }
+        match v { Bool(_) => return true
+        _ => return false }
     }
 
     fnc isInteger(v: JsonValue) -> Bool
     {
-        match v { Integer(_) => return true; _ => return false; }
+        match v { Integer(_) => return true
+        _ => return false }
     }
 
     fnc isFloat(v: JsonValue) -> Bool
     {
-        match v { Float(_) => return true; _ => return false; }
+        match v { Float(_) => return true
+        _ => return false }
     }
 
     fnc isNumber(v: JsonValue) -> Bool
     {
         match v
         {
-            Integer(_) => return true;
-            Float(_)   => return true;
-            _          => return false;
+            Integer(_) => return true
+            Float(_)   => return true
+            _          => return false
         }
     }
 
     fnc isString(v: JsonValue) -> Bool
     {
-        match v { Str(_) => return true; _ => return false; }
+        match v { Str(_) => return true
+        _ => return false }
     }
 
     fnc isArray(v: JsonValue) -> Bool
     {
-        match v { Array(_) => return true; _ => return false; }
+        match v { Array(_) => return true
+        _ => return false }
     }
 
     fnc isObject(v: JsonValue) -> Bool
     {
-        match v { Object(_) => return true; _ => return false; }
+        match v { Object(_) => return true
+        _ => return false }
     }
 
     fnc asBool(v: JsonValue) -> Bool
     {
         match v
         {
-            Bool(b) => return b;
-            _       => { throw "JsonValue is not a Bool"; return false; }
+            Bool(b) => return b
+            _       => { throw "JsonValue is not a Bool"
+            return false }
         }
-        return false;
+        return false
     }
 
     fnc asInteger(v: JsonValue) -> Int64
     {
         match v
         {
-            Integer(n) => return n;
-            _          => { throw "JsonValue is not an Integer"; return 0; }
+            Integer(n) => return n
+            _          => { throw "JsonValue is not an Integer"
+            return 0 }
         }
-        return 0;
+        return 0
     }
 
     fnc asFloat(v: JsonValue) -> Float64
     {
         match v
         {
-            Float(f)   => return f;
-            Integer(n) => return n as Float64;
-            _          => { throw "JsonValue is not a number"; return 0.0; }
+            Float(f)   => return f
+            Integer(n) => return n as Float64
+            _          => { throw "JsonValue is not a number"
+            return 0.0 }
         }
-        return 0.0;
+        return 0.0
     }
 
     fnc asString(v: JsonValue) -> String
     {
         match v
         {
-            Str(s) => return s;
-            _      => { throw "JsonValue is not a String"; return ""; }
+            Str(s) => return s
+            _      => { throw "JsonValue is not a String"
+            return "" }
         }
-        return "";
+        return ""
     }
 
     fnc asArray(v: JsonValue) -> List<JsonValue>
     {
         match v
         {
-            Array(a) => { let arr = a; return arr; }
-            _        => { throw "JsonValue is not an Array"; var r: List<JsonValue> = []; return r; }
+            Array(a) => { let arr = a
+            return arr }
+            _        => { throw "JsonValue is not an Array"
+            var r: List<JsonValue> = []
+            return r }
         }
-        var emptyArr: List<JsonValue> = [];
-        return emptyArr;
+        var emptyArr: List<JsonValue> = []
+        return emptyArr
     }
 
     fnc asObject(v: JsonValue) -> Map<String, JsonValue>
     {
         match v
         {
-            Object(o) => { let obj = o; return obj; }
-            _         => { throw "JsonValue is not an Object"; var r: Map<String, JsonValue> = @{}; return r; }
+            Object(o) => { let obj = o
+            return obj }
+            _         => { throw "JsonValue is not an Object"
+            var r: Map<String, JsonValue> = @{}
+            return r }
         }
-        var emptyObj: Map<String, JsonValue> = @{};
-        return emptyObj;
+        var emptyObj: Map<String, JsonValue> = @{}
+        return emptyObj
     }
 
     fnc isTruthy(v: JsonValue) -> Bool
     {
         match v
         {
-            Null    => return false;
-            Bool(b) => return b;
-            _       => return true;
+            Null    => return false
+            Bool(b) => return b
+            _       => return true
         }
     }
 
@@ -127,13 +144,13 @@ class JsonValueHelper
     {
         match v
         {
-            Null       => return "null";
-            Bool(_)    => return "boolean";
-            Integer(_) => return "number";
-            Float(_)   => return "number";
-            Str(_)     => return "string";
-            Array(_)   => return "array";
-            Object(_)  => return "object";
+            Null       => return "null"
+            Bool(_)    => return "boolean"
+            Integer(_) => return "number"
+            Float(_)   => return "number"
+            Str(_)     => return "string"
+            Array(_)   => return "array"
+            Object(_)  => return "object"
         }
     }
 
@@ -141,15 +158,15 @@ class JsonValueHelper
     {
         match v
         {
-            Null       => return 0;
-            Bool(b)    => { if (b ){ return 2; } return 1; }
-            Integer(_) => return 3;
-            Float(_)   => return 3;
-            Str(_)     => return 4;
-            Array(_)   => return 5;
-            Object(_)  => return 6;
+            Null       => return 0
+            Bool(b)    => { if (b ){ return 2 } return 1 }
+            Integer(_) => return 3
+            Float(_)   => return 3
+            Str(_)     => return 4
+            Array(_)   => return 5
+            Object(_)  => return 6
         }
-        return 0;
+        return 0
     }
 
     fnc equals(a: JsonValue, b: JsonValue) -> Bool
@@ -158,33 +175,36 @@ class JsonValueHelper
         {
             Null =>
             {
-                match b { Null => return true; _ => return false; }
+                match b { Null => return true
+                _ => return false }
             }
             Bool(av) =>
             {
-                match b { Bool(bv) => return av == bv; _ => return false; }
+                match b { Bool(bv) => return av == bv
+                _ => return false }
             }
             Integer(an) =>
             {
                 match b
                 {
-                    Integer(bn) => return an == bn;
-                    Float(bf)   => return (an as Float64) == bf;
-                    _           => return false;
+                    Integer(bn) => return an == bn
+                    Float(bf)   => return (an as Float64) == bf
+                    _           => return false
                 }
             }
             Float(af) =>
             {
                 match b
                 {
-                    Float(bf)   => return af == bf;
-                    Integer(bn) => return af == (bn as Float64);
-                    _           => return false;
+                    Float(bf)   => return af == bf
+                    Integer(bn) => return af == (bn as Float64)
+                    _           => return false
                 }
             }
             Str(sv) =>
             {
-                match b { Str(bs) => return (sv == bs); _ => return false; }
+                match b { Str(bs) => return (sv == bs)
+                _ => return false }
             }
             Array(aa) =>
             {
@@ -192,18 +212,18 @@ class JsonValueHelper
                 {
                     Array(ba) =>
                     {
-                        let aaArr = aa;
-                        let baArr = ba;
-                        if (aaArr.len() != baArr.len() ){ return false; }
-                        var i: Int64 = 0;
+                        let aaArr = aa
+                        let baArr = ba
+                        if (aaArr.len() != baArr.len() ){ return false }
+                        var i: Int64 = 0
                         while i < aaArr.len()
                         {
-                            if (!JsonValueHelper::equals(aaArr[i], baArr[i]) ){ return false; }
-                            i = i + 1;
+                            if (!JsonValueHelper::equals(aaArr[i], baArr[i]) ){ return false }
+                            i = i + 1
                         }
-                        return true;
+                        return true
                     }
-                    _ => return false;
+                    _ => return false
                 }
             }
             Object(ao) =>
@@ -212,27 +232,27 @@ class JsonValueHelper
                 {
                     Object(bo) =>
                     {
-                        if (ao.len() != bo.len() ){ return false; }
-                        let aoKeys = JsonUtil::sortStringList(ao.keys());
+                        if (ao.len() != bo.len() ){ return false }
+                        let aoKeys = JsonUtil::sortStringList(ao.keys())
                         for key in aoKeys
                         {
-                            if (!bo.contains(key) ){ return false; }
-                            if (!JsonValueHelper::equals(ao.get(key), bo.get(key)) ){ return false; }
+                            if (!bo.contains(key) ){ return false }
+                            if (!JsonValueHelper::equals(ao.get(key), bo.get(key)) ){ return false }
                         }
-                        return true;
+                        return true
                     }
-                    _ => return false;
+                    _ => return false
                 }
             }
         }
-        return false;
+        return false
     }
 
     fnc compare(a: JsonValue, b: JsonValue) -> Int64
     {
-        let aOrder = JsonValueHelper::typeOrder(a);
-        let bOrder = JsonValueHelper::typeOrder(b);
-        if (aOrder != bOrder ){ return aOrder - bOrder; }
+        let aOrder = JsonValueHelper::typeOrder(a)
+        let bOrder = JsonValueHelper::typeOrder(b)
+        if (aOrder != bOrder ){ return aOrder - bOrder }
 
         match a
         {
@@ -242,18 +262,18 @@ class JsonValueHelper
                 {
                     Integer(bn) =>
                     {
-                        if (an < bn ){ return -1; }
-                        if (an > bn ){ return 1; }
-                        return 0;
+                        if (an < bn ){ return -1 }
+                        if (an > bn ){ return 1 }
+                        return 0
                     }
                     Float(bf) =>
                     {
-                        let af = an as Float64;
-                        if (af < bf ){ return -1; }
-                        if (af > bf ){ return 1; }
-                        return 0;
+                        let af = an as Float64
+                        if (af < bf ){ return -1 }
+                        if (af > bf ){ return 1 }
+                        return 0
                     }
-                    _ => return 0;
+                    _ => return 0
                 }
             }
             Float(af) =>
@@ -262,18 +282,18 @@ class JsonValueHelper
                 {
                     Float(bf) =>
                     {
-                        if (af < bf ){ return -1; }
-                        if (af > bf ){ return 1; }
-                        return 0;
+                        if (af < bf ){ return -1 }
+                        if (af > bf ){ return 1 }
+                        return 0
                     }
                     Integer(bn) =>
                     {
-                        let bfv = bn as Float64;
-                        if (af < bfv ){ return -1; }
-                        if (af > bfv ){ return 1; }
-                        return 0;
+                        let bfv = bn as Float64
+                        if (af < bfv ){ return -1 }
+                        if (af > bfv ){ return 1 }
+                        return 0
                     }
-                    _ => return 0;
+                    _ => return 0
                 }
             }
             Str(sv) =>
@@ -282,11 +302,11 @@ class JsonValueHelper
                 {
                     Str(bs) =>
                     {
-                        if (sv < bs ){ return -1; }
-                        if (sv > bs ){ return 1; }
-                        return 0;
+                        if (sv < bs ){ return -1 }
+                        if (sv > bs ){ return 1 }
+                        return 0
                     }
-                    _ => return 0;
+                    _ => return 0
                 }
             }
             Array(aa) =>
@@ -295,61 +315,64 @@ class JsonValueHelper
                 {
                     Array(ba) =>
                     {
-                        let aaArr = aa;
-                        let baArr = ba;
-                        var i: Int64 = 0;
-                        var minLen = aaArr.len();
-                        if (baArr.len() < minLen ){ minLen = baArr.len(); }
+                        let aaArr = aa
+                        let baArr = ba
+                        var i: Int64 = 0
+                        var minLen = aaArr.len()
+                        if (baArr.len() < minLen ){ minLen = baArr.len() }
                         while i < minLen
                         {
-                            let c = JsonValueHelper::compare(aaArr[i], baArr[i]);
-                            if (c != 0 ){ return c; }
-                            i = i + 1;
+                            let c = JsonValueHelper::compare(aaArr[i], baArr[i])
+                            if (c != 0 ){ return c }
+                            i = i + 1
                         }
-                        if (aaArr.len() < baArr.len() ){ return -1; }
-                        if (aaArr.len() > baArr.len() ){ return 1; }
-                        return 0;
+                        if (aaArr.len() < baArr.len() ){ return -1 }
+                        if (aaArr.len() > baArr.len() ){ return 1 }
+                        return 0
                     }
-                    _ => return 0;
+                    _ => return 0
                 }
             }
-            _ => return 0;
+            _ => return 0
         }
-        return 0;
+        return 0
     }
 
     fnc addValues(a: JsonValue, b: JsonValue) -> JsonValue
     {
         match a
         {
-            Null => return b;
+            Null => return b
             Integer(an) =>
             {
                 match b
                 {
-                    Integer(bn) => return JsonValue::Integer(an + bn);
-                    Float(bf)   => return JsonValue::Float((an as Float64) + bf);
-                    Null        => return a;
-                    _           => { throw "Cannot add: incompatible types"; return JsonValue::Null; }
+                    Integer(bn) => return JsonValue::Integer(an + bn)
+                    Float(bf)   => return JsonValue::Float((an as Float64) + bf)
+                    Null        => return a
+                    _           => { throw "Cannot add: incompatible types"
+                    return JsonValue::Null }
                 }
             }
             Float(af) =>
             {
                 match b
                 {
-                    Float(bf)   => return JsonValue::Float(af + bf);
-                    Integer(bn) => return JsonValue::Float(af + (bn as Float64));
-                    Null        => return a;
-                    _           => { throw "Cannot add: incompatible types"; return JsonValue::Null; }
+                    Float(bf)   => return JsonValue::Float(af + bf)
+                    Integer(bn) => return JsonValue::Float(af + (bn as Float64))
+                    Null        => return a
+                    _           => { throw "Cannot add: incompatible types"
+                    return JsonValue::Null }
                 }
             }
             Str(sv) =>
             {
                 match b
                 {
-                    Str(bs) => return JsonValue::Str(sv + bs);
-                    Null    => return a;
-                    _       => { throw "Cannot add strings with non-strings"; return JsonValue::Null; }
+                    Str(bs) => return JsonValue::Str(sv + bs)
+                    Null    => return a
+                    _       => { throw "Cannot add strings with non-strings"
+                    return JsonValue::Null }
                 }
             }
             Array(aa) =>
@@ -358,15 +381,16 @@ class JsonValueHelper
                 {
                     Array(ba) =>
                     {
-                        let aaArr = aa;
-                        let baArr = ba;
-                        var result: List<JsonValue> = [];
-                        for item in aaArr { result.push(item); }
-                        for item in baArr { result.push(item); }
-                        return JsonValue::Array(result);
+                        let aaArr = aa
+                        let baArr = ba
+                        var result: List<JsonValue> = []
+                        for item in aaArr { result.push(item) }
+                        for item in baArr { result.push(item) }
+                        return JsonValue::Array(result)
                     }
-                    Null => return a;
-                    _    => { throw "Cannot add array with non-array"; return JsonValue::Null; }
+                    Null => return a
+                    _    => { throw "Cannot add array with non-array"
+                    return JsonValue::Null }
                 }
             }
             Object(ao) =>
@@ -375,24 +399,25 @@ class JsonValueHelper
                 {
                     Object(bo) =>
                     {
-                        var result: Map<String, JsonValue> = @{};
-                        let aoKs = JsonUtil::sortStringList(ao.keys());
-                        for key in aoKs { result[key] = ao.get(key); }
-                        let boKs = JsonUtil::sortStringList(bo.keys());
-                        for key in boKs { result[key] = bo.get(key); }
-                        return JsonValue::Object(result);
+                        var result: Map<String, JsonValue> = @{}
+                        let aoKs = JsonUtil::sortStringList(ao.keys())
+                        for key in aoKs { result[key] = ao.get(key) }
+                        let boKs = JsonUtil::sortStringList(bo.keys())
+                        for key in boKs { result[key] = bo.get(key) }
+                        return JsonValue::Object(result)
                     }
-                    Null => return a;
-                    _    => { throw "Cannot add object with non-object"; return JsonValue::Null; }
+                    Null => return a
+                    _    => { throw "Cannot add object with non-object"
+                    return JsonValue::Null }
                 }
             }
             Bool(_) =>
             {
-                throw "Cannot add booleans";
-                return JsonValue::Null;
+                throw "Cannot add booleans"
+                return JsonValue::Null
             }
         }
-        return JsonValue::Null;
+        return JsonValue::Null
     }
 
     fnc subtractValues(a: JsonValue, b: JsonValue) -> JsonValue
@@ -403,18 +428,20 @@ class JsonValueHelper
             {
                 match b
                 {
-                    Integer(bn) => return JsonValue::Integer(an - bn);
-                    Float(bf)   => return JsonValue::Float((an as Float64) - bf);
-                    _           => { throw "Cannot subtract: type mismatch"; return JsonValue::Null; }
+                    Integer(bn) => return JsonValue::Integer(an - bn)
+                    Float(bf)   => return JsonValue::Float((an as Float64) - bf)
+                    _           => { throw "Cannot subtract: type mismatch"
+                    return JsonValue::Null }
                 }
             }
             Float(af) =>
             {
                 match b
                 {
-                    Float(bf)   => return JsonValue::Float(af - bf);
-                    Integer(bn) => return JsonValue::Float(af - (bn as Float64));
-                    _           => { throw "Cannot subtract: type mismatch"; return JsonValue::Null; }
+                    Float(bf)   => return JsonValue::Float(af - bf)
+                    Integer(bn) => return JsonValue::Float(af - (bn as Float64))
+                    _           => { throw "Cannot subtract: type mismatch"
+                    return JsonValue::Null }
                 }
             }
             Array(aa) =>
@@ -423,51 +450,56 @@ class JsonValueHelper
                 {
                     Array(ba) =>
                     {
-                        let aaArr = aa;
-                        let baArr = ba;
-                        var result: List<JsonValue> = [];
+                        let aaArr = aa
+                        let baArr = ba
+                        var result: List<JsonValue> = []
                         for item in aaArr
                         {
-                            var found = false;
+                            var found = false
                             for bitem in baArr
                             {
-                                if (JsonValueHelper::equals(item, bitem) ){ found = true; break; }
+                                if (JsonValueHelper::equals(item, bitem) ){ found = true
+                                break }
                             }
-                            if (!found ){ result.push(item); }
+                            if (!found ){ result.push(item) }
                         }
-                        return JsonValue::Array(result);
+                        return JsonValue::Array(result)
                     }
-                    _ => { throw "Cannot subtract: type mismatch"; return JsonValue::Null; }
+                    _ => { throw "Cannot subtract: type mismatch"
+                    return JsonValue::Null }
                 }
             }
-            _ => { throw "Cannot subtract: unsupported type"; return JsonValue::Null; }
+            _ => { throw "Cannot subtract: unsupported type"
+            return JsonValue::Null }
         }
-        return JsonValue::Null;
+        return JsonValue::Null
     }
 
     fnc multiplyValues(a: JsonValue, b: JsonValue) -> JsonValue
     {
         match a
         {
-            Null => return JsonValue::Null;
+            Null => return JsonValue::Null
             Integer(an) =>
             {
                 match b
                 {
-                    Integer(bn) => return JsonValue::Integer(an * bn);
-                    Float(bf)   => return JsonValue::Float((an as Float64) * bf);
-                    Null        => return JsonValue::Null;
-                    _           => { throw "Cannot multiply: type mismatch"; return JsonValue::Null; }
+                    Integer(bn) => return JsonValue::Integer(an * bn)
+                    Float(bf)   => return JsonValue::Float((an as Float64) * bf)
+                    Null        => return JsonValue::Null
+                    _           => { throw "Cannot multiply: type mismatch"
+                    return JsonValue::Null }
                 }
             }
             Float(af) =>
             {
                 match b
                 {
-                    Float(bf)   => return JsonValue::Float(af * bf);
-                    Integer(bn) => return JsonValue::Float(af * (bn as Float64));
-                    Null        => return JsonValue::Null;
-                    _           => { throw "Cannot multiply: type mismatch"; return JsonValue::Null; }
+                    Float(bf)   => return JsonValue::Float(af * bf)
+                    Integer(bn) => return JsonValue::Float(af * (bn as Float64))
+                    Null        => return JsonValue::Null
+                    _           => { throw "Cannot multiply: type mismatch"
+                    return JsonValue::Null }
                 }
             }
             Str(sv) =>
@@ -476,13 +508,15 @@ class JsonValueHelper
                 {
                     Integer(n) =>
                     {
-                        if (n <= 0 ){ return JsonValue::Null; }
-                        var result = "";
-                        var i: Int64 = 0;
-                        while i < n { result = result + sv; i = i + 1; }
-                        return JsonValue::Str(result);
+                        if (n <= 0 ){ return JsonValue::Null }
+                        var result = ""
+                        var i: Int64 = 0
+                        while i < n { result = result + sv
+                        i = i + 1 }
+                        return JsonValue::Str(result)
                     }
-                    _ => { throw "Cannot multiply string by non-integer"; return JsonValue::Null; }
+                    _ => { throw "Cannot multiply string by non-integer"
+                    return JsonValue::Null }
                 }
             }
             Object(ao) =>
@@ -491,29 +525,31 @@ class JsonValueHelper
                 {
                     Object(bo) =>
                     {
-                        var result: Map<String, JsonValue> = @{};
-                        let aoKs = JsonUtil::sortStringList(ao.keys());
-                        for key in aoKs { result[key] = ao.get(key); }
-                        let boKs = JsonUtil::sortStringList(bo.keys());
+                        var result: Map<String, JsonValue> = @{}
+                        let aoKs = JsonUtil::sortStringList(ao.keys())
+                        for key in aoKs { result[key] = ao.get(key) }
+                        let boKs = JsonUtil::sortStringList(bo.keys())
                         for key in boKs
                         {
                             if (result.contains(key)
                             ){
-                                result[key] = JsonValueHelper::multiplyValues(result.get(key), bo.get(key));
+                                result[key] = JsonValueHelper::multiplyValues(result.get(key), bo.get(key))
                             }
                             else
                             {
-                                result[key] = bo.get(key);
+                                result[key] = bo.get(key)
                             }
                         }
-                        return JsonValue::Object(result);
+                        return JsonValue::Object(result)
                     }
-                    _ => { throw "Cannot multiply object with non-object"; return JsonValue::Null; }
+                    _ => { throw "Cannot multiply object with non-object"
+                    return JsonValue::Null }
                 }
             }
-            _ => { throw "Cannot multiply: unsupported type"; return JsonValue::Null; }
+            _ => { throw "Cannot multiply: unsupported type"
+            return JsonValue::Null }
         }
-        return JsonValue::Null;
+        return JsonValue::Null
     }
 
     fnc divideValues(a: JsonValue, b: JsonValue) -> JsonValue
@@ -526,16 +562,18 @@ class JsonValueHelper
                 {
                     Integer(bn) =>
                     {
-                        if (bn == 0 ){ throw "Division by zero"; return JsonValue::Null; }
-                        if (an % bn == 0 ){ return JsonValue::Integer(an / bn); }
-                        return JsonValue::Float((an as Float64) / (bn as Float64));
+                        if (bn == 0 ){ throw "Division by zero"
+                        return JsonValue::Null }
+                        if (an % bn == 0 ){ return JsonValue::Integer(an / bn) }
+                        return JsonValue::Float((an as Float64) / (bn as Float64))
                     }
                     Float(bf) =>
                     {
-                        if (bf == 0.0 ){ throw "Division by zero"; }
-                        return JsonValue::Float((an as Float64) / bf);
+                        if (bf == 0.0 ){ throw "Division by zero" }
+                        return JsonValue::Float((an as Float64) / bf)
                     }
-                    _ => { throw "Cannot divide: type mismatch"; return JsonValue::Null; }
+                    _ => { throw "Cannot divide: type mismatch"
+                    return JsonValue::Null }
                 }
             }
             Float(af) =>
@@ -544,15 +582,17 @@ class JsonValueHelper
                 {
                     Float(bf) =>
                     {
-                        if (bf == 0.0 ){ throw "Division by zero"; }
-                        return JsonValue::Float(af / bf);
+                        if (bf == 0.0 ){ throw "Division by zero" }
+                        return JsonValue::Float(af / bf)
                     }
                     Integer(bn) =>
                     {
-                        if (bn == 0 ){ throw "Division by zero"; return JsonValue::Null; }
-                        return JsonValue::Float(af / (bn as Float64));
+                        if (bn == 0 ){ throw "Division by zero"
+                        return JsonValue::Null }
+                        return JsonValue::Float(af / (bn as Float64))
                     }
-                    _ => { throw "Cannot divide: type mismatch"; return JsonValue::Null; }
+                    _ => { throw "Cannot divide: type mismatch"
+                    return JsonValue::Null }
                 }
             }
             Str(sv) =>
@@ -561,18 +601,20 @@ class JsonValueHelper
                 {
                     Str(bs) =>
                     {
-                        if (bs.len() == 0 ){ throw "Division by empty string"; }
-                        let parts = sv.split(bs);
-                        var result: List<JsonValue> = [];
-                        for p in parts { result.push(JsonValue::Str(p)); }
-                        return JsonValue::Array(result);
+                        if (bs.len() == 0 ){ throw "Division by empty string" }
+                        let parts = sv.split(bs)
+                        var result: List<JsonValue> = []
+                        for p in parts { result.push(JsonValue::Str(p)) }
+                        return JsonValue::Array(result)
                     }
-                    _ => { throw "Cannot divide string by non-string"; return JsonValue::Null; }
+                    _ => { throw "Cannot divide string by non-string"
+                    return JsonValue::Null }
                 }
             }
-            _ => { throw "Cannot divide: unsupported type"; return JsonValue::Null; }
+            _ => { throw "Cannot divide: unsupported type"
+            return JsonValue::Null }
         }
-        return JsonValue::Null;
+        return JsonValue::Null
     }
 
     fnc moduloValues(a: JsonValue, b: JsonValue) -> JsonValue
@@ -585,14 +627,16 @@ class JsonValueHelper
                 {
                     Integer(bn) =>
                     {
-                        if (bn == 0 ){ throw "Modulo by zero"; }
-                        return JsonValue::Integer(an % bn);
+                        if (bn == 0 ){ throw "Modulo by zero" }
+                        return JsonValue::Integer(an % bn)
                     }
-                    _ => { throw "Cannot modulo: type mismatch"; return JsonValue::Null; }
+                    _ => { throw "Cannot modulo: type mismatch"
+                    return JsonValue::Null }
                 }
             }
-            _ => { throw "Cannot modulo: unsupported type"; return JsonValue::Null; }
+            _ => { throw "Cannot modulo: unsupported type"
+            return JsonValue::Null }
         }
-        return JsonValue::Null;
+        return JsonValue::Null
     }
 }

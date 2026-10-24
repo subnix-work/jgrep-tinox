@@ -1,121 +1,121 @@
-module jgrep.color;
+module jgrep.color
 
-import JsonUtil;
-import JsonValue;
-import JsonSerializer;
-import Ansi;
-import ColorConfig;
+import JsonUtil
+import JsonValue
+import JsonSerializer
+import Ansi
+import ColorConfig
 
 class JsonHighlighter
 {
     fnc highlight(value: JsonValue, config: ColorConfig) -> String
     {
-        if (!config.enabled ){ return JsonSerializer::stringify(value); }
-        return JsonHighlighter::highlightValue(value);
+        if (!config.enabled ){ return JsonSerializer::stringify(value) }
+        return JsonHighlighter::highlightValue(value)
     }
 
     fnc highlightPretty(value: JsonValue, config: ColorConfig) -> String
     {
-        if (!config.enabled ){ return JsonSerializer::prettyStringify(value, 2); }
-        return JsonHighlighter::highlightPrettyValue(value, 0);
+        if (!config.enabled ){ return JsonSerializer::prettyStringify(value, 2) }
+        return JsonHighlighter::highlightPrettyValue(value, 0)
     }
 
     fnc highlightValue(value: JsonValue) -> String
     {
         match value
         {
-            Null    => return Ansi::colorize("null", Ansi::magenta());
+            Null    => return Ansi::colorize("null", Ansi::magenta())
             Bool(b) =>
             {
-                if (b ){ return Ansi::colorize("true", Ansi::magenta()); }
-                return Ansi::colorize("false", Ansi::magenta());
+                if (b ){ return Ansi::colorize("true", Ansi::magenta()) }
+                return Ansi::colorize("false", Ansi::magenta())
             }
-            Integer(n) => return Ansi::colorize(n.toString(), Ansi::yellow());
-            Float(s)   => return Ansi::colorize(JsonUtil::floatDisplay(s), Ansi::yellow());
-            Str(s) => return Ansi::colorize("\"" + JsonSerializer::escapeString(s) + "\"", Ansi::green());
+            Integer(n) => return Ansi::colorize(n.toString(), Ansi::yellow())
+            Float(s)   => return Ansi::colorize(JsonUtil::floatDisplay(s), Ansi::yellow())
+            Str(s) => return Ansi::colorize("\"" + JsonSerializer::escapeString(s) + "\"", Ansi::green())
             Array(a) =>
             {
-                let ha = a;
-                if (ha.len() == 0 ){ return "[]"; }
-                var result = "[";
-                var i = 0;
+                let ha = a
+                if (ha.len() == 0 ){ return "[]" }
+                var result = "["
+                var i = 0
                 for item in ha
                 {
-                    if (i > 0 ){ result = result + ","; }
-                    result = result + JsonHighlighter::highlightValue(item);
-                    i = i + 1;
+                    if (i > 0 ){ result = result + "," }
+                    result = result + JsonHighlighter::highlightValue(item)
+                    i = i + 1
                 }
-                return result + "]";
+                return result + "]"
             }
             Object(o) =>
             {
-                let hoLen = o.len();
-                if (hoLen == 0 ){ return "{}"; }
-                var result = "{";
-                var i = 0;
-                let hoKs = JsonUtil::sortStringList(o.keys());
+                let hoLen = o.len()
+                if (hoLen == 0 ){ return "{}" }
+                var result = "{"
+                var i = 0
+                let hoKs = JsonUtil::sortStringList(o.keys())
                 for key in hoKs
                 {
-                    if (i > 0 ){ result = result + ","; }
-                    result = result + Ansi::colorize("\"" + JsonSerializer::escapeString(key) + "\"", Ansi::cyan());
-                    result = result + ":";
-                    result = result + JsonHighlighter::highlightValue(o.get(key));
-                    i = i + 1;
+                    if (i > 0 ){ result = result + "," }
+                    result = result + Ansi::colorize("\"" + JsonSerializer::escapeString(key) + "\"", Ansi::cyan())
+                    result = result + ":"
+                    result = result + JsonHighlighter::highlightValue(o.get(key))
+                    i = i + 1
                 }
-                return result + "}";
+                return result + "}"
             }
         }
-        return "";
+        return ""
     }
 
     fnc highlightPrettyValue(value: JsonValue, depth: Int64) -> String
     {
-        let pad = JsonSerializer::spaces((depth + 1) * 2);
-        let closePad = JsonSerializer::spaces(depth * 2);
+        let pad = JsonSerializer::spaces((depth + 1) * 2)
+        let closePad = JsonSerializer::spaces(depth * 2)
 
         match value
         {
-            Null    => return Ansi::colorize("null", Ansi::magenta());
+            Null    => return Ansi::colorize("null", Ansi::magenta())
             Bool(b) =>
             {
-                if (b ){ return Ansi::colorize("true", Ansi::magenta()); }
-                return Ansi::colorize("false", Ansi::magenta());
+                if (b ){ return Ansi::colorize("true", Ansi::magenta()) }
+                return Ansi::colorize("false", Ansi::magenta())
             }
-            Integer(n) => return Ansi::colorize(n.toString(), Ansi::yellow());
-            Float(s)   => return Ansi::colorize(JsonUtil::floatDisplay(s), Ansi::yellow());
-            Str(s) => return Ansi::colorize("\"" + JsonSerializer::escapeString(s) + "\"", Ansi::green());
+            Integer(n) => return Ansi::colorize(n.toString(), Ansi::yellow())
+            Float(s)   => return Ansi::colorize(JsonUtil::floatDisplay(s), Ansi::yellow())
+            Str(s) => return Ansi::colorize("\"" + JsonSerializer::escapeString(s) + "\"", Ansi::green())
             Array(a) =>
             {
-                let hpa = a;
-                if (hpa.len() == 0 ){ return "[]"; }
-                var result = "[\n";
-                var i = 0;
+                let hpa = a
+                if (hpa.len() == 0 ){ return "[]" }
+                var result = "[\n"
+                var i = 0
                 for item in hpa
                 {
-                    if (i > 0 ){ result = result + ",\n"; }
-                    result = result + pad + JsonHighlighter::highlightPrettyValue(item, depth + 1);
-                    i = i + 1;
+                    if (i > 0 ){ result = result + ",\n" }
+                    result = result + pad + JsonHighlighter::highlightPrettyValue(item, depth + 1)
+                    i = i + 1
                 }
-                return result + "\n" + closePad + "]";
+                return result + "\n" + closePad + "]"
             }
             Object(o) =>
             {
-                let hpoLen = o.len();
-                if (hpoLen == 0 ){ return "{}"; }
-                var result = "{\n";
-                var i = 0;
-                let hpoKs = JsonUtil::sortStringList(o.keys());
+                let hpoLen = o.len()
+                if (hpoLen == 0 ){ return "{}" }
+                var result = "{\n"
+                var i = 0
+                let hpoKs = JsonUtil::sortStringList(o.keys())
                 for key in hpoKs
                 {
-                    if (i > 0 ){ result = result + ",\n"; }
-                    result = result + pad + Ansi::colorize("\"" + JsonSerializer::escapeString(key) + "\"", Ansi::cyan());
-                    result = result + ": ";
-                    result = result + JsonHighlighter::highlightPrettyValue(o.get(key), depth + 1);
-                    i = i + 1;
+                    if (i > 0 ){ result = result + ",\n" }
+                    result = result + pad + Ansi::colorize("\"" + JsonSerializer::escapeString(key) + "\"", Ansi::cyan())
+                    result = result + ": "
+                    result = result + JsonHighlighter::highlightPrettyValue(o.get(key), depth + 1)
+                    i = i + 1
                 }
-                return result + "\n" + closePad + "}";
+                return result + "\n" + closePad + "}"
             }
         }
-        return "";
+        return ""
     }
 }
