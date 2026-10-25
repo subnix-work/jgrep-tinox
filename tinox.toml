@@ -1,5 +1,5 @@
 [package]
-compiler = "2.5.1"
+compiler = "2.6.0"
 name = "jgrep"
 version = "1.0.9"
 description = "grep for JSON — reimplemented in Tinox"
