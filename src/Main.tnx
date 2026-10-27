@@ -134,6 +134,6 @@ class Main
         }
 
         var jgrep = JGrep::new(opts)
-        return jgrep.run()
+        return jgrep.run() as Int32
     }
 }
