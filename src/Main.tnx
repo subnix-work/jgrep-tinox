@@ -110,7 +110,7 @@ class Main
 
         if (opts.showVersion
         ){
-            println(progName + " 1.0.16 (Tinox)")
+            println(progName + " 1.0.17 (Tinox)")
             return 0
         }
 
