@@ -1,7 +1,7 @@
 [package]
-compiler = "2.9.2"
+compiler = "2.9.3"
 name = "jgrep"
-version = "1.0.14"
+version = "1.0.15"
 description = "grep for JSON — reimplemented in Tinox"
 author = "tuvbunn2@googlemail.com"
 entry = "src/Main.tnx"
