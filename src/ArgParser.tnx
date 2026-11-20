@@ -11,141 +11,191 @@ class ArgParser
         while i < args.len()
         {
             let arg = args[i]
+            let next = ArgParser::applyValueOption(opts, args, i)
 
-            if (arg == "-h" || arg == "--help"
-            ){
-                opts.showHelp = true
+            if (next >= 0)
+            {
+                i = next
+            }
+            else if (ArgParser::applyFlag(opts, arg))
+            {
                 i = i + 1
             }
-            else if (arg == "-V" || arg == "--version"
-            ){
-                opts.showVersion = true
-                i = i + 1
-            }
-            else if (arg == "-r" || arg == "--recursive"
-            ){
-                opts.recursive = true
-                i = i + 1
-            }
-            else if (arg == "-l" || arg == "--files-with-matches"
-            ){
-                opts.filesWithMatches = true
-                i = i + 1
-            }
-            else if (arg == "-c" || arg == "--count"
-            ){
-                opts.count = true
-                i = i + 1
-            }
-            else if (arg == "-s" || arg == "--slurp"
-            ){
-                opts.slurp = true
-                i = i + 1
-            }
-            else if (arg == "-n" || arg == "--null-input"
-            ){
-                opts.nullInput = true
-                i = i + 1
-            }
-            else if (arg == "-u" || arg == "--unbuffered"
-            ){
-                opts.unbuffered = true
-                i = i + 1
-            }
-            else if (arg == "--pretty"
-            ){
-                opts.pretty = true
-                i = i + 1
-            }
-            else if (arg == "--color-level"
-            ){
-                opts.colorLevel = true
-                i = i + 1
-            }
-            else if (arg == "--color-level-field"
-            ){
-                i = i + 1
-                if (i < args.len() ){ opts.colorLevelField = args[i] }
-                i = i + 1
-            }
-            else if (arg == "--no-color"
-            ){
-                opts.noColor = true
-                i = i + 1
-            }
-            else if (arg == "--color"
-            ){
-                i = i + 1
-                if (i < args.len() ){ opts.colorMode = args[i] }
-                i = i + 1
-            }
-            else if (arg.startsWith("--color=")
-            ){
-                opts.colorMode = arg.substring(8, arg.len())
-                i = i + 1
-            }
-            else if (arg == "--yaml"
-            ){
-                opts.yamlFlag = true
-                i = i + 1
-            }
-            else if (arg == "--json"
-            ){
-                opts.jsonFlag = true
-                i = i + 1
-            }
-            else if (arg == "-f" || arg == "--from-file"
-            ){
-                i = i + 1
-                if (i < args.len() ){ opts.fromFile = args[i] }
-                i = i + 1
-            }
-            else if (arg == "completion"
-            ){
-                i = i + 1
-                if (i < args.len() ){ opts.completionShell = args[i] }
-                i = i + 1
-            }
-            else if (arg.startsWith("--")
-            ){
+            else if (arg.startsWith("--"))
+            {
                 opts.badOption = arg
                 i = i + 1
             }
-            else if (arg.startsWith("-")
-            ){
-                let flags = arg.substring(1, arg.len())
-                var fi: Int64 = 0
-                while fi < flags.len()
-                {
-                    let fcode = flags[fi] as Int64
-                    if (fcode == 114 ){ opts.recursive = true }
-                    else if (fcode == 108 ){ opts.filesWithMatches = true }
-                    else if (fcode == 99 ){ opts.count = true }
-                    else if (fcode == 115 ){ opts.slurp = true }
-                    else if (fcode == 110 ){ opts.nullInput = true }
-                    else if (fcode == 117 ){ opts.unbuffered = true }
-                    else if (fcode == 104 ){ opts.showHelp = true }
-                    else if (fcode == 86 ){ opts.showVersion = true }
-                    else { opts.badOption = arg }
-                    fi = fi + 1
-                }
+            else if (arg.startsWith("-"))
+            {
+                ArgParser::applyShortCluster(opts, arg)
                 i = i + 1
             }
             else
             {
-                if (filterSet == false && opts.fromFile == ""
-                ){
-                    opts.filterExpr = arg
-                    filterSet = true
-                }
-                else
-                {
-                    opts.files.push(arg)
-                }
+                filterSet = ArgParser::applyPositional(opts, arg, filterSet)
                 i = i + 1
             }
         }
 
         return opts
+    }
+
+    // Options that consume the following argument (or carry it after `=`).
+    // Returns the index of the next unprocessed argument, or -1 when `args[i]`
+    // is not such an option.
+    fnc applyValueOption(opts: CliOptions, args: List<String>, i: Int64) -> Int64
+    {
+        let arg = args[i]
+        let hasValue = i + 1 < args.len()
+
+        if (arg == "--color-level-field")
+        {
+            if (hasValue)
+            {
+                opts.colorLevelField = args[i + 1] }
+            return i + 2
+        }
+        if (arg == "--color")
+        {
+            if (hasValue) { opts.colorMode = args[i + 1] }
+            return i + 2
+        }
+        if (arg.startsWith("--color="))
+        {
+            opts.colorMode = arg.substring(8, arg.len())
+            return i + 1
+        }
+        if (arg == "-f" || arg == "--from-file")
+        {
+            if (hasValue) { opts.fromFile = args[i + 1] }
+            return i + 2
+        }
+        if (arg == "completion")
+        {
+            if (hasValue) { opts.completionShell = args[i + 1] }
+            return i + 2
+        }
+        return -1
+    }
+
+    // Value-less flags. Returns true when `arg` was one of them.
+    fnc applyFlag(opts: CliOptions, arg: String) -> Bool
+    {
+        return ArgParser::applyInfoFlag(opts, arg) ||
+            ArgParser::applyInputFlag(opts, arg) ||
+            ArgParser::applyOutputFlag(opts, arg)
+    }
+
+    fnc applyInfoFlag(opts: CliOptions, arg: String) -> Bool
+    {
+        if (arg == "-h" || arg == "--help") { opts.showHelp = true
+                return true
+            }
+        if (arg == "-V" || arg == "--version")
+        {
+            opts.showVersion = true
+            return true
+        }
+        if (arg == "-r" || arg == "--recursive")
+        {
+            opts.recursive = true
+            return true
+        }
+        if (arg == "-l" || arg == "--files-with-matches")
+        {
+            opts.filesWithMatches = true
+            return true
+        }
+        return false
+    }
+
+    fnc applyInputFlag(opts: CliOptions, arg: String) -> Bool
+    {
+        if (arg == "-c" || arg == "--count")
+        {
+            opts.count = true
+            return true
+        }
+        if (arg == "-s" || arg == "--slurp")
+        {
+            opts.slurp = true
+            return true
+        }
+        if (arg == "-n" || arg == "--null-input")
+        {
+            opts.nullInput = true
+            return true
+        }
+        if (arg == "-u" || arg == "--unbuffered")
+        {
+            opts.unbuffered = true
+            return true
+        }
+        return false
+    }
+
+    fnc applyOutputFlag(opts: CliOptions, arg: String) -> Bool
+    {
+        if (arg == "--pretty")
+        {
+            opts.pretty = true
+            return true
+        }
+        if (arg == "--color-level")
+        {
+            opts.colorLevel = true
+            return true
+        }
+        if (arg == "--no-color")
+        {
+            opts.noColor = true
+            return true
+        }
+        if (arg == "--yaml")
+        {
+            opts.yamlFlag = true
+            return true
+        }
+        if (arg == "--json")
+        {
+            opts.jsonFlag = true
+            return true
+        }
+        return false
+    }
+
+    // Clustered short flags such as `-rlc`.
+    fnc applyShortCluster(opts: CliOptions, arg: String)
+    {
+        let flags = arg.substring(1, arg.len())
+        var fi: Int64 = 0
+        while fi < flags.len()
+        {
+            let fcode = flags[fi] as Int64
+            if (fcode == 114 ){ opts.recursive = true }
+            else if (fcode == 108 ){ opts.filesWithMatches = true }
+            else if (fcode == 99 ){ opts.count = true }
+            else if (fcode == 115 ){ opts.slurp = true }
+            else if (fcode == 110 ){ opts.nullInput = true }
+            else if (fcode == 117 ){ opts.unbuffered = true }
+            else if (fcode == 104 ){ opts.showHelp = true }
+            else if (fcode == 86 ){ opts.showVersion = true }
+            else { opts.badOption = arg }
+            fi = fi + 1
+        }
+    }
+
+    // The first positional argument is the filter (unless -f supplied one);
+    // everything after that is an input file. Returns the new `filterSet`.
+    fnc applyPositional(opts: CliOptions, arg: String, filterSet: Bool) -> Bool
+    {
+        if (filterSet == false && opts.fromFile == "")
+        {
+            opts.filterExpr = arg
+            return true
+        }
+        opts.files.push(arg)
+        return filterSet
     }
 }

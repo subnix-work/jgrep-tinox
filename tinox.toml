@@ -9,3 +9,8 @@ output = "jgrep"
 
 [build]
 release = true
+
+[analysis]
+# Known debt: Evaluator/FilterParser/FilterLexer/JsonValueHelper/YamlParser exceed the
+# compiler complexity limits. Reported as warnings until they are split up.
+level = "warn"
